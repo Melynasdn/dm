@@ -281,13 +281,60 @@ def algos_page():
 
 
 # ----------------- PAGE RESULTS -----------------
+# ------------------ Helpers ------------------
 import matplotlib.pyplot as plt
 import io, base64
 from scipy.cluster.hierarchy import dendrogram, linkage as sch_linkage
-from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score
+from sklearn.preprocessing import StandardScaler
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.cluster.hierarchy import dendrogram, linkage
+from scipy.spatial.distance import pdist, squareform
+from sklearn.preprocessing import StandardScaler
+import io
+import base64
+
+# ------------------ Helpers ------------------
+import matplotlib.pyplot as plt
+import io, base64
+from scipy.cluster.hierarchy import dendrogram, linkage as sch_linkage
+from sklearn.preprocessing import StandardScaler
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.cluster.hierarchy import dendrogram, linkage
+from scipy.spatial.distance import pdist, squareform
+from sklearn.preprocessing import StandardScaler
+import io
+import base64
 
 
 # ------------------ Helpers ------------------
+import matplotlib.pyplot as plt
+import io, base64
+from scipy.cluster.hierarchy import dendrogram, linkage as sch_linkage
+from sklearn.preprocessing import StandardScaler
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.cluster.hierarchy import dendrogram, linkage
+from scipy.spatial.distance import pdist, squareform
+from sklearn.preprocessing import StandardScaler
+import io
+import base64
+
+
+# ------------------ Helpers ------------------
+import matplotlib.pyplot as plt
+import io, base64
+from scipy.cluster.hierarchy import dendrogram, linkage as sch_linkage
+from sklearn.preprocessing import StandardScaler
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.cluster.hierarchy import dendrogram, linkage
+from scipy.spatial.distance import pdist, squareform
+from sklearn.preprocessing import StandardScaler
+import io
+import base64
+
 
 # ------------------ Helpers ------------------
 import matplotlib.pyplot as plt
@@ -308,7 +355,7 @@ import base64
 def fig_to_base64(fig):
     """Convertit une figure matplotlib en base64"""
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", bbox_inches="tight", dpi=100)
+    fig.savefig(buf, format="png", bbox_inches="tight", dpi=120)
     plt.close(fig)
     buf.seek(0)
     return base64.b64encode(buf.read()).decode("utf-8")
@@ -386,6 +433,62 @@ def diana_linkage(X):
     return np.array(linkage_matrix) if linkage_matrix else np.array([])
 
 
+def plot_grouped_histogram(metrics_dict, title):
+    """Génère un histogramme groupé des métriques"""
+    algos = list(metrics_dict.keys())
+    n_algos = len(algos)
+    
+    # Extraction des métriques
+    silhouettes = [metrics_dict[a].get("silhouette") for a in algos]
+    davies = [metrics_dict[a].get("davies_bouldin") for a in algos]
+    calinski = [metrics_dict[a].get("calinski_harabasz") for a in algos]
+    
+    # Remplacer les "N/A" par None pour le plotting
+    silhouettes = [s if s != "N/A" else None for s in silhouettes]
+    davies = [d if d != "N/A" else None for d in davies]
+    calinski = [c if c != "N/A" else None for c in calinski]
+    
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    x = np.arange(n_algos)
+    width = 0.6
+    
+    colors = ['#3b82f6', '#8b5cf6', '#ec4899']
+    
+    # Silhouette
+    valid_sil = [s if s is not None else 0 for s in silhouettes]
+    axes[0].bar(x, valid_sil, width, color=colors[0], alpha=0.8)
+    axes[0].set_ylabel('Score', fontsize=12, fontweight='bold')
+    axes[0].set_title('Silhouette ↑', fontsize=14, fontweight='bold')
+    axes[0].set_xticks(x)
+    axes[0].set_xticklabels([a.upper() for a in algos], rotation=45, ha='right')
+    axes[0].grid(axis='y', alpha=0.3, linestyle='--')
+    axes[0].set_ylim([-1, 1])
+    
+    # Davies-Bouldin
+    valid_dav = [d if d is not None else 0 for d in davies]
+    axes[1].bar(x, valid_dav, width, color=colors[1], alpha=0.8)
+    axes[1].set_ylabel('Score', fontsize=12, fontweight='bold')
+    axes[1].set_title('Davies-Bouldin ↓', fontsize=14, fontweight='bold')
+    axes[1].set_xticks(x)
+    axes[1].set_xticklabels([a.upper() for a in algos], rotation=45, ha='right')
+    axes[1].grid(axis='y', alpha=0.3, linestyle='--')
+    
+    # Calinski-Harabasz
+    valid_cal = [c if c is not None else 0 for c in calinski]
+    axes[2].bar(x, valid_cal, width, color=colors[2], alpha=0.8)
+    axes[2].set_ylabel('Score', fontsize=12, fontweight='bold')
+    axes[2].set_title('Calinski-Harabasz ↑', fontsize=14, fontweight='bold')
+    axes[2].set_xticks(x)
+    axes[2].set_xticklabels([a.upper() for a in algos], rotation=45, ha='right')
+    axes[2].grid(axis='y', alpha=0.3, linestyle='--')
+    
+    plt.suptitle(title, fontsize=16, fontweight='bold', y=1.02)
+    plt.tight_layout()
+    
+    base64_str = fig_to_base64(fig)
+    return f"data:image/png;base64,{base64_str}"
+
+
 def generate_dendrogram(X, algo="agnes"):
     """
     Génère un dendrogramme et retourne l'image en base64
@@ -407,15 +510,15 @@ def generate_dendrogram(X, algo="agnes"):
         print("Erreur: Au moins 2 échantillons sont nécessaires")
         return None
     
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(14, 8))
     
     try:
         if algo.lower() == "agnes":
             # AGNES: Agglomerative Nesting (bottom-up)
             X_scaled = StandardScaler().fit_transform(X)
             Z = linkage(X_scaled, method='ward')
-            dendrogram(Z, ax=ax)
-            ax.set_title("Dendrogramme - AGNES (Ward)", fontsize=14, fontweight='bold')
+            dendrogram(Z, ax=ax, color_threshold=0.7*max(Z[:,2]))
+            ax.set_title("Dendrogramme - AGNES (Ward)", fontsize=16, fontweight='bold', pad=20)
             
         elif algo.lower() == "diana":
             # DIANA: DIvisive ANAlysis (top-down)
@@ -423,20 +526,22 @@ def generate_dendrogram(X, algo="agnes"):
             Z = diana_linkage(X_scaled)
             
             if Z.size > 0:
-                dendrogram(Z, ax=ax)
-                ax.set_title("Dendrogramme - DIANA (Divisif)", fontsize=14, fontweight='bold')
+                dendrogram(Z, ax=ax, color_threshold=0.7*max(Z[:,2]))
+                ax.set_title("Dendrogramme - DIANA (Divisif)", fontsize=16, fontweight='bold', pad=20)
             else:
                 ax.text(0.5, 0.5, "Impossible de créer le dendrogramme DIANA", 
-                       ha="center", va="center", fontsize=12)
-                ax.set_title("Dendrogramme - DIANA", fontsize=14, fontweight='bold')
+                       ha="center", va="center", fontsize=14)
+                ax.set_title("Dendrogramme - DIANA", fontsize=16, fontweight='bold', pad=20)
         else:
             ax.text(0.5, 0.5, f"Algorithme '{algo}' non reconnu\nUtilisez 'agnes' ou 'diana'", 
-                   ha="center", va="center", fontsize=12)
-            ax.set_title("Erreur", fontsize=14, fontweight='bold')
+                   ha="center", va="center", fontsize=14)
+            ax.set_title("Erreur", fontsize=16, fontweight='bold', pad=20)
         
-        ax.set_xlabel("Échantillons", fontsize=11)
-        ax.set_ylabel("Distance", fontsize=11)
-        ax.grid(True, alpha=0.3, axis='y')
+        ax.set_xlabel("Échantillons", fontsize=13, fontweight='bold')
+        ax.set_ylabel("Distance", fontsize=13, fontweight='bold')
+        ax.grid(True, alpha=0.3, axis='y', linestyle='--')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
         plt.tight_layout()
         
         # Toujours retourner le base64 avec le préfixe data:image pour NiceGUI
@@ -459,7 +564,7 @@ def results_page():
         ui.run_javascript("window.location.href='/algos'")
         return
 
-    ui.label("📊 Résultats Clustering").classes("text-3xl font-bold mb-6")
+    
 
     results = state['results']
     X = state.get('X')
@@ -478,81 +583,132 @@ def results_page():
 
             if m["n_clusters"] > 1:
                 from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score
-                m["silhouette"] = float(silhouette_score(X[mask], labels[mask]))
-                m["davies_bouldin"] = float(davies_bouldin_score(X[mask], labels[mask]))
-                m["calinski_harabasz"] = float(calinski_harabasz_score(X[mask], labels[mask]))
+                m["silhouette"] = round(float(silhouette_score(X[mask], labels[mask])), 3)
+                m["davies_bouldin"] = round(float(davies_bouldin_score(X[mask], labels[mask])), 3)
+                m["calinski_harabasz"] = round(float(calinski_harabasz_score(X[mask], labels[mask])), 2)
             else:
-                m["silhouette"] = None
-                m["davies_bouldin"] = None
-                m["calinski_harabasz"] = None
+                m["silhouette"] = "N/A"
+                m["davies_bouldin"] = "N/A"
+                m["calinski_harabasz"] = "N/A"
 
         metrics_dict[algo] = m
         res.update(m)
 
-    # ----------------- Tableau comparatif -----------------
-    rows = [{**{'algo': algo.upper()}, **m} for algo, m in metrics_dict.items()]
-    ui.table(
-        rows=rows,
-        columns=[
-            {"name": "algo", "label": "Algorithme", "field": "algo"},
-            {"name": "n_clusters", "label": "Clusters", "field": "n_clusters"},
-            {"name": "n_noise", "label": "Bruit", "field": "n_noise"},
-            {"name": "silhouette", "label": "Silhouette", "field": "silhouette"},
-            {"name": "davies_bouldin", "label": "Davies-Bouldin", "field": "davies_bouldin"},
-            {"name": "calinski_harabasz", "label": "Calinski-Harabasz", "field": "calinski_harabasz"},
-        ],
-    ).classes("mb-6")
+    # ----------------- Tableau comparatif avec style amélioré -----------------
+    with ui.card().classes("w-full shadow-2xl p-6 mb-8"):
+        ui.label("📈 Tableau Comparatif des Métriques").classes(
+            "text-2xl font-bold mb-4 text-gray-800"
+        )
+        
+        rows = [{**{'algo': algo.upper()}, **m} for algo, m in metrics_dict.items()]
+        ui.table(
+            rows=rows,
+            columns=[
+                {"name": "algo", "label": "Algorithme", "field": "algo", "align": "left"},
+                {"name": "n_clusters", "label": "Clusters", "field": "n_clusters", "align": "center"},
+                {"name": "n_noise", "label": "Bruit", "field": "n_noise", "align": "center"},
+                {"name": "silhouette", "label": "Silhouette ↑", "field": "silhouette", "align": "center"},
+                {"name": "davies_bouldin", "label": "Davies-Bouldin ↓", "field": "davies_bouldin", "align": "center"},
+                {"name": "calinski_harabasz", "label": "Calinski-Harabasz ↑", "field": "calinski_harabasz", "align": "center"},
+            ],
+        ).classes("w-full").props("flat bordered").style(
+            "font-size: 15px;"
+        )
 
-    # ----------------- Histogramme comparatif -----------------
-    hist_img = plot_grouped_histogram(metrics_dict, "Comparaison des métriques")
-    ui.image(hist_img).classes("mx-auto mb-12").style("max-width:900px; width:100%; height:auto")
+    # ----------------- Histogramme comparatif avec dimensions fixes -----------------
+    with ui.card().classes("w-full shadow-2xl p-6 mb-10"):
+        ui.label("📊 Comparaison Visuelle des Métriques").classes(
+            "text-2xl font-bold mb-4 text-gray-800"
+        )
+        hist_img = plot_grouped_histogram(metrics_dict, "Comparaison des métriques")
+        ui.image(hist_img).classes("mx-auto").style(
+            "width: 100%; max-width: 1000px; height: auto; border-radius: 8px;"
+        )
 
     # ----------------- Détail par algorithme -----------------
-    for algo, res in results.items():
+    for idx, (algo, res) in enumerate(results.items()):
 
-        ui.separator()
-        ui.label(f"🔹 {algo.upper()}").classes("text-2xl font-bold mt-6 mb-4")
+        ui.separator().classes("my-8")
+        
+        # Couleur différente pour chaque algo
+        colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981']
+        color = colors[idx % len(colors)]
+        
+        with ui.element('div').classes('w-full p-5 rounded-lg mb-6').style(
+            f'background: linear-gradient(135deg, {color}22 0%, {color}11 100%); border-left: 4px solid {color};'
+        ):
+            ui.label(f"{algo.upper()}").classes(
+                "text-3xl font-bold"
+            ).style(f'color: {color};')
 
         m = metrics_dict[algo]
 
-        # ---------- Résumé ----------
-        with ui.card().classes("p-4 shadow-md w-2/3 mx-auto mb-6"):
-            ui.label("📌 Résumé des métriques").classes("font-semibold mb-2")
-            ui.html(f"""
-                <ul style='line-height:1.8; font-size:16px;'>
-                    <li><b>Nombre de clusters :</b> {m["n_clusters"]}</li>
-                    <li><b>Bruit (labels = -1) :</b> {m["n_noise"]}</li>
-                    <li><b>Silhouette :</b> {m["silhouette"]}</li>
-                    <li><b>Davies-Bouldin :</b> {m["davies_bouldin"]}</li>
-                    <li><b>Calinski-Harabasz :</b> {m["calinski_harabasz"]}</li>
-                </ul>
-            """, sanitize=False)
-
-        # ---------- PCA ----------
-        ui.label("🎨 Visualisation PCA").classes("text-xl font-bold mt-4 mb-2")
-        if X_pca is None:
-            ui.label("PCA non disponible")
-        else:
-            img64 = scatter_plot_2d(X_pca, res['labels'], f"{algo.upper()} - PCA")
-            ui.image(img64).classes("mx-auto mb-6").style(
-                "max-width:900px; width:100%; height:auto"
+        # ---------- Résumé dans une card élégante ----------
+        with ui.card().classes("shadow-lg p-6 mb-6 w-full").style(
+            "border-top: 3px solid " + color
+        ):
+            ui.label("📌 Résumé des Métriques").classes(
+                "text-xl font-bold mb-4 text-gray-800"
             )
+            
+            with ui.row().classes("gap-4 w-full justify-center items-stretch"):
+                # Clusters
+                with ui.card().classes("p-4 bg-gray-50 text-center flex-1"):
+                    ui.label("Clusters").classes("text-sm text-gray-600 font-semibold mb-2")
+                    ui.label(str(m["n_clusters"])).classes("text-3xl font-bold").style(f'color: {color};')
+                
+                # Points de bruit
+                with ui.card().classes("p-4 bg-gray-50 text-center flex-1"):
+                    ui.label("Points de bruit").classes("text-sm text-gray-600 font-semibold mb-2")
+                    ui.label(str(m["n_noise"])).classes("text-3xl font-bold text-orange-600")
+                
+                # Silhouette
+                with ui.card().classes("p-4 bg-gray-50 text-center flex-1"):
+                    ui.label("Silhouette ↑").classes("text-sm text-gray-600 font-semibold mb-2")
+                    ui.label(str(m["silhouette"])).classes("text-2xl font-bold text-green-600")
+                
+                # Davies-Bouldin
+                with ui.card().classes("p-4 bg-gray-50 text-center flex-1"):
+                    ui.label("Davies-Bouldin ↓").classes("text-sm text-gray-600 font-semibold mb-2")
+                    ui.label(str(m["davies_bouldin"])).classes("text-2xl font-bold text-blue-600")
+                
+                # Calinski-Harabasz
+                with ui.card().classes("p-4 bg-gray-50 text-center flex-1"):
+                    ui.label("Calinski-Harabasz ↑").classes("text-sm text-gray-600 font-semibold mb-2")
+                    ui.label(str(m["calinski_harabasz"])).classes("text-2xl font-bold text-purple-600")
 
-        # ---------- Dendrogramme ----------
-        if algo.lower() in ["agnes", "diana"]:
-            ui.label("🌳 Dendrogramme").classes("text-xl font-bold mt-4 mb-2")
-            try:
-                dendro64 = generate_dendrogram(X, algo)
-                if dendro64:
-                    ui.image(dendro64).classes("mx-auto mb-10").style(
-                        "max-width:950px; width:100%; height:auto"
-                    )
+        # ---------- Visualisations côte à côte ----------
+        with ui.grid(columns=1 if algo.lower() not in ["agnes", "diana"] else 2).classes("gap-8 mb-8 w-full"):
+            
+            # PCA
+            with ui.card().classes("shadow-lg p-6"):
+                ui.label("🎨 Visualisation PCA").classes("text-2xl font-bold mb-4 text-gray-800")
+                if X_pca is None:
+                    ui.label("PCA non disponible").classes("text-gray-500 text-center py-10")
                 else:
-                    ui.label("⚠️ Impossible de générer le dendrogramme").classes("text-orange-600")
-            except Exception as e:
-                ui.label(f"❌ Erreur lors de la génération du dendrogramme : {e}").classes("text-red-600")
+                    img64 = scatter_plot_2d(X_pca, res['labels'], f"{algo.upper()} - PCA")
+                    ui.image(img64).classes("w-full mx-auto").style(
+                        "max-width: 100%; height: auto; display: block; border-radius: 8px;"
+                    )
 
-
+            # Dendrogramme (si applicable)
+            if algo.lower() in ["agnes", "diana"]:
+                with ui.card().classes("shadow-lg p-6"):
+                    ui.label("🌳 Dendrogramme").classes("text-2xl font-bold mb-4 text-gray-800")
+                    try:
+                        dendro64 = generate_dendrogram(X, algo)
+                        if dendro64:
+                            ui.image(dendro64).classes("w-full mx-auto").style(
+                                "max-width: 100%; height: auto; display: block; border-radius: 8px;"
+                            )
+                        else:
+                            ui.label("⚠️ Impossible de générer le dendrogramme").classes(
+                                "text-orange-600 text-center py-10"
+                            )
+                    except Exception as e:
+                        ui.label(f"❌ Erreur : {e}").classes(
+                            "text-red-600 text-center py-10"
+                        )
 
 
 
