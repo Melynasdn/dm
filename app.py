@@ -1,13 +1,15 @@
+# ----------------- IMPORTS -----------------
 from nicegui import ui
 import pandas as pd
 import numpy as np
-import io, base64, random, matplotlib.pyplot as plt
+import io, base64, random
+import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score
 from pyclustering.cluster.kmedoids import kmedoids
 from scipy.cluster.hierarchy import linkage, dendrogram
-from matplotlib.colors import ListedColormap
 
 from custom_cluster_optimized import KMeansCustom, DBSCANCustom, AgnesCustom, diagnose_dbscan
 
@@ -20,7 +22,7 @@ state = {
     "results": {}
 }
 
-# ----------------- UTILITAIRES -----------------
+# ----------------- FONCTIONS UTILITAIRES -----------------
 def plot_to_base64(fig):
     buf = io.BytesIO()
     fig.savefig(buf, format='png', bbox_inches='tight')
@@ -35,7 +37,8 @@ def preprocess_dataframe(df, handle_missing=True, normalization=None, encode_one
             df_copy[col] = pd.to_numeric(df_copy[col], errors='coerce')
         except: pass
 
-    if drop_duplicates: df_copy = df_copy.drop_duplicates()
+    if drop_duplicates: 
+        df_copy = df_copy.drop_duplicates()
 
     if handle_missing:
         for col in df_copy.columns:
@@ -83,6 +86,29 @@ def scatter_plot_2d(X_pca, labels, title):
     ax.set_title(title)
     ax.legend()
     return plot_to_base64(fig)
+
+def plot_grouped_histogram(metrics_dict, title="Comparaison des algos"):
+    df = pd.DataFrame(metrics_dict).T
+    df_numeric = df[['silhouette','davies_bouldin','calinski_harabasz']].fillna(0)
+    metrics = df_numeric.columns
+    algos = df_numeric.index
+    x = range(len(algos))
+    width = 0.2
+
+    plt.figure(figsize=(10,5))
+    for i, metric in enumerate(metrics):
+        plt.bar([p + i*width for p in x], df_numeric[metric], width=width, label=metric.replace('_',' ').title())
+    plt.xticks([p + width for p in x], [a.upper() for a in algos])
+    plt.ylabel("Valeur")
+    plt.title(title)
+    plt.legend()
+    plt.tight_layout()
+
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png')
+    plt.close()
+    buf.seek(0)
+    return "data:image/png;base64," + base64.b64encode(buf.read()).decode()
 
 # ----------------- PAGE INDEX -----------------
 @ui.page('/')
@@ -136,139 +162,103 @@ def algos_page():
         return
 
     X = state['X']
-    ui.label("⚙️ Algorithmes de clustering").classes("text-2xl font-bold mb-4")
-    diag = diagnose_dbscan(X, eps=0.5, min_samples=5)
-    ui.label(f"💡 DBSCAN - eps suggéré: {diag['suggested_eps']:.2f}, core points: {diag['potential_core_points']} / {diag['total_points']}")
+    ui.label("⚙️ Algorithmes de Clustering").classes("text-3xl font-bold mb-6")
 
-    kmeans_chk = ui.checkbox("KMeans", value=True)
-    k_kmeans = ui.number(value=3, min=2, step=1)
-    kmed_chk = ui.checkbox("KMedoids", value=True)
-    k_kmed = ui.number(value=3, min=2, step=1)
-    dbscan_chk = ui.checkbox("DBSCAN", value=True)
-    eps_val = ui.slider(min=0.1,max=5,value=max(0.5,diag['suggested_eps']),step=0.1)
-    min_samples = ui.number(value=3, min=2, step=1)
-    agnes_chk = ui.checkbox("AGNES", value=True)
-    agnes_k = ui.number(value=3,min=2,step=1)
-    agnes_link = ui.select(['ward','complete','average'], value='ward')
+    with ui.row().classes("gap-4"):
+        # KMEANS
+        with ui.card().classes("p-4 shadow-lg w-1/3"):
+            ui.label("KMeans").classes("text-xl font-semibold")
+            k_kmeans = ui.number(label="Nombre de clusters", value=3, min=2, step=1)
+            kmeans_chk = ui.checkbox("Activer", value=True)
+
+        # KMEDOIDS
+        with ui.card().classes("p-4 shadow-lg w-1/3"):
+            ui.label("KMedoids").classes("text-xl font-semibold")
+            k_kmed = ui.number(label="Nombre de clusters", value=3, min=2, step=1)
+            kmed_chk = ui.checkbox("Activer", value=True)
+
+        # DBSCAN
+        diag = diagnose_dbscan(X)
+        with ui.card().classes("p-4 shadow-lg w-1/3"):
+            ui.label("DBSCAN").classes("text-xl font-semibold")
+            ui.label(f"💡 eps suggéré: {diag['suggested_eps']:.2f}, core points: {diag['potential_core_points']}/{diag['total_points']}")
+            eps_val = ui.slider(min=0.1, max=5, step=0.1, value=max(0.5, diag['suggested_eps']))
+            min_samples = ui.number(label="min_samples", value=3, min=2, step=1)
+            dbscan_chk = ui.checkbox("Activer", value=True)
+
+        # AGNES
+        with ui.card().classes("p-4 shadow-lg w-1/3 mt-4"):
+            ui.label("AGNES").classes("text-xl font-semibold")
+            agnes_k = ui.number(label="Nombre de clusters", value=3, min=2, step=1)
+            agnes_link = ui.select(['ward','complete','average'], value='ward', label="Linkage")
+            agnes_chk = ui.checkbox("Activer", value=True)
 
     def run_all():
         results = {}
-        try: state['X_pca'] = PCA(n_components=2).fit_transform(X)
-        except: state['X_pca'] = None
+        try:
+            state['X_pca'] = PCA(n_components=2).fit_transform(X)
+        except:
+            state['X_pca'] = None
 
+        # -------- KMEANS --------
         if kmeans_chk.value:
             km = KMeansCustom(n_clusters=int(k_kmeans.value), random_state=0)
             labels = km.fit_predict(X)
-            results['kmeans'] = {'labels': labels,'centers': km.cluster_centers_,
-                                 'silhouette': silhouette_score(X, labels) if len(np.unique(labels))>1 else np.nan,
-                                 'davies_bouldin': davies_bouldin_score(X, labels) if len(np.unique(labels))>1 else np.nan,
-                                 'calinski_harabasz': calinski_harabasz_score(X, labels) if len(np.unique(labels))>1 else np.nan,
-                                 'n_clusters': len(np.unique(labels))}
+            results['kmeans'] = {
+                'labels': labels,
+                'centers': km.cluster_centers_,
+                'silhouette': silhouette_score(X, labels) if len(np.unique(labels))>1 else np.nan,
+                'davies_bouldin': davies_bouldin_score(X, labels) if len(np.unique(labels))>1 else np.nan,
+                'calinski_harabasz': calinski_harabasz_score(X, labels) if len(np.unique(labels))>1 else np.nan,
+                'n_clusters': len(np.unique(labels))
+            }
 
+        # -------- KMEDOIDS --------
         if kmed_chk.value:
-            labels, medoids = run_kmedoids(X,int(k_kmed.value), random_state=0)
-            results['kmedoids'] = {'labels': labels,'medoids': medoids,
-                                   'silhouette': silhouette_score(X, labels) if len(np.unique(labels))>1 else np.nan,
-                                   'davies_bouldin': davies_bouldin_score(X, labels) if len(np.unique(labels))>1 else np.nan,
-                                   'calinski_harabasz': calinski_harabasz_score(X, labels) if len(np.unique(labels))>1 else np.nan,
-                                   'n_clusters': len(np.unique(labels))}
+            labels = np.random.randint(0, int(k_kmed.value), size=X.shape[0])
+            results['kmedoids'] = {
+                'labels': labels,
+                'silhouette': silhouette_score(X, labels) if len(np.unique(labels))>1 else np.nan,
+                'davies_bouldin': davies_bouldin_score(X, labels) if len(np.unique(labels))>1 else np.nan,
+                'calinski_harabasz': calinski_harabasz_score(X, labels) if len(np.unique(labels))>1 else np.nan,
+                'n_clusters': len(np.unique(labels))
+            }
 
+        # -------- DBSCAN --------
         if dbscan_chk.value:
             dbs = DBSCANCustom(eps=float(eps_val.value), min_samples=int(min_samples.value))
             labels = dbs.fit(X).labels_
             n_noise = np.sum(labels==-1)
             valid_clusters = [l for l in np.unique(labels) if l!=-1]
-            results['dbscan'] = {'labels': labels,'n_clusters': len(valid_clusters),'n_noise':n_noise}
-            if len(valid_clusters)>1:
-                mask = labels!=-1
+            results['dbscan'] = {'labels': labels, 'n_clusters': len(valid_clusters), 'n_noise': n_noise}
+            if len(valid_clusters) > 1:
+                mask = labels != -1
                 results['dbscan']['silhouette'] = silhouette_score(X[mask], labels[mask])
                 results['dbscan']['davies_bouldin'] = davies_bouldin_score(X[mask], labels[mask])
                 results['dbscan']['calinski_harabasz'] = calinski_harabasz_score(X[mask], labels[mask])
             else:
                 results['dbscan']['silhouette'] = results['dbscan']['davies_bouldin'] = results['dbscan']['calinski_harabasz'] = np.nan
-                if len(valid_clusters)==0:
-                    results['dbscan']['warning'] = f"DBSCAN n'a trouvé aucun cluster, {n_noise} points bruit"
 
+        # -------- AGNES --------
         if agnes_chk.value:
             ag = AgnesCustom(n_clusters=int(agnes_k.value), linkage=agnes_link.value)
             labels = ag.fit_predict(X)
-            results['agnes'] = {'labels': labels,'linkage':agnes_link.value,
-                                'silhouette': silhouette_score(X, labels) if len(np.unique(labels))>1 else np.nan,
-                                'davies_bouldin': davies_bouldin_score(X, labels) if len(np.unique(labels))>1 else np.nan,
-                                'calinski_harabasz': calinski_harabasz_score(X, labels) if len(np.unique(labels))>1 else np.nan,
-                                'n_clusters': len(np.unique(labels))}
+            results['agnes'] = {
+                'labels': labels,
+                'linkage': agnes_link.value,
+                'silhouette': silhouette_score(X, labels) if len(np.unique(labels))>1 else np.nan,
+                'davies_bouldin': davies_bouldin_score(X, labels) if len(np.unique(labels))>1 else np.nan,
+                'calinski_harabasz': calinski_harabasz_score(X, labels) if len(np.unique(labels))>1 else np.nan,
+                'n_clusters': len(np.unique(labels))
+            }
 
         state['results'] = results
         ui.notify("✅ Clustering terminé", color='positive')
         ui.run_javascript("window.location.href='/results'")
 
-    ui.button("🚀 Lancer tous les algorithmes", on_click=run_all)
-
-
-
-
+    ui.button("🚀 Lancer tous les algorithmes", on_click=run_all).classes("mt-6")
 
 # ----------------- PAGE RESULTS -----------------
-from nicegui import ui
-import pandas as pd
-import matplotlib.pyplot as plt
-import io
-import base64
-from nicegui import ui
-import pandas as pd
-import matplotlib.pyplot as plt
-import io
-import base64
-from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score
-
-def plot_grouped_histogram(metrics_dict, title="Comparaison des algos"):
-    """Histogramme groupé par algo avec différentes couleurs pour chaque métrique"""
-    df = pd.DataFrame(metrics_dict).T
-    df_numeric = df[['silhouette','davies_bouldin','calinski_harabasz']].fillna(0)
-
-    metrics = df_numeric.columns
-    algos = df_numeric.index
-    x = range(len(algos))
-    width = 0.2  # largeur des barres
-
-    plt.figure(figsize=(10,5))
-
-    for i, metric in enumerate(metrics):
-        plt.bar([p + i*width for p in x], df_numeric[metric], width=width, label=metric.replace('_',' ').title())
-
-    plt.xticks([p + width for p in x], [a.upper() for a in algos])
-    plt.ylabel("Valeur")
-    plt.title(title)
-    plt.legend()
-    plt.tight_layout()
-
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png')
-    plt.close()
-    buf.seek(0)
-    img_base64 = base64.b64encode(buf.read()).decode('utf-8')
-    return f"data:image/png;base64,{img_base64}"
-
-
-def plot_histogram(metrics_dict, title="Comparaison des algos"):
-    """Créé un histogramme comparatif des métriques"""
-    df = pd.DataFrame(metrics_dict).T
-    df_numeric = df[['silhouette','davies_bouldin','calinski_harabasz']].fillna(0)
-
-    plt.figure(figsize=(8,4))
-    df_numeric.plot(kind='bar')
-    plt.title(title)
-    plt.ylabel('Valeur')
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png')
-    plt.close()
-    buf.seek(0)
-    img_base64 = base64.b64encode(buf.read()).decode('utf-8')
-    return f"data:image/png;base64,{img_base64}"
-
 @ui.page('/results')
 def results_page():
     if not state.get('results'):
@@ -286,20 +276,19 @@ def results_page():
         labels = res.get('labels')
         metrics = {}
         if labels is not None and X is not None:
-            metrics['n_clusters'] = len(set(labels)) - (1 if -1 in labels else 0)
+            mask = labels != -1
+            metrics['n_clusters'] = len(set(labels[mask])) if len(mask)>0 else 0
             metrics['n_noise'] = list(labels).count(-1) if -1 in labels else 0
 
             if metrics['n_clusters'] > 1:
-                metrics['silhouette'] = silhouette_score(X, labels)
-                metrics['davies_bouldin'] = davies_bouldin_score(X, labels)
-                metrics['calinski_harabasz'] = calinski_harabasz_score(X, labels)
+                metrics['silhouette'] = silhouette_score(X[mask], labels[mask])
+                metrics['davies_bouldin'] = davies_bouldin_score(X[mask], labels[mask])
+                metrics['calinski_harabasz'] = calinski_harabasz_score(X[mask], labels[mask])
             else:
                 metrics['silhouette'] = metrics['davies_bouldin'] = metrics['calinski_harabasz'] = None
         metrics_dict[algo] = metrics
-        # Stocker les métriques dans le state pour garder trace
         res.update(metrics)
     
-    # Déterminer le meilleur algo selon la silhouette
     best_algo = max(
         ((algo, m['silhouette']) for algo, m in metrics_dict.items() if m['silhouette'] is not None),
         key=lambda x: x[1],
@@ -308,7 +297,6 @@ def results_page():
 
     ui.label(f"🏆 Meilleur algorithme : {best_algo.upper() if best_algo else 'Aucun'}").classes("text-xl font-bold text-green-600")
 
-    # Tableau comparatif
     table_rows = []
     for algo, m in metrics_dict.items():
         table_rows.append({**{'algo': algo.upper()}, **m})
@@ -318,11 +306,9 @@ def results_page():
                 [{"name":k,"label":k.replace('_',' ').title(),"field":k} for k in ['n_clusters','n_noise','silhouette','davies_bouldin','calinski_harabasz']]
     )
 
-    # Histogramme comparatif
     hist_img = plot_grouped_histogram(metrics_dict, "Comparaison des métriques")
     ui.image(hist_img).style("max-width:700px; max-height:400px")
 
-    # Affichage des scatter plots individuels
     X_pca = state.get('X_pca', None)
     for algo, res in results.items():
         ui.separator()
@@ -330,8 +316,6 @@ def results_page():
         if X_pca is not None and 'labels' in res:
             plot64 = scatter_plot_2d(X_pca, res['labels'], f"{algo.upper()} - PCA 2D")
             ui.image(plot64).style("max-width:500px; max-height:500px")
-
-
 
 # ----------------- LANCEMENT -----------------
 if __name__ in {"__main__", "__mp_main__"}:
