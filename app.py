@@ -1,26 +1,27 @@
-# app.py
+# app_complete.py
 from nicegui import ui
 import pandas as pd
 import numpy as np
-import io
-import base64
-import matplotlib.pyplot as plt
-import random
-
+import io, base64, random, matplotlib.pyplot as plt
+import seaborn as sns
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from sklearn.decomposition import PCA
-from sklearn.cluster import KMeans, DBSCAN, AgglomerativeClustering
+# from sklearn.cluster import KMeans, DBSCAN, AgglomerativeClustering
+from custom_cluster import KMeansCustom, DBSCANCustom, AgnesCustom
+from custom_cluster_optimized import KMeansCustom, DBSCANCustom, AgnesCustom
+
 from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score
-
 from pyclustering.cluster.kmedoids import kmedoids
+from scipy.cluster.hierarchy import linkage, dendrogram
+from sklearn.metrics import silhouette_samples
 
-# -------- ÉTAT GLOBAL (simple) --------
+# -------- ÉTAT GLOBAL --------
 state = {
     "raw_df": None,
     "numeric_columns": None,
     "X": None,
     "X_pca": None,
-    "results": {},
+    "results": {}
 }
 
 # -------- UTILITAIRES PLOTS --------
@@ -33,12 +34,11 @@ def plot_to_base64(fig):
 
 def scatter_pca_image(X_pca, labels, centers_pca=None, title="Scatter PCA"):
     fig, ax = plt.subplots(figsize=(6,4))
-    unique_labels = np.unique(labels)
-    for lab in unique_labels:
+    for lab in np.unique(labels):
         mask = labels == lab
         ax.scatter(X_pca[mask,0], X_pca[mask,1], label=str(lab), s=20, alpha=0.7)
     if centers_pca is not None:
-        ax.scatter(centers_pca[:,0], centers_pca[:,1], marker='X', s=120, c='black', linewidths=1.5)
+        ax.scatter(centers_pca[:,0], centers_pca[:,1], marker='X', s=120, c='black')
     ax.set_title(title)
     ax.set_xlabel("PC1")
     ax.set_ylabel("PC2")
@@ -62,7 +62,6 @@ def silhouette_image(score, title="Silhouette Score"):
     return plot_to_base64(fig)
 
 def dendrogram_image(X, method='ward', title="Dendrogramme"):
-    from scipy.cluster.hierarchy import linkage, dendrogram
     Z = linkage(X, method=method)
     fig = plt.figure(figsize=(8,4))
     dendrogram(Z, color_threshold=None)
@@ -73,26 +72,22 @@ def dendrogram_image(X, method='ward', title="Dendrogramme"):
 def preprocess_dataframe(df, normalization='minmax', handle_missing=True):
     numeric = df.select_dtypes(include=[np.number]).copy()
     if numeric.shape[1] == 0:
-        raise ValueError("Aucune colonne numérique détectée dans le dataset.")
+        raise ValueError("Aucune colonne numérique détectée")
     if handle_missing:
         numeric = numeric.fillna(numeric.mean())
     X = numeric.values.astype(float)
     if normalization == 'minmax':
-        scaler = MinMaxScaler()
-        X = scaler.fit_transform(X)
+        X = MinMaxScaler().fit_transform(X)
     elif normalization == 'zscore':
-        scaler = StandardScaler()
-        X = scaler.fit_transform(X)
+        X = StandardScaler().fit_transform(X)
     return numeric, X
 
-# -------- K-Medoids --------
+# -------- K-MEDOIDS --------
 def run_kmedoids(X, n_clusters, random_state=None):
     data = X.tolist()
     if random_state is not None:
         random.seed(random_state)
-        init = random.sample(range(len(data)), n_clusters)
-    else:
-        init = random.sample(range(len(data)), n_clusters)
+    init = random.sample(range(len(data)), n_clusters)
     kmed = kmedoids(data, init)
     kmed.process()
     clusters = kmed.get_clusters()
@@ -103,203 +98,249 @@ def run_kmedoids(X, n_clusters, random_state=None):
             labels[idx] = cid
     return labels, medoids
 
-# -------- PAGES NiceGUI --------
+# -------- PAGES --------
 @ui.page('/')
 def index():
     ui.label("📥 Charger votre dataset CSV").classes("text-2xl font-bold")
-    ui.label("Chargez un fichier CSV contenant vos données (les colonnes numériques seront utilisées).").classes("text-sm")
-
+    ui.label("Colonnes numériques utilisées pour le clustering").classes("text-sm")
     async def on_upload(e):
-        try:
-            # Lire le contenu en bytes
-            content = await e.file.read()
-            df = pd.read_csv(io.BytesIO(content))
-            state['raw_df'] = df
-            ui.notify(f"Dataset chargé : {df.shape[0]} lignes × {df.shape[1]} colonnes", color='positive')
-            ui.button("Aller au prétraitement", on_click=lambda: ui.run_javascript("window.location.href='/preprocess'"))
-
-        except Exception as ex:
-            ui.notify(f"Erreur lecture CSV: {ex}", color='negative')
+        content = await e.file.read()
+        df = pd.read_csv(io.BytesIO(content))
+        state['raw_df'] = df
+        ui.notify(f"Dataset chargé : {df.shape}", color='positive')
+        ui.button(
+    "Aller au prétraitement",
+    on_click=lambda: ui.run_javascript("window.location.href='/preprocess'")
+)
 
     ui.upload(on_upload=on_upload).props('accept=".csv"').classes('mt-4')
 
-
 @ui.page('/preprocess')
-def page_preprocess():
-    if state['raw_df'] is None:
-        ui.notify("Aucun dataset chargé — retour à l'accueil", color='warning')
+def preprocess_page():
+    if state.get('raw_df') is None:
+        ui.notify("Aucun CSV chargé", color='warning')
         ui.run_javascript("window.location.href='/'")
         return
 
-    ui.label("🧹 Prétraitement automatique").classes("text-2xl font-bold")
     df = state['raw_df']
+    ui.label(f"{df.shape[0]} lignes × {df.shape[1]} colonnes").classes("text-lg font-semibold mb-2")
+    ui.table.from_pandas(df.head(5)).classes("mb-4")
 
-    ui.label(f"Dimensions du dataset: {df.shape[0]} lignes × {df.shape[1]} colonnes").classes('mt-2')
-    ui.label("Aperçu (5 premières lignes):").classes('mt-4')
-    ui.table.from_pandas(df.head(5)).classes('w-full')
+    ui.label("⚙️ Options de prétraitement avancé").classes("text-xl font-bold mb-2")
 
-    with ui.row().classes('items-center gap-4 mt-4'):
-        norm_select = ui.select(['minmax', 'zscore', 'none'], value='minmax', label='Normalisation').classes('w-48')
-        missing_switch = ui.switch('Gérer valeurs manquantes (remplir par la moyenne)', value=True)
+    # ---- Choix des étapes de prétraitement ----
+    with ui.row().classes("gap-4"):
+        with ui.card().classes("p-4 flex-1 shadow-lg"):
+            ui.label("Doublons").classes("font-semibold mb-1")
+            remove_duplicates = ui.switch("Supprimer les doublons", value=True)
 
+            ui.label("Valeurs manquantes").classes("font-semibold mt-2 mb-1")
+            handle_missing = ui.switch("Remplir les valeurs manquantes", value=True)
+
+            ui.label("Outliers").classes("font-semibold mt-2 mb-1")
+            handle_outliers = ui.switch("Supprimer les outliers (Z-score > 3)", value=False)
+
+        with ui.card().classes("p-4 flex-1 shadow-lg"):
+            ui.label("Encodage").classes("font-semibold mb-1")
+            onehot_encode = ui.switch("Encodage One-Hot pour colonnes catégorielles", value=True)
+
+            ui.label("Normalisation").classes("font-semibold mt-2 mb-1")
+            normalization = ui.select(['minmax', 'zscore', 'aucune'], value='minmax')
+
+    # ---- Fonction de prétraitement ----
     def do_preprocess():
-        try:
-            norm = norm_select.value
-            if norm == 'none':
-                norm = None
-            numeric_df, X = preprocess_dataframe(df, normalization=norm, handle_missing=missing_switch.value)
-            state['numeric_columns'] = list(numeric_df.columns)
-            state['X'] = X
-            ui.notify(f"Prétraitement terminé — colonnes numériques: {len(state['numeric_columns'])}", color='positive')
-            ui.run_javascript("window.location.href='/algos'")
-        except Exception as ex:
-            ui.notify(str(ex), color='negative')
+        # Copier le dataframe pour éviter de modifier l'original
+        df_copy = df.copy()
 
-    ui.button("Lancer prétraitement", on_click=do_preprocess).classes('mt-4 bg-blue-600 text-white')
+        # Supprimer doublons
+        if remove_duplicates.value:
+            df_copy = df_copy.drop_duplicates()
 
-    # --- Nouveau bouton pour aller directement au clustering si prétraitement déjà fait ---
+        # Gestion valeurs manquantes
+        if handle_missing.value:
+            # remplir numérique avec moyenne, catégoriel avec mode
+            for col in df_copy.columns:
+                if df_copy[col].dtype in [int, float]:
+                    df_copy[col].fillna(df_copy[col].mean(), inplace=True)
+                else:
+                    df_copy[col].fillna(df_copy[col].mode()[0], inplace=True)
+
+        # Supprimer outliers
+        if handle_outliers.value:
+            numeric_cols = df_copy.select_dtypes(include=['int64', 'float64']).columns
+            from scipy import stats
+            df_copy = df_copy[(np.abs(stats.zscore(df_copy[numeric_cols])) < 3).all(axis=1)]
+
+        # Encodage One-Hot
+        if onehot_encode.value:
+            categorical_cols = df_copy.select_dtypes(include=['object', 'category']).columns
+            df_copy = pd.get_dummies(df_copy, columns=categorical_cols, drop_first=True)
+
+        # Normalisation
+        numeric_cols = df_copy.select_dtypes(include=['int64', 'float64']).columns
+        if normalization.value != 'aucune':
+            from sklearn.preprocessing import MinMaxScaler, StandardScaler
+            scaler = MinMaxScaler() if normalization.value == 'minmax' else StandardScaler()
+            df_copy[numeric_cols] = scaler.fit_transform(df_copy[numeric_cols])
+
+        # Enregistrer l'état
+        state['preprocessed_df'] = df_copy
+        state['X'] = df_copy.values
+        state['numeric_columns'] = list(df_copy.columns)
+
+        ui.notify("Prétraitement terminé", color='positive')
+        ui.run_javascript("window.location.href='/algos'")
+
+    # ---- Boutons ----
+    ui.button("Lancer prétraitement", on_click=do_preprocess)\
+        .classes("mt-4 bg-blue-600 text-white text-lg px-6 py-2 rounded-lg shadow-lg")
+
     if state.get('X') is not None:
         ui.button("Aller au clustering", on_click=lambda: ui.run_javascript("window.location.href='/algos'"))\
-          .classes('mt-2 bg-green-500 text-white')
+            .classes("mt-2 bg-green-500 text-white text-lg px-6 py-2 rounded-lg shadow-lg")
 
-    if state.get('numeric_columns') is not None:
-        ui.separator().classes('my-4')
-        ui.label("Colonnes numériques détectées:").classes('font-semibold')
-        ui.label(", ".join(state['numeric_columns'])).classes('text-sm')
+
+
+
+
+
+
+
 
 
 @ui.page('/algos')
-def page_algos():
+def algos_page():
     if state.get('X') is None:
-        ui.notify("Données non prétraitées — retour à preprocessing", color='warning')
+        ui.notify("Prétraitement nécessaire", color='warning')
         ui.run_javascript("window.location.href='/preprocess'")
         return
 
-    ui.label("⚙️ Sélection des algorithmes & paramètres").classes("text-2xl font-bold")
-    with ui.column().classes('w-full max-w-2xl'):
-        kmeans_chk = ui.checkbox('K-Means', value=True)
-        k_kmeans = ui.number('K (K-Means)', value=3, min=2, step=1)
+    X = state['X']
+    ui.label("⚙️ Sélection des algorithmes de clustering").classes("text-2xl font-bold mb-4")
 
-        kmedoids_chk = ui.checkbox('K-Medoids', value=True)
-        k_kmedoids = ui.number('K (K-Medoids)', value=3, min=2, step=1)
-
-        dbscan_chk = ui.checkbox('DBSCAN', value=False)
-        eps = ui.number('eps (DBSCAN)', value=0.5, step=0.1)
-        min_samples = ui.number('min_samples (DBSCAN)', value=5, step=1, min=1)
-
-        agnes_chk = ui.checkbox('AGNES (Agglomerative)', value=True)
-        agnes_k = ui.number('K (AGNES)', value=3, min=2, step=1)
-        agnes_link = ui.select(['ward', 'complete', 'average'], value='ward', label='linkage')
-
-    def run_all():
-        X = state['X']
-        results = {}
-        # PCA 2D for visualization
-        try:
-            pca = PCA(n_components=2)
-            X_pca = pca.fit_transform(X)
-            state['X_pca'] = X_pca
-        except Exception:
-            state['X_pca'] = None
-
+    # ------- LAYOUT DES CARTES -------
+    with ui.row().classes('gap-4'):
         # K-MEANS
-        if kmeans_chk.value:
-            try:
-                k = int(k_kmeans.value)
-                km = KMeans(n_clusters=k, random_state=0)
-                labels = km.fit_predict(X)
-                sil = silhouette_score(X, labels) if len(np.unique(labels))>1 else float('nan')
-                db = davies_bouldin_score(X, labels) if len(np.unique(labels))>1 else float('nan')
-                ch = calinski_harabasz_score(X, labels) if len(np.unique(labels))>1 else float('nan')
-                results['kmeans'] = {
-                    'labels': labels,
-                    'centers': km.cluster_centers_,
-                    'silhouette': sil,
-                    'davies_bouldin': db,
-                    'calinski_harabasz': ch,
-                    'n_clusters': len(np.unique(labels))
-                }
-            except Exception as ex:
-                ui.notify(f"K-Means erreur: {ex}", color='negative')
+        with ui.card().classes('p-4 flex-1 shadow-lg'):
+            ui.label("K-Means").classes("text-xl font-semibold mb-2")
+            kmeans_chk = ui.checkbox('Activer', value=True).classes('mb-2')
+            ui.label("Nombre de clusters (K)").classes('text-sm mb-1')
+            k_kmeans = ui.number(value=3, min=2, step=1)
 
         # K-MEDOIDS
-        if kmedoids_chk.value:
-            try:
-                k = int(k_kmedoids.value)
-                labels, medoids = run_kmedoids(X, k, random_state=0)
-                sil = silhouette_score(X, labels) if len(np.unique(labels))>1 else float('nan')
-                db = davies_bouldin_score(X, labels) if len(np.unique(labels))>1 else float('nan')
-                ch = calinski_harabasz_score(X, labels) if len(np.unique(labels))>1 else float('nan')
-                results['kmedoids'] = {
-                    'labels': labels,
-                    'medoids': medoids,
-                    'silhouette': sil,
-                    'davies_bouldin': db,
-                    'calinski_harabasz': ch,
-                    'n_clusters': len(np.unique(labels))
-                }
-            except Exception as ex:
-                ui.notify(f"K-Medoids erreur: {ex}", color='negative')
+        with ui.card().classes('p-4 flex-1 shadow-lg'):
+            ui.label("K-Medoids").classes("text-xl font-semibold mb-2")
+            kmedoids_chk = ui.checkbox('Activer', value=True).classes('mb-2')
+            ui.label("Nombre de clusters (K)").classes('text-sm mb-1')
+            k_kmedoids = ui.number(value=3, min=2, step=1)
 
+    with ui.row().classes('gap-4 mt-4'):
         # DBSCAN
-        if dbscan_chk.value:
-            try:
-                dbs = DBSCAN(eps=float(eps.value), min_samples=int(min_samples.value))
-                labels = dbs.fit_predict(X)
-                valid_clusters = [lab for lab in np.unique(labels) if lab != -1]
-                if len(valid_clusters) > 0 and len(np.unique(labels))>1:
-                    sil = silhouette_score(X, labels)
-                    db = davies_bouldin_score(X, labels)
-                    ch = calinski_harabasz_score(X, labels)
-                else:
-                    sil = float('nan'); db = float('nan'); ch = float('nan')
-                results['dbscan'] = {
-                    'labels': labels,
-                    'silhouette': sil,
-                    'davies_bouldin': db,
-                    'calinski_harabasz': ch,
-                    'n_clusters': len(np.unique(labels)) - (1 if -1 in labels else 0)
-                }
-            except Exception as ex:
-                ui.notify(f"DBSCAN erreur: {ex}", color='negative')
+        with ui.card().classes('p-4 flex-1 shadow-lg'):
+            ui.label("DBSCAN").classes("text-xl font-semibold mb-2")
+            dbscan_chk = ui.checkbox('Activer', value=False).classes('mb-2')
+            ui.label("eps").classes('text-sm mb-1')
+            eps = ui.slider(min=0.1, max=2.0, step=0.05, value=0.5)
+            ui.label("min_samples").classes('text-sm mt-2 mb-1')
+            min_samples = ui.number(value=5, min=1, step=1)
 
         # AGNES
+        with ui.card().classes('p-4 flex-1 shadow-lg'):
+            ui.label("AGNES").classes("text-xl font-semibold mb-2")
+            agnes_chk = ui.checkbox('Activer', value=True).classes('mb-2')
+            ui.label("Nombre de clusters (K)").classes('text-sm mb-1')
+            agnes_k = ui.number(value=3, min=2, step=1)
+            ui.label("Méthode linkage").classes('text-sm mb-1 mt-2')
+            agnes_link = ui.select(['ward', 'complete', 'average'], value='ward')
+
+    # ------- BOUTON LANCER -------
+    def run_all():
+        results = {}
+        try:
+            X_pca = PCA(n_components=2).fit_transform(X)
+            state['X_pca'] = X_pca
+        except:
+            state['X_pca'] = None
+
+        # --- K-MEANS ---
+        if kmeans_chk.value:
+            k = int(k_kmeans.value)
+            km = KMeansCustom(n_clusters=k, random_state=0)
+            labels = km.fit_predict(X)
+            results['kmeans'] = {
+                'labels': labels,
+                'centers': km.cluster_centers_,
+                'silhouette': silhouette_score(X, labels) if len(np.unique(labels))>1 else float('nan'),
+                'davies_bouldin': davies_bouldin_score(X, labels) if len(np.unique(labels))>1 else float('nan'),
+                'calinski_harabasz': calinski_harabasz_score(X, labels) if len(np.unique(labels))>1 else float('nan'),
+                'n_clusters': len(np.unique(labels))
+            }
+
+        # --- K-MEDOIDS ---
+        if kmedoids_chk.value:
+            k = int(k_kmedoids.value)
+            labels, medoids = run_kmedoids(X, k, random_state=0)
+            results['kmedoids'] = {
+                'labels': labels,
+                'medoids': medoids,
+                'silhouette': silhouette_score(X, labels) if len(np.unique(labels))>1 else float('nan'),
+                'davies_bouldin': davies_bouldin_score(X, labels) if len(np.unique(labels))>1 else float('nan'),
+                'calinski_harabasz': calinski_harabasz_score(X, labels) if len(np.unique(labels))>1 else float('nan'),
+                'n_clusters': len(np.unique(labels))
+            }
+
+        # --- DBSCAN ---
+        if dbscan_chk.value:
+            dbs = DBSCANCustom(eps=float(eps.value), min_samples=int(min_samples.value))
+            labels = dbs.fit_predict(X)
+            valid_clusters = [l for l in np.unique(labels) if l != -1]
+            results['dbscan'] = {
+                'labels': labels,
+                'silhouette': silhouette_score(X, labels) if len(valid_clusters)>1 else float('nan'),
+                'davies_bouldin': davies_bouldin_score(X, labels) if len(valid_clusters)>1 else float('nan'),
+                'calinski_harabasz': calinski_harabasz_score(X, labels) if len(valid_clusters)>1 else float('nan'),
+                'n_clusters': len(valid_clusters)
+            }
+
+        # --- AGNES ---
         if agnes_chk.value:
-            try:
-                k = int(agnes_k.value)
-                linkage = agnes_link.value
-                ag = AgglomerativeClustering(n_clusters=k, linkage=linkage)
-                labels = ag.fit_predict(X)
-                sil = silhouette_score(X, labels) if len(np.unique(labels))>1 else float('nan')
-                db = davies_bouldin_score(X, labels) if len(np.unique(labels))>1 else float('nan')
-                ch = calinski_harabasz_score(X, labels) if len(np.unique(labels))>1 else float('nan')
-                results['agnes'] = {
-                    'labels': labels,
-                    'linkage': linkage,
-                    'silhouette': sil,
-                    'davies_bouldin': db,
-                    'calinski_harabasz': ch,
-                    'n_clusters': len(np.unique(labels))
-                }
-            except Exception as ex:
-                ui.notify(f"AGNES erreur: {ex}", color='negative')
+            k = int(agnes_k.value)
+            link = agnes_link.value
+            ag = AgnesCustom(n_clusters=k, linkage=link)
+            labels = ag.fit_predict(X)
+            results['agnes'] = {
+                'labels': labels,
+                'linkage': link,
+                'silhouette': silhouette_score(X, labels) if len(np.unique(labels))>1 else float('nan'),
+                'davies_bouldin': davies_bouldin_score(X, labels) if len(np.unique(labels))>1 else float('nan'),
+                'calinski_harabasz': calinski_harabasz_score(X, labels) if len(np.unique(labels))>1 else float('nan'),
+                'n_clusters': len(np.unique(labels))
+            }
 
         state['results'] = results
         ui.notify("Clustering terminé", color='positive')
         ui.run_javascript("window.location.href='/results'")
 
-    ui.button("Lancer tous les algorithmes sélectionnés", on_click=run_all).classes('mt-6 bg-green-600 text-white')
+    ui.button("Lancer tous les algorithmes", on_click=run_all)\
+        .classes('mt-6 bg-green-600 text-white text-lg px-6 py-3 rounded-lg shadow-lg')
+
+
+
+
+
+
+
 
 
 
 @ui.page('/results')
-def page_results():
+def results_page():
     if not state.get('results'):
-        ui.notify("Aucun résultat — exécutez les algorithmes d'abord", color='warning')
-        ui.run_javascript('/algos')
+        ui.notify("Aucun résultat disponible — exécutez les algorithmes d'abord", color='warning')
+        ui.run_javascript("window.location.href='/algos'")
         return
 
-    ui.label("📊 Résultats — onglets par algorithme").classes("text-2xl font-bold")
+    ui.label("📊 Résultats").classes("text-2xl font-bold")
     results = state['results']
     X_pca = state.get('X_pca')
 
@@ -317,14 +358,14 @@ def page_results():
         with ui.tab_panels(tabs, value=tab_summary):
             # Résumé
             with ui.tab_panel(tab_summary):
-                ui.label(f"Nombre de clusters (excluant bruit) : {res.get('n_clusters', 'N/A')}")
-                ui.label(f"Silhouette : {res.get('silhouette', float('nan'))}")
-                ui.label(f"Davies-Bouldin : {res.get('davies_bouldin', float('nan'))}")
-                ui.label(f"Calinski-Harabasz : {res.get('calinski_harabasz', float('nan'))}")
+                ui.label(f"Nombre de clusters : {res.get('n_clusters','N/A')}")
+                ui.label(f"Silhouette : {res.get('silhouette', 'N/A')}")
+                ui.label(f"Davies-Bouldin : {res.get('davies_bouldin', 'N/A')}")
+                ui.label(f"Calinski-Harabasz : {res.get('calinski_harabasz', 'N/A')}")
                 if 'medoids' in res:
-                    ui.label(f"Medoïdes indices : {res['medoids']}")
+                    ui.label(f"Medoïdes : {res['medoids']}")
                 if 'centers' in res:
-                    ui.label(f"Centres disponibles (shape): {np.array(res['centers']).shape}")
+                    ui.label(f"Centres (shape) : {np.array(res['centers']).shape}")
 
             # Scatter PCA
             with ui.tab_panel(tab_scatter):
@@ -335,37 +376,66 @@ def page_results():
                     if 'centers' in res:
                         try:
                             centers_pca = PCA(n_components=2).fit_transform(res['centers'])
-                        except Exception:
+                        except:
                             centers_pca = None
-                    img = scatter_pca_image(X_pca, res['labels'], centers_pca=centers_pca, title=f"{algo_name.upper()} PCA")
-                    ui.image(img).classes('mt-4')
+                    with ui.pyplot():
+                        labels = res['labels']
+                        unique_labels = np.unique(labels)
+                        for lab in unique_labels:
+                            mask = labels == lab
+                            plt.scatter(X_pca[mask,0], X_pca[mask,1], label=str(lab), alpha=0.7)
+                        if centers_pca is not None:
+                            plt.scatter(centers_pca[:,0], centers_pca[:,1], marker='X', s=120, c='black', linewidths=1.5)
+                        plt.title(f"{algo_name.upper()} PCA")
+                        plt.xlabel("PC1")
+                        plt.ylabel("PC2")
+                        plt.legend(title="Cluster", bbox_to_anchor=(1.05,1), loc='upper left')
 
             # Histogramme
             with ui.tab_panel(tab_hist):
-                img = histogram_image(res['labels'], title=f"{algo_name.upper()} - Distribution des clusters")
-                ui.image(img)
+                with ui.pyplot():
+                    labels = res['labels']
+                    unique, counts = np.unique(labels, return_counts=True)
+                    plt.bar(unique.astype(str), counts, alpha=0.8)
+                    plt.title(f"{algo_name.upper()} - Distribution")
+                    plt.xlabel("Cluster")
+                    plt.ylabel("Nombre de points")
 
             # Silhouette
             with ui.tab_panel(tab_sil):
                 s = res.get('silhouette', float('nan'))
                 if np.isnan(s):
-                    ui.label("Silhouette non calculable (moins de 2 clusters) ou non applicable")
+                    ui.label("Silhouette non calculable")
                 else:
-                    img = silhouette_image(s, title=f"{algo_name.upper()} Silhouette")
-                    ui.image(img)
+                    with ui.pyplot():
+                        plt.axvline(s, linewidth=3, color='red')
+                        plt.xlim(-1,1)
+                        plt.title(f"{algo_name.upper()} Silhouette = {s:.4f}")
 
-            # Dendrogramme (AGNES)
+            # Dendrogramme
             with ui.tab_panel(tab_dend):
-                if algo_name == 'agnes':
+                if algo_name=='agnes':
                     try:
-                        img = dendrogram_image(state['X'], method=res.get('linkage','ward'), title=f"AGNES - {res.get('linkage','ward')}")
-                        ui.image(img)
-                    except Exception as ex:
-                        ui.label(f"Impossible de générer dendrogramme: {ex}")
+                        from scipy.cluster.hierarchy import linkage, dendrogram
+                        Z = linkage(state['X'], method=res.get('linkage','ward'))
+                        with ui.pyplot():
+                            dendrogram(Z, color_threshold=None)
+                            plt.title(f"AGNES - {res.get('linkage')}")
+                    except:
+                        ui.label("Dendrogramme impossible")
                 else:
-                    ui.label("Dendrogramme disponible uniquement pour AGNES")
+                    ui.label("Dendrogramme uniquement pour AGNES")
 
 
-# -------- LANCEMENT --------
-if __name__ in {"__main__", "__mp_main__"}:
-    ui.run(title="Data Mining Clustering - Simple", port=8080, reload=True)
+
+
+
+
+
+
+
+
+
+# -------- RUN --------
+if __name__ in {"__main__","__mp_main__"}:
+    ui.run(title="Clustering Data Mining - Full", port=8080, reload=True)
