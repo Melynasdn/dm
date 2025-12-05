@@ -110,202 +110,412 @@ def plot_grouped_histogram(metrics_dict, title="Comparaison des algos"):
     buf.seek(0)
     return "data:image/png;base64," + base64.b64encode(buf.read()).decode()
 
+
+
 # ----------------- PAGE INDEX -----------------
+# ----------------- PAGE ACCUEIL (CHOIX MODE) -----------------
+
 @ui.page('/')
-def index():
-    ui.label("📥 Charger votre dataset CSV").classes("text-2xl font-bold")
-    async def on_upload(e):
-        content = await e.file.read()
-        df = pd.read_csv(io.BytesIO(content))
-        state['raw_df'] = df
-        ui.notify(f"✅ Dataset chargé : {df.shape[0]} lignes × {df.shape[1]} colonnes", color='positive')
-        ui.run_javascript("window.location.href='/preprocess'")
-    ui.upload(on_upload=on_upload).props('accept=".csv"')
+def home_page():
+
+    ui.add_head_html("""
+    <style>
+        body {
+            background-color: #f5f6fa;
+        }
+        .main-title {
+            font-weight: 700;
+            font-size: 36px;
+            color: #2c3e50;
+        }
+        .sub-title {
+            color: #636e72;
+            font-size: 16px;
+        }
+    </style>
+    """)
+
+    with ui.column().classes("w-full h-screen items-center justify-center gap-8"):
+
+        ui.label("Plateforme de Clustering").classes("main-title")
+        ui.label("Veuillez choisir le mode d'analyse").classes("sub-title")
+
+        with ui.row().classes("gap-10"):
+
+            # -------- NON SUPERVISÉ --------
+            with ui.card().classes("p-8 w-72 shadow-md rounded-xl hover:shadow-xl transition"):
+               
+                ui.label("Clustering Non Supervisé").classes("text-xl font-bold mt-2")
+               
+
+                ui.button(
+                "Commencer",
+                on_click=lambda: ui.run_javascript("window.location.href='/upload'")
+            ).classes("mt-6 w-full h-12 text-base")
+
+
+            # -------- SUPERVISÉ --------
+            with ui.card().classes("p-8 w-72 shadow-md rounded-xl hover:shadow-xl transition"):
+               
+                ui.label("Clustering Supervisé").classes("text-xl font-bold mt-2")
+                ui.label("À bientôt").classes("text-gray-500 text-sm mt-1")
+
+                ui.button(
+                "Accéder",
+                on_click=lambda: ui.notify(" À bientôt !", color="warning")
+            ).classes("mt-6 w-full h-12 text-base")
+
+
+# ----------------- PAGE UPLOAD (DESIGN MODERNE - CORRIGÉE) -----------------
+@ui.page('/upload')
+def upload_page():
+
+    ui.add_head_html("""
+    <style>
+        body {
+            background-color: #f5f6fa;
+        }
+        .upload-title {
+            font-weight: 700;
+            font-size: 28px;
+            color: #2c3e50;
+        }
+        .upload-sub {
+            color: #636e72;
+            font-size: 14px;
+        }
+    </style>
+    """)
+
+    with ui.column().classes("w-full h-screen items-center justify-center"):
+
+        with ui.card().classes("p-10 w-[420px] shadow-lg rounded-xl"):
+
+            ui.label(" Chargement du Dataset").classes("upload-title text-center")
+            ui.label("Importez votre fichier CSV pour commencer").classes("upload-sub text-center mb-6")
+
+            status_label = ui.label("Aucun fichier chargé").classes("text-red-500 text-sm mb-4")
+
+            #  Bouton suivant désactivé au début
+            btn_next = ui.button("Suivant ➡").classes("w-1/2 h-11")
+            btn_next.disable()
+
+            async def on_upload(e):
+                content = await e.file.read()
+                df = pd.read_csv(io.BytesIO(content))
+                state['raw_df'] = df
+
+                status_label.text = f" Fichier chargé : {df.shape[0]} lignes × {df.shape[1]} colonnes"
+                status_label.classes("text-green-600")
+
+                btn_next.enable() 
+
+                ui.notify(
+                    f"Dataset chargé avec succès !",
+                    color='positive'
+                )
+
+            ui.upload(
+                on_upload=on_upload,
+                label="Sélectionner un fichier CSV"
+            ).props('accept=".csv"').classes("w-full mb-4")
+
+            ui.separator().classes("my-4")
+
+            with ui.row().classes("w-full gap-4"):
+                ui.button(
+                    "⬅ Retour",
+                    on_click=lambda: ui.run_javascript("window.location.href='/'")
+                ).classes("w-1/2 h-11")
+
+             
+                btn_next.on_click(lambda: ui.run_javascript("window.location.href='/preprocess'"))
+
+
 
 # ----------------- PAGE PREPROCESS -----------------
+
 @ui.page('/preprocess')
 def preprocess_page():
+
     if state['raw_df'] is None:
-        ui.notify("⚠️ Aucun CSV chargé", color='warning')
-        ui.run_javascript("window.location.href='/'")
+        ui.notify("⚠️ Aucun dataset chargé", color='warning')
+        ui.run_javascript("window.location.href='/upload'")
         return
 
     df = state['raw_df']
-    ui.label(f"📊 Dataset avant prétraitement : {df.shape[0]}×{df.shape[1]}").classes("text-xl font-semibold")
-    ui.table(rows=df.head(10).to_dict('records'), columns=[{"name": c,"label": c,"field":c} for c in df.columns])
 
-    drop_dup = ui.switch("Supprimer doublons", value=False)
-    handle_missing = ui.switch("Remplir valeurs manquantes", value=True)
-    onehot = ui.switch("Encodage OneHot", value=False)
-    norm_select = ui.select(['none','minmax','zscore'], value='minmax', label='Normalisation')
+    ui.add_head_html("""
+    <style>
+        body {
+            background-color: #f5f6fa;
+        }
+        .pp-title {
+            font-size: 26px;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+        .pp-sub {
+            font-size: 14px;
+            color: #636e72;
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+    </style>
+    """)
 
-    container = ui.column()
-    def apply():
-        processed_df, X = preprocess_dataframe(df, handle_missing.value, None if norm_select.value=='none' else norm_select.value,
-                                               encode_onehot=onehot.value, drop_duplicates=drop_dup.value)
-        state['X'] = X
-        state['numeric_columns'] = list(processed_df.select_dtypes(include=[np.number]).columns)
-        container.clear()
-        ui.label(f"✅ Dataset après prétraitement : {processed_df.shape[0]}×{processed_df.shape[1]}").classes("text-lg font-semibold")
-        ui.table(rows=processed_df.head(10).to_dict('records'), columns=[{"name": c,"label": c,"field":c} for c in processed_df.columns])
-        ui.button("Aller au clustering →", on_click=lambda: ui.run_javascript("window.location.href='/algos'"))
-        ui.notify("✅ Prétraitement appliqué!", color='positive')
-    ui.button("Lancer prétraitement", on_click=apply)
-    container
+    with ui.column().classes("w-full min-h-screen items-center py-10 gap-8"):
+
+        # ---------- TITRE ----------
+        ui.label(" Prétraitement des Données").classes("pp-title")
+        ui.label("Configurez les options avant le clustering").classes("pp-sub")
+
+        # ---------- CARTE PRINCIPALE ----------
+        with ui.card().classes("p-8 w-[1000px] shadow-lg rounded-xl"):
+
+            ui.label(f" Dataset chargé : {df.shape[0]} lignes × {df.shape[1]} colonnes") \
+              .classes("section-title mb-4")
+
+            # ---------- APERÇU DU DATASET ----------
+            with ui.expansion(" Aperçu des données (10 premières lignes)", icon="table_view"):
+                ui.table(
+                    rows=df.head(10).to_dict('records'),
+                    columns=[{"name": c, "label": c, "field": c} for c in df.columns]
+                )
+
+            ui.separator().classes("my-6")
+
+            # ---------- OPTIONS DE PRETRAITEMENT ----------
+            ui.label(" Options de prétraitement").classes("section-title mb-3")
+
+            with ui.row().classes("gap-10 w-full"):
+
+                drop_dup = ui.switch("Supprimer doublons", value=False)
+                handle_missing = ui.switch("Remplir valeurs manquantes", value=True)
+                onehot = ui.switch("Encodage OneHot", value=False)
+
+                norm_select = ui.select(
+                    ['none', 'minmax', 'zscore'],
+                    value='minmax',
+                    label='Normalisation'
+                ).classes("w-48")
+
+            ui.separator().classes("my-6")
+
+            # ---------- BOUTONS ----------
+            with ui.row().classes("w-full gap-6"):
+
+                ui.button(
+                    "⬅ Retour Upload",
+                    on_click=lambda: ui.run_javascript("window.location.href='/upload'")
+                ).classes("w-1/3 h-11")
+
+                btn_apply = ui.button(" Appliquer le prétraitement").classes("w-1/3 h-11")
+
+                ui.button(
+                    "➡ Continuer au clustering",
+                    on_click=lambda: ui.run_javascript("window.location.href='/algos'")
+                ).classes("w-1/3 h-11")
+
+        # ---------- ZONE DE RÉSULTAT ----------
+        result_container = ui.column().classes("w-[1000px]")
+
+        def apply():
+            processed_df, X = preprocess_dataframe(
+                df,
+                handle_missing.value,
+                None if norm_select.value == 'none' else norm_select.value,
+                encode_onehot=onehot.value,
+                drop_duplicates=drop_dup.value
+            )
+
+            state['X'] = X
+            state['numeric_columns'] = list(processed_df.select_dtypes(include=[np.number]).columns)
+
+            result_container.clear()
+
+            with result_container:
+                with ui.card().classes("p-6 shadow-md rounded-xl mt-6"):
+                    ui.label(
+                        f" Dataset après prétraitement : {processed_df.shape[0]} × {processed_df.shape[1]}"
+                    ).classes("section-title mb-3")
+
+                    ui.table(
+                        rows=processed_df.head(10).to_dict('records'),
+                        columns=[{"name": c, "label": c, "field": c} for c in processed_df.columns]
+                    )
+
+            ui.notify("Prétraitement appliqué avec succès", color='positive')
+
+        btn_apply.on_click(apply)
+
 
 # ----------------- PAGE ALGOS -----------------
+
 @ui.page('/algos')
 def algos_page():
+
     if state.get('X') is None:
         ui.notify("⚠️ Prétraitement nécessaire", color='warning')
         ui.run_javascript("window.location.href='/preprocess'")
         return
 
     X = state['X']
-    ui.label("⚙️ Algorithmes de Clustering").classes("text-3xl font-bold mb-6")
 
-    with ui.row().classes("gap-4"):
-        # KMEANS
-        with ui.card().classes("p-4 shadow-lg w-1/3"):
-            ui.label("KMeans").classes("text-xl font-semibold")
-            k_kmeans = ui.number(label="Nombre de clusters", value=3, min=2, step=1)
-            kmeans_chk = ui.checkbox("Activer", value=True)
+    ui.add_head_html("""
+    <style>
+        body {
+            background-color: #f5f6fa;
+        }
+        .algo-title {
+            font-size: 26px;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        .algo-card {
+            width: 320px;
+        }
+    </style>
+    """)
 
-        # KMEDOIDS
-        with ui.card().classes("p-4 shadow-lg w-1/3"):
-            ui.label("KMedoids").classes("text-xl font-semibold")
-            k_kmed = ui.number(label="Nombre de clusters", value=3, min=2, step=1)
-            kmed_chk = ui.checkbox("Activer", value=True)
+    with ui.column().classes("w-full min-h-screen items-center py-10 gap-8"):
 
-        # DBSCAN
-        diag = diagnose_dbscan(X)
-        with ui.card().classes("p-4 shadow-lg w-1/3"):
-            ui.label("DBSCAN").classes("text-xl font-semibold")
-            ui.label(f"💡 eps suggéré: {diag['suggested_eps']:.2f}, core points: {diag['potential_core_points']}/{diag['total_points']}")
-            eps_val = ui.slider(min=0.1, max=5, step=0.1, value=max(0.5, diag['suggested_eps']))
-            min_samples = ui.number(label="min_samples", value=3, min=2, step=1)
-            dbscan_chk = ui.checkbox("Activer", value=True)
+        # ---------- TITRE ----------
+        ui.label(" Algorithmes de Clustering").classes("algo-title")
+        ui.label("Configurez les paramètres et lancez l’analyse").classes("text-gray-500")
 
-        # AGNES
-        with ui.card().classes("p-4 shadow-lg w-1/3 mt-4"):
-            ui.label("AGNES").classes("text-xl font-semibold")
-            agnes_k = ui.number(label="Nombre de clusters", value=3, min=2, step=1)
-            agnes_link = ui.select(['ward','complete','average'], value='ward', label="Linkage")
-            agnes_chk = ui.checkbox("Activer", value=True)
+        # ---------- GRILLE DES ALGOS ----------
+        with ui.row().classes("gap-8 flex-wrap justify-center"):
 
-        # DIANA
-        with ui.card().classes("p-4 shadow-lg w-1/3 mt-4"):
-          ui.label("DIANA").classes("text-xl font-semibold")
-          diana_k = ui.number(label="Nombre de clusters", value=3, min=2, step=1)
-          diana_chk = ui.checkbox("Activer", value=True)
+            # -------- KMEANS --------
+            with ui.card().classes("p-6 shadow-md rounded-xl algo-card"):
+                ui.label("KMeans").classes("section-title mb-3")
+                k_kmeans = ui.number("Nombre de clusters", value=3, min=2)
+                kmeans_chk = ui.switch("Activer", value=True)
 
-    def run_all():
-        results = {}
-        try:
-            state['X_pca'] = PCA(n_components=2).fit_transform(X)
-        except:
-            state['X_pca'] = None
+            # -------- KMEDOIDS --------
+            with ui.card().classes("p-6 shadow-md rounded-xl algo-card"):
+                ui.label("KMedoids").classes("section-title mb-3")
+                k_kmed = ui.number("Nombre de clusters", value=3, min=2)
+                kmed_chk = ui.switch("Activer", value=True)
 
-        # -------- KMEANS --------
-        if kmeans_chk.value:
-            km = KMeansCustom(n_clusters=int(k_kmeans.value), random_state=0)
-            labels = km.fit_predict(X)
-            results['kmeans'] = {
-                'labels': labels,
-                'centers': km.cluster_centers_,
-                'silhouette': silhouette_score(X, labels) if len(np.unique(labels))>1 else np.nan,
-                'davies_bouldin': davies_bouldin_score(X, labels) if len(np.unique(labels))>1 else np.nan,
-                'calinski_harabasz': calinski_harabasz_score(X, labels) if len(np.unique(labels))>1 else np.nan,
-                'n_clusters': len(np.unique(labels))
-            }
+            # -------- DBSCAN --------
+            diag = diagnose_dbscan(X)
+            with ui.card().classes("p-6 shadow-md rounded-xl algo-card"):
+                ui.label("DBSCAN").classes("section-title mb-1")
+                ui.label(
+                    f"💡 eps suggéré : {diag['suggested_eps']:.2f}"
+                ).classes("text-sm text-gray-500 mb-3")
 
-        # -------- KMEDOIDS --------
-        if kmed_chk.value:
-            labels = np.random.randint(0, int(k_kmed.value), size=X.shape[0])
-            results['kmedoids'] = {
-                'labels': labels,
-                'silhouette': silhouette_score(X, labels) if len(np.unique(labels))>1 else np.nan,
-                'davies_bouldin': davies_bouldin_score(X, labels) if len(np.unique(labels))>1 else np.nan,
-                'calinski_harabasz': calinski_harabasz_score(X, labels) if len(np.unique(labels))>1 else np.nan,
-                'n_clusters': len(np.unique(labels))
-            }
+                eps_val = ui.slider(min=0.1, max=5, step=0.1,
+                                    value=max(0.5, diag['suggested_eps']))
+                min_samples = ui.number("min_samples", value=3, min=2)
 
-        # -------- DBSCAN --------
-        if dbscan_chk.value:
-            dbs = DBSCANCustom(eps=float(eps_val.value), min_samples=int(min_samples.value))
-            labels = dbs.fit(X).labels_
-            n_noise = np.sum(labels==-1)
-            valid_clusters = [l for l in np.unique(labels) if l!=-1]
-            results['dbscan'] = {'labels': labels, 'n_clusters': len(valid_clusters), 'n_noise': n_noise}
-            if len(valid_clusters) > 1:
-                mask = labels != -1
-                results['dbscan']['silhouette'] = silhouette_score(X[mask], labels[mask])
-                results['dbscan']['davies_bouldin'] = davies_bouldin_score(X[mask], labels[mask])
-                results['dbscan']['calinski_harabasz'] = calinski_harabasz_score(X[mask], labels[mask])
-            else:
-                results['dbscan']['silhouette'] = results['dbscan']['davies_bouldin'] = results['dbscan']['calinski_harabasz'] = np.nan
+                dbscan_chk = ui.switch("Activer", value=True)
 
-        # -------- DIANA --------
-        if diana_chk.value:
-            di = DianaCustom(n_clusters=int(diana_k.value))
-            labels = di.fit_predict(X)
-            results['diana'] = {
-                 'labels': labels,
-                 'silhouette': silhouette_score(X, labels) if len(np.unique(labels))>1 else np.nan,
-                  'davies_bouldin': davies_bouldin_score(X, labels) if len(np.unique(labels))>1 else np.nan,
-                  'calinski_harabasz': calinski_harabasz_score(X, labels) if len(np.unique(labels))>1 else np.nan,
-                  'n_clusters': len(np.unique(labels))
-            }
+            # -------- AGNES --------
+            with ui.card().classes("p-6 shadow-md rounded-xl algo-card"):
+                ui.label("AGNES").classes("section-title mb-3")
+                agnes_k = ui.number("Nombre de clusters", value=3, min=2)
+                agnes_link = ui.select(
+                    ['ward', 'complete', 'average'],
+                    value='ward',
+                    label="Linkage"
+                )
+                agnes_chk = ui.switch("Activer", value=True)
 
-        # -------- AGNES --------
-        if agnes_chk.value:
-            ag = AgnesCustom(n_clusters=int(agnes_k.value), linkage=agnes_link.value)
-            labels = ag.fit_predict(X)
-            results['agnes'] = {
-                'labels': labels,
-                'linkage': agnes_link.value,
-                'silhouette': silhouette_score(X, labels) if len(np.unique(labels))>1 else np.nan,
-                'davies_bouldin': davies_bouldin_score(X, labels) if len(np.unique(labels))>1 else np.nan,
-                'calinski_harabasz': calinski_harabasz_score(X, labels) if len(np.unique(labels))>1 else np.nan,
-                'n_clusters': len(np.unique(labels))
-            }
+            # -------- DIANA --------
+            with ui.card().classes("p-6 shadow-md rounded-xl algo-card"):
+                ui.label("DIANA").classes("section-title mb-3")
+                diana_k = ui.number("Nombre de clusters", value=3, min=2)
+                diana_chk = ui.switch("Activer", value=True)
 
-        state['results'] = results
-        ui.notify("✅ Clustering terminé", color='positive')
-        ui.run_javascript("window.location.href='/results'")
+        ui.separator().classes("my-6 w-[900px]")
 
-    ui.button("🚀 Lancer tous les algorithmes", on_click=run_all).classes("mt-6")
+        # ---------- BOUTONS ----------
+        with ui.row().classes("gap-6"):
+
+            ui.button(
+                "⬅ Retour Prétraitement",
+                on_click=lambda: ui.run_javascript("window.location.href='/preprocess'")
+            ).classes("w-64 h-11")
+
+            btn_run = ui.button(" Lancer les algorithmes").classes("w-64 h-11")
+
+        # ---------- EXECUTION ----------
+        def run_all():
+            results = {}
+
+            try:
+                state['X_pca'] = PCA(n_components=2).fit_transform(X)
+            except:
+                state['X_pca'] = None
+
+            # -------- KMEANS --------
+            if kmeans_chk.value:
+                km = KMeansCustom(n_clusters=int(k_kmeans.value), random_state=0)
+                labels = km.fit_predict(X)
+                results['kmeans'] = {
+                    'labels': labels,
+                    'silhouette': silhouette_score(X, labels) if len(np.unique(labels)) > 1 else np.nan,
+                    'davies_bouldin': davies_bouldin_score(X, labels) if len(np.unique(labels)) > 1 else np.nan,
+                    'calinski_harabasz': calinski_harabasz_score(X, labels) if len(np.unique(labels)) > 1 else np.nan,
+                    'n_clusters': len(np.unique(labels))
+                }
+
+            # -------- KMEDOIDS --------
+            if kmed_chk.value:
+                labels = np.random.randint(0, int(k_kmed.value), size=X.shape[0])
+                results['kmedoids'] = {
+                    'labels': labels,
+                    'silhouette': silhouette_score(X, labels) if len(np.unique(labels)) > 1 else np.nan,
+                    'davies_bouldin': davies_bouldin_score(X, labels) if len(np.unique(labels)) > 1 else np.nan,
+                    'calinski_harabasz': calinski_harabasz_score(X, labels) if len(np.unique(labels)) > 1 else np.nan,
+                    'n_clusters': len(np.unique(labels))
+                }
+
+            # -------- DBSCAN --------
+            if dbscan_chk.value:
+                dbs = DBSCANCustom(eps=float(eps_val.value), min_samples=int(min_samples.value))
+                labels = dbs.fit(X).labels_
+
+                valid_clusters = [l for l in np.unique(labels) if l != -1]
+
+                results['dbscan'] = {
+                    'labels': labels,
+                    'n_clusters': len(valid_clusters),
+                    'n_noise': np.sum(labels == -1)
+                }
+
+            # -------- DIANA --------
+            if diana_chk.value:
+                di = DianaCustom(n_clusters=int(diana_k.value))
+                labels = di.fit_predict(X)
+                results['diana'] = {'labels': labels}
+
+            # -------- AGNES --------
+            if agnes_chk.value:
+                ag = AgnesCustom(n_clusters=int(agnes_k.value), linkage=agnes_link.value)
+                labels = ag.fit_predict(X)
+                results['agnes'] = {'labels': labels}
+
+            state['results'] = results
+            ui.notify("Clustering terminé", color='positive')
+            ui.run_javascript("window.location.href='/results'")
+
+        btn_run.on_click(run_all)
 
 
 
 
-
-# ----------------- PAGE RESULTS -----------------
-# ------------------ Helpers ------------------
-import matplotlib.pyplot as plt
-import io, base64
-from scipy.cluster.hierarchy import dendrogram, linkage as sch_linkage
-from sklearn.preprocessing import StandardScaler
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.cluster.hierarchy import dendrogram, linkage
-from scipy.spatial.distance import pdist, squareform
-from sklearn.preprocessing import StandardScaler
-import io
-import base64
-
-# ------------------ Helpers ------------------
-import matplotlib.pyplot as plt
-import io, base64
-from scipy.cluster.hierarchy import dendrogram, linkage as sch_linkage
-from sklearn.preprocessing import StandardScaler
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.cluster.hierarchy import dendrogram, linkage
-from scipy.spatial.distance import pdist, squareform
-from sklearn.preprocessing import StandardScaler
-import io
-import base64
 
 
 # ------------------ Helpers ------------------
