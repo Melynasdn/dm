@@ -115,91 +115,124 @@ def index():
 
     ui.upload(on_upload=on_upload).props('accept=".csv"').classes('mt-4')
 
+
+
+
+
+
+from nicegui import ui, app
+import pandas as pd
+import numpy as np
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, OneHotEncoder
+
+# -----------------------------
+# Exemple d'état global
+# -----------------------------
+state = {
+    'raw_df': None,  # à remplir lors du chargement CSV
+    'X': None,
+    'numeric_columns': []
+}
+
+# -----------------------------
+# Fonction de prétraitement
+# -----------------------------
+def preprocess_dataframe(df, handle_missing=True, normalization=None, encode_onehot=False, drop_duplicates=False):
+    df_copy = df.copy()
+
+    # Supprimer doublons
+    if drop_duplicates:
+        df_copy = df_copy.drop_duplicates()
+
+    # Remplir valeurs manquantes
+    for col in df_copy.columns:
+        if df_copy[col].dtype in [np.float64, np.int64]:
+            df_copy[col] = df_copy[col].fillna(df_copy[col].mean())
+        else:
+            df_copy[col] = df_copy[col].fillna(df_copy[col].mode()[0])
+
+    # Encodage OneHot
+    if encode_onehot:
+        cat_cols = df_copy.select_dtypes(include=['object', 'category']).columns
+        if len(cat_cols) > 0:
+            df_copy = pd.get_dummies(df_copy, columns=cat_cols)
+
+    # Normalisation
+    numeric_cols = df_copy.select_dtypes(include=[np.number]).columns
+    if normalization == 'zscore':
+        df_copy[numeric_cols] = StandardScaler().fit_transform(df_copy[numeric_cols])
+    elif normalization == 'minmax':
+        df_copy[numeric_cols] = MinMaxScaler().fit_transform(df_copy[numeric_cols])
+
+    return df_copy, df_copy.values
+
+# -----------------------------
+# Page Preprocessing
+# -----------------------------
 @ui.page('/preprocess')
 def preprocess_page():
-    if state.get('raw_df') is None:
+    if state['raw_df'] is None:
         ui.notify("Aucun CSV chargé", color='warning')
         ui.run_javascript("window.location.href='/'")
         return
 
     df = state['raw_df']
-    ui.label(f"{df.shape[0]} lignes × {df.shape[1]} colonnes").classes("text-lg font-semibold mb-2")
-    ui.table.from_pandas(df.head(5)).classes("mb-4")
 
-    ui.label("⚙️ Options de prétraitement avancé").classes("text-xl font-bold mb-2")
+    ui.label(f"📊 Dataset avant prétraitement : {df.shape[0]} lignes × {df.shape[1]} colonnes").classes("text-xl font-semibold")
+    
+    # CORRECTION: Convertir le DataFrame en liste de dictionnaires
+    ui.table(
+        rows=df.head(5).to_dict('records'),
+        columns=[{"name": col, "label": col, "field": col} for col in df.columns]
+    )
 
-    # ---- Choix des étapes de prétraitement ----
-    with ui.row().classes("gap-4"):
-        with ui.card().classes("p-4 flex-1 shadow-lg"):
-            ui.label("Doublons").classes("font-semibold mb-1")
-            remove_duplicates = ui.switch("Supprimer les doublons", value=True)
+    # -----------------------------
+    # Options de prétraitement
+    # -----------------------------
+    ui.label("⚙️ Choisissez les opérations de prétraitement").classes("text-lg font-semibold mt-4")
+    drop_duplicates_switch = ui.switch("Supprimer doublons", value=False)
+    missing_switch = ui.switch("Remplir valeurs manquantes", value=True)
+    encode_onehot_switch = ui.switch("Encodage OneHot des catégories", value=False)
+    norm_select = ui.select(['none', 'minmax', 'zscore'], value='minmax', label='Normalisation')
 
-            ui.label("Valeurs manquantes").classes("font-semibold mt-2 mb-1")
-            handle_missing = ui.switch("Remplir les valeurs manquantes", value=True)
+    # Conteneur pour afficher le dataset après prétraitement
+    processed_table_container = ui.column().classes("mt-4")
 
-            ui.label("Outliers").classes("font-semibold mt-2 mb-1")
-            handle_outliers = ui.switch("Supprimer les outliers (Z-score > 3)", value=False)
+    # -----------------------------
+    # Fonction pour appliquer le prétraitement
+    # -----------------------------
+    def apply_preprocessing():
+        processed_df, X = preprocess_dataframe(
+            df,
+            handle_missing=missing_switch.value,
+            normalization=None if norm_select.value=='none' else norm_select.value,
+            encode_onehot=encode_onehot_switch.value,
+            drop_duplicates=drop_duplicates_switch.value
+        )
+        state['X'] = X
+        state['numeric_columns'] = list(processed_df.select_dtypes(include=[np.number]).columns)
 
-        with ui.card().classes("p-4 flex-1 shadow-lg"):
-            ui.label("Encodage").classes("font-semibold mb-1")
-            onehot_encode = ui.switch("Encodage One-Hot pour colonnes catégorielles", value=True)
+        # Affichage du dataset traité
+        processed_table_container.clear()
+        with processed_table_container:
+            ui.label(f"✅ Dataset après prétraitement : {processed_df.shape[0]} lignes × {processed_df.shape[1]} colonnes").classes("text-xl font-semibold mt-2")
+            
+            # CORRECTION: Utiliser to_dict('records') ici aussi
+            ui.table(
+                rows=processed_df.head(5).to_dict('records'),
+                columns=[{"name": col, "label": col, "field": col} for col in processed_df.columns]
+            )
 
-            ui.label("Normalisation").classes("font-semibold mt-2 mb-1")
-            normalization = ui.select(['minmax', 'zscore', 'aucune'], value='minmax')
+    # -----------------------------
+    # Bouton lancer prétraitement
+    # -----------------------------
+    ui.button("Lancer prétraitement", on_click=apply_preprocessing).classes('mt-4 bg-blue-600 text-white px-4 py-2 rounded')
 
-    # ---- Fonction de prétraitement ----
-    def do_preprocess():
-        # Copier le dataframe pour éviter de modifier l'original
-        df_copy = df.copy()
-
-        # Supprimer doublons
-        if remove_duplicates.value:
-            df_copy = df_copy.drop_duplicates()
-
-        # Gestion valeurs manquantes
-        if handle_missing.value:
-            # remplir numérique avec moyenne, catégoriel avec mode
-            for col in df_copy.columns:
-                if df_copy[col].dtype in [int, float]:
-                    df_copy[col].fillna(df_copy[col].mean(), inplace=True)
-                else:
-                    df_copy[col].fillna(df_copy[col].mode()[0], inplace=True)
-
-        # Supprimer outliers
-        if handle_outliers.value:
-            numeric_cols = df_copy.select_dtypes(include=['int64', 'float64']).columns
-            from scipy import stats
-            df_copy = df_copy[(np.abs(stats.zscore(df_copy[numeric_cols])) < 3).all(axis=1)]
-
-        # Encodage One-Hot
-        if onehot_encode.value:
-            categorical_cols = df_copy.select_dtypes(include=['object', 'category']).columns
-            df_copy = pd.get_dummies(df_copy, columns=categorical_cols, drop_first=True)
-
-        # Normalisation
-        numeric_cols = df_copy.select_dtypes(include=['int64', 'float64']).columns
-        if normalization.value != 'aucune':
-            from sklearn.preprocessing import MinMaxScaler, StandardScaler
-            scaler = MinMaxScaler() if normalization.value == 'minmax' else StandardScaler()
-            df_copy[numeric_cols] = scaler.fit_transform(df_copy[numeric_cols])
-
-        # Enregistrer l'état
-        state['preprocessed_df'] = df_copy
-        state['X'] = df_copy.values
-        state['numeric_columns'] = list(df_copy.columns)
-
-        ui.notify("Prétraitement terminé", color='positive')
-        ui.run_javascript("window.location.href='/algos'")
-
-    # ---- Boutons ----
-    ui.button("Lancer prétraitement", on_click=do_preprocess)\
-        .classes("mt-4 bg-blue-600 text-white text-lg px-6 py-2 rounded-lg shadow-lg")
-
+    # -----------------------------
+    # Si prétraitement déjà fait
+    # -----------------------------
     if state.get('X') is not None:
-        ui.button("Aller au clustering", on_click=lambda: ui.run_javascript("window.location.href='/algos'"))\
-            .classes("mt-2 bg-green-500 text-white text-lg px-6 py-2 rounded-lg shadow-lg")
-
-
+        ui.button("Aller au clustering", on_click=lambda: ui.run_javascript("window.location.href='/algos'")).classes('mt-2 bg-green-500 text-white px-4 py-2 rounded')
 
 
 
