@@ -221,6 +221,35 @@ import io
 import base64
 from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score
 
+def plot_grouped_histogram(metrics_dict, title="Comparaison des algos"):
+    """Histogramme groupé par algo avec différentes couleurs pour chaque métrique"""
+    df = pd.DataFrame(metrics_dict).T
+    df_numeric = df[['silhouette','davies_bouldin','calinski_harabasz']].fillna(0)
+
+    metrics = df_numeric.columns
+    algos = df_numeric.index
+    x = range(len(algos))
+    width = 0.2  # largeur des barres
+
+    plt.figure(figsize=(10,5))
+
+    for i, metric in enumerate(metrics):
+        plt.bar([p + i*width for p in x], df_numeric[metric], width=width, label=metric.replace('_',' ').title())
+
+    plt.xticks([p + width for p in x], [a.upper() for a in algos])
+    plt.ylabel("Valeur")
+    plt.title(title)
+    plt.legend()
+    plt.tight_layout()
+
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png')
+    plt.close()
+    buf.seek(0)
+    img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+    return f"data:image/png;base64,{img_base64}"
+
+
 def plot_histogram(metrics_dict, title="Comparaison des algos"):
     """Créé un histogramme comparatif des métriques"""
     df = pd.DataFrame(metrics_dict).T
@@ -290,7 +319,7 @@ def results_page():
     )
 
     # Histogramme comparatif
-    hist_img = plot_histogram(metrics_dict, "Comparaison des métriques")
+    hist_img = plot_grouped_histogram(metrics_dict, "Comparaison des métriques")
     ui.image(hist_img).style("max-width:700px; max-height:400px")
 
     # Affichage des scatter plots individuels
