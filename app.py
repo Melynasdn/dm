@@ -276,64 +276,285 @@ def algos_page():
 
     ui.button("🚀 Lancer tous les algorithmes", on_click=run_all).classes("mt-6")
 
+
+
+
+
 # ----------------- PAGE RESULTS -----------------
+import matplotlib.pyplot as plt
+import io, base64
+from scipy.cluster.hierarchy import dendrogram, linkage as sch_linkage
+from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score
+
+
+# ------------------ Helpers ------------------
+
+# ------------------ Helpers ------------------
+import matplotlib.pyplot as plt
+import io, base64
+from scipy.cluster.hierarchy import dendrogram, linkage as sch_linkage
+from sklearn.preprocessing import StandardScaler
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.cluster.hierarchy import dendrogram, linkage
+from scipy.spatial.distance import pdist, squareform
+from sklearn.preprocessing import StandardScaler
+import io
+import base64
+
+
+# ============== FONCTIONS DENDROGRAMME ==============
+
+def fig_to_base64(fig):
+    """Convertit une figure matplotlib en base64"""
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight", dpi=100)
+    plt.close(fig)
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode("utf-8")
+
+
+def diana_linkage(X):
+    """Implémentation simplifiée de DIANA (DIvisive ANAlysis)"""
+    n = X.shape[0]
+    if n < 2:
+        return np.array([])
+    
+    # Calcul de la matrice de distances
+    dist_matrix = squareform(pdist(X, metric='euclidean'))
+    
+    # Structure pour stocker le linkage
+    linkage_matrix = []
+    cluster_id = n
+    
+    # Dictionnaire pour suivre les clusters actifs
+    active_clusters = {i: [i] for i in range(n)}
+    
+    while len(active_clusters) > 1:
+        # Trouver le cluster avec le diamètre maximum
+        max_diameter = -1
+        cluster_to_split = None
+        
+        for cid, members in active_clusters.items():
+            if len(members) > 1:
+                # Calculer le diamètre (distance max entre membres)
+                diameter = 0
+                for i in members:
+                    for j in members:
+                        if i < j:
+                            diameter = max(diameter, dist_matrix[i, j])
+                if diameter > max_diameter:
+                    max_diameter = diameter
+                    cluster_to_split = cid
+        
+        if cluster_to_split is None:
+            break
+        
+        members = active_clusters[cluster_to_split]
+        
+        # Trouver l'élément le plus éloigné du reste
+        max_avg_dist = -1
+        splinter = None
+        
+        for member in members:
+            avg_dist = np.mean([dist_matrix[member, other] 
+                               for other in members if other != member])
+            if avg_dist > max_avg_dist:
+                max_avg_dist = avg_dist
+                splinter = member
+        
+        # Créer deux nouveaux clusters
+        remaining = [m for m in members if m != splinter]
+        
+        # Ajouter à la matrice de linkage
+        linkage_matrix.append([
+            splinter if splinter < n else splinter,
+            cluster_id if len(remaining) > 1 else remaining[0],
+            max_avg_dist,
+            len(members)
+        ])
+        
+        # Mettre à jour les clusters actifs
+        del active_clusters[cluster_to_split]
+        active_clusters[splinter] = [splinter]
+        if len(remaining) > 1:
+            active_clusters[cluster_id] = remaining
+            cluster_id += 1
+        elif len(remaining) == 1:
+            active_clusters[remaining[0]] = remaining
+    
+    return np.array(linkage_matrix) if linkage_matrix else np.array([])
+
+
+def generate_dendrogram(X, algo="agnes"):
+    """
+    Génère un dendrogramme et retourne l'image en base64
+    
+    Parameters:
+    -----------
+    X : array-like, shape (n_samples, n_features)
+        Données à clusteriser
+    algo : str, default="agnes"
+        Algorithme: "agnes" (agglomératif) ou "diana" (divisif)
+    
+    Returns:
+    --------
+    str : Image encodée en base64 avec le préfixe data:image/png;base64,
+    """
+    X = np.array(X)
+    
+    if X.shape[0] < 2:
+        print("Erreur: Au moins 2 échantillons sont nécessaires")
+        return None
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    try:
+        if algo.lower() == "agnes":
+            # AGNES: Agglomerative Nesting (bottom-up)
+            X_scaled = StandardScaler().fit_transform(X)
+            Z = linkage(X_scaled, method='ward')
+            dendrogram(Z, ax=ax)
+            ax.set_title("Dendrogramme - AGNES (Ward)", fontsize=14, fontweight='bold')
+            
+        elif algo.lower() == "diana":
+            # DIANA: DIvisive ANAlysis (top-down)
+            X_scaled = StandardScaler().fit_transform(X)
+            Z = diana_linkage(X_scaled)
+            
+            if Z.size > 0:
+                dendrogram(Z, ax=ax)
+                ax.set_title("Dendrogramme - DIANA (Divisif)", fontsize=14, fontweight='bold')
+            else:
+                ax.text(0.5, 0.5, "Impossible de créer le dendrogramme DIANA", 
+                       ha="center", va="center", fontsize=12)
+                ax.set_title("Dendrogramme - DIANA", fontsize=14, fontweight='bold')
+        else:
+            ax.text(0.5, 0.5, f"Algorithme '{algo}' non reconnu\nUtilisez 'agnes' ou 'diana'", 
+                   ha="center", va="center", fontsize=12)
+            ax.set_title("Erreur", fontsize=14, fontweight='bold')
+        
+        ax.set_xlabel("Échantillons", fontsize=11)
+        ax.set_ylabel("Distance", fontsize=11)
+        ax.grid(True, alpha=0.3, axis='y')
+        plt.tight_layout()
+        
+        # Toujours retourner le base64 avec le préfixe data:image pour NiceGUI
+        base64_str = fig_to_base64(fig)
+        return f"data:image/png;base64,{base64_str}"
+            
+    except Exception as e:
+        print(f"Erreur lors de la génération du dendrogramme: {e}")
+        plt.close(fig)
+        return None
+
+
+# ============== PAGE RESULTS ==============
+
 @ui.page('/results')
 def results_page():
+
     if not state.get('results'):
         ui.notify("⚠️ Aucun résultat", color='warning')
         ui.run_javascript("window.location.href='/algos'")
         return
 
-    ui.label("📊 Résultats Clustering").classes("text-3xl font-bold")
+    ui.label("📊 Résultats Clustering").classes("text-3xl font-bold mb-6")
+
     results = state['results']
-    X = state.get('X', None)
-    
-    # Calcul automatique des métriques
+    X = state.get('X')
+    X_pca = state.get('X_pca')
+
+    # ----------------- Calcul des métriques -----------------
     metrics_dict = {}
     for algo, res in results.items():
         labels = res.get('labels')
-        metrics = {}
+        m = {}
+
         if labels is not None and X is not None:
             mask = labels != -1
-            metrics['n_clusters'] = len(set(labels[mask])) if len(mask)>0 else 0
-            metrics['n_noise'] = list(labels).count(-1) if -1 in labels else 0
+            m["n_clusters"] = len(set(labels[mask])) if mask.sum() > 0 else 0
+            m["n_noise"] = list(labels).count(-1) if -1 in labels else 0
 
-            if metrics['n_clusters'] > 1:
-                metrics['silhouette'] = silhouette_score(X[mask], labels[mask])
-                metrics['davies_bouldin'] = davies_bouldin_score(X[mask], labels[mask])
-                metrics['calinski_harabasz'] = calinski_harabasz_score(X[mask], labels[mask])
+            if m["n_clusters"] > 1:
+                from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score
+                m["silhouette"] = float(silhouette_score(X[mask], labels[mask]))
+                m["davies_bouldin"] = float(davies_bouldin_score(X[mask], labels[mask]))
+                m["calinski_harabasz"] = float(calinski_harabasz_score(X[mask], labels[mask]))
             else:
-                metrics['silhouette'] = metrics['davies_bouldin'] = metrics['calinski_harabasz'] = None
-        metrics_dict[algo] = metrics
-        res.update(metrics)
-    
-    best_algo = max(
-        ((algo, m['silhouette']) for algo, m in metrics_dict.items() if m['silhouette'] is not None),
-        key=lambda x: x[1],
-        default=(None, None)
-    )[0]
+                m["silhouette"] = None
+                m["davies_bouldin"] = None
+                m["calinski_harabasz"] = None
 
-    ui.label(f"🏆 Meilleur algorithme : {best_algo.upper() if best_algo else 'Aucun'}").classes("text-xl font-bold text-green-600")
+        metrics_dict[algo] = m
+        res.update(m)
 
-    table_rows = []
-    for algo, m in metrics_dict.items():
-        table_rows.append({**{'algo': algo.upper()}, **m})
+    # ----------------- Tableau comparatif -----------------
+    rows = [{**{'algo': algo.upper()}, **m} for algo, m in metrics_dict.items()]
     ui.table(
-        rows=table_rows,
-        columns=[{"name":"algo","label":"Algorithme","field":"algo"}] +
-                [{"name":k,"label":k.replace('_',' ').title(),"field":k} for k in ['n_clusters','n_noise','silhouette','davies_bouldin','calinski_harabasz']]
-    )
+        rows=rows,
+        columns=[
+            {"name": "algo", "label": "Algorithme", "field": "algo"},
+            {"name": "n_clusters", "label": "Clusters", "field": "n_clusters"},
+            {"name": "n_noise", "label": "Bruit", "field": "n_noise"},
+            {"name": "silhouette", "label": "Silhouette", "field": "silhouette"},
+            {"name": "davies_bouldin", "label": "Davies-Bouldin", "field": "davies_bouldin"},
+            {"name": "calinski_harabasz", "label": "Calinski-Harabasz", "field": "calinski_harabasz"},
+        ],
+    ).classes("mb-6")
 
+    # ----------------- Histogramme comparatif -----------------
     hist_img = plot_grouped_histogram(metrics_dict, "Comparaison des métriques")
-    ui.image(hist_img).style("max-width:700px; max-height:400px")
+    ui.image(hist_img).classes("mx-auto mb-12").style("max-width:900px; width:100%; height:auto")
 
-    X_pca = state.get('X_pca', None)
+    # ----------------- Détail par algorithme -----------------
     for algo, res in results.items():
+
         ui.separator()
-        ui.label(f"🔹 {algo.upper()}").classes("text-xl font-semibold")
-        if X_pca is not None and 'labels' in res:
-            plot64 = scatter_plot_2d(X_pca, res['labels'], f"{algo.upper()} - PCA 2D")
-            ui.image(plot64).style("max-width:500px; max-height:500px")
+        ui.label(f"🔹 {algo.upper()}").classes("text-2xl font-bold mt-6 mb-4")
+
+        m = metrics_dict[algo]
+
+        # ---------- Résumé ----------
+        with ui.card().classes("p-4 shadow-md w-2/3 mx-auto mb-6"):
+            ui.label("📌 Résumé des métriques").classes("font-semibold mb-2")
+            ui.html(f"""
+                <ul style='line-height:1.8; font-size:16px;'>
+                    <li><b>Nombre de clusters :</b> {m["n_clusters"]}</li>
+                    <li><b>Bruit (labels = -1) :</b> {m["n_noise"]}</li>
+                    <li><b>Silhouette :</b> {m["silhouette"]}</li>
+                    <li><b>Davies-Bouldin :</b> {m["davies_bouldin"]}</li>
+                    <li><b>Calinski-Harabasz :</b> {m["calinski_harabasz"]}</li>
+                </ul>
+            """, sanitize=False)
+
+        # ---------- PCA ----------
+        ui.label("🎨 Visualisation PCA").classes("text-xl font-bold mt-4 mb-2")
+        if X_pca is None:
+            ui.label("PCA non disponible")
+        else:
+            img64 = scatter_plot_2d(X_pca, res['labels'], f"{algo.upper()} - PCA")
+            ui.image(img64).classes("mx-auto mb-6").style(
+                "max-width:900px; width:100%; height:auto"
+            )
+
+        # ---------- Dendrogramme ----------
+        if algo.lower() in ["agnes", "diana"]:
+            ui.label("🌳 Dendrogramme").classes("text-xl font-bold mt-4 mb-2")
+            try:
+                dendro64 = generate_dendrogram(X, algo)
+                if dendro64:
+                    ui.image(dendro64).classes("mx-auto mb-10").style(
+                        "max-width:950px; width:100%; height:auto"
+                    )
+                else:
+                    ui.label("⚠️ Impossible de générer le dendrogramme").classes("text-orange-600")
+            except Exception as e:
+                ui.label(f"❌ Erreur lors de la génération du dendrogramme : {e}").classes("text-red-600")
+
+
+
+
 
 # ----------------- LANCEMENT -----------------
 if __name__ in {"__main__", "__mp_main__"}:
