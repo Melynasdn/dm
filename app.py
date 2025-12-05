@@ -204,7 +204,42 @@ def algos_page():
 
     ui.button("🚀 Lancer tous les algorithmes", on_click=run_all)
 
+
+
+
+
 # ----------------- PAGE RESULTS -----------------
+from nicegui import ui
+import pandas as pd
+import matplotlib.pyplot as plt
+import io
+import base64
+from nicegui import ui
+import pandas as pd
+import matplotlib.pyplot as plt
+import io
+import base64
+from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score
+
+def plot_histogram(metrics_dict, title="Comparaison des algos"):
+    """Créé un histogramme comparatif des métriques"""
+    df = pd.DataFrame(metrics_dict).T
+    df_numeric = df[['silhouette','davies_bouldin','calinski_harabasz']].fillna(0)
+
+    plt.figure(figsize=(8,4))
+    df_numeric.plot(kind='bar')
+    plt.title(title)
+    plt.ylabel('Valeur')
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png')
+    plt.close()
+    buf.seek(0)
+    img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+    return f"data:image/png;base64,{img_base64}"
+
 @ui.page('/results')
 def results_page():
     if not state.get('results'):
@@ -214,20 +249,60 @@ def results_page():
 
     ui.label("📊 Résultats Clustering").classes("text-3xl font-bold")
     results = state['results']
-    X_pca = state.get('X_pca', None)
+    X = state.get('X', None)
+    
+    # Calcul automatique des métriques
+    metrics_dict = {}
+    for algo, res in results.items():
+        labels = res.get('labels')
+        metrics = {}
+        if labels is not None and X is not None:
+            metrics['n_clusters'] = len(set(labels)) - (1 if -1 in labels else 0)
+            metrics['n_noise'] = list(labels).count(-1) if -1 in labels else 0
 
+            if metrics['n_clusters'] > 1:
+                metrics['silhouette'] = silhouette_score(X, labels)
+                metrics['davies_bouldin'] = davies_bouldin_score(X, labels)
+                metrics['calinski_harabasz'] = calinski_harabasz_score(X, labels)
+            else:
+                metrics['silhouette'] = metrics['davies_bouldin'] = metrics['calinski_harabasz'] = None
+        metrics_dict[algo] = metrics
+        # Stocker les métriques dans le state pour garder trace
+        res.update(metrics)
+    
+    # Déterminer le meilleur algo selon la silhouette
+    best_algo = max(
+        ((algo, m['silhouette']) for algo, m in metrics_dict.items() if m['silhouette'] is not None),
+        key=lambda x: x[1],
+        default=(None, None)
+    )[0]
+
+    ui.label(f"🏆 Meilleur algorithme : {best_algo.upper() if best_algo else 'Aucun'}").classes("text-xl font-bold text-green-600")
+
+    # Tableau comparatif
+    table_rows = []
+    for algo, m in metrics_dict.items():
+        table_rows.append({**{'algo': algo.upper()}, **m})
+    ui.table(
+        rows=table_rows,
+        columns=[{"name":"algo","label":"Algorithme","field":"algo"}] +
+                [{"name":k,"label":k.replace('_',' ').title(),"field":k} for k in ['n_clusters','n_noise','silhouette','davies_bouldin','calinski_harabasz']]
+    )
+
+    # Histogramme comparatif
+    hist_img = plot_histogram(metrics_dict, "Comparaison des métriques")
+    ui.image(hist_img).style("max-width:700px; max-height:400px")
+
+    # Affichage des scatter plots individuels
+    X_pca = state.get('X_pca', None)
     for algo, res in results.items():
         ui.separator()
         ui.label(f"🔹 {algo.upper()}").classes("text-xl font-semibold")
-        # Table des métriques
-        metrics = {k:v for k,v in res.items() if k in ['silhouette','davies_bouldin','calinski_harabasz','n_clusters','n_noise','warning']}
-        if metrics:
-            ui.table(rows=[metrics], columns=[{"name":k,"label":k,"field":k} for k in metrics.keys()])
-
-        # Scatter plot 2D
         if X_pca is not None and 'labels' in res:
             plot64 = scatter_plot_2d(X_pca, res['labels'], f"{algo.upper()} - PCA 2D")
             ui.image(plot64).style("max-width:500px; max-height:500px")
+
+
 
 # ----------------- LANCEMENT -----------------
 if __name__ in {"__main__", "__mp_main__"}:
