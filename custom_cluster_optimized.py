@@ -79,3 +79,30 @@ class AgnesCustom:
         Z = sch_linkage(X, method=self.linkage)
         labels = fcluster(Z, t=self.n_clusters, criterion='maxclust') - 1
         return labels
+    
+# ------------------ DIANA ------------------
+class DianaCustom:
+    def __init__(self, n_clusters=3):
+        self.n_clusters = n_clusters
+
+    def fit_predict(self, X):
+        X = np.array(X)
+        clusters = [list(range(X.shape[0]))]  # tout dans un seul cluster
+        while len(clusters) < self.n_clusters:
+            largest_cluster_idx = np.argmax([len(c) for c in clusters])
+            cluster = clusters.pop(largest_cluster_idx)
+            if len(cluster) <= 1:
+                clusters.append(cluster)
+                break
+            sub_X = X[cluster]
+            dists = np.mean(cdist(sub_X, sub_X), axis=1)
+            outlier_idx = np.argmax(dists)
+            new_cluster = [cluster[outlier_idx]]
+            cluster = [cluster[i] for i in range(len(cluster)) if i != outlier_idx]
+            clusters.append(cluster)
+            clusters.append(new_cluster)
+        labels = np.zeros(X.shape[0], dtype=int)
+        for cid, c in enumerate(clusters):
+            for idx in c:
+                labels[idx] = cid
+        return labels

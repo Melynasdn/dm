@@ -11,7 +11,7 @@ from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_har
 from pyclustering.cluster.kmedoids import kmedoids
 from scipy.cluster.hierarchy import linkage, dendrogram
 
-from custom_cluster_optimized import KMeansCustom, DBSCANCustom, AgnesCustom, diagnose_dbscan
+from custom_cluster_optimized import KMeansCustom, DBSCANCustom, AgnesCustom, diagnose_dbscan, DianaCustom
 
 # ----------------- ÉTAT GLOBAL -----------------
 state = {
@@ -193,6 +193,12 @@ def algos_page():
             agnes_link = ui.select(['ward','complete','average'], value='ward', label="Linkage")
             agnes_chk = ui.checkbox("Activer", value=True)
 
+        # DIANA
+        with ui.card().classes("p-4 shadow-lg w-1/3 mt-4"):
+          ui.label("DIANA").classes("text-xl font-semibold")
+          diana_k = ui.number(label="Nombre de clusters", value=3, min=2, step=1)
+          diana_chk = ui.checkbox("Activer", value=True)
+
     def run_all():
         results = {}
         try:
@@ -238,6 +244,18 @@ def algos_page():
                 results['dbscan']['calinski_harabasz'] = calinski_harabasz_score(X[mask], labels[mask])
             else:
                 results['dbscan']['silhouette'] = results['dbscan']['davies_bouldin'] = results['dbscan']['calinski_harabasz'] = np.nan
+
+        # -------- DIANA --------
+        if diana_chk.value:
+            di = DianaCustom(n_clusters=int(diana_k.value))
+            labels = di.fit_predict(X)
+            results['diana'] = {
+                 'labels': labels,
+                 'silhouette': silhouette_score(X, labels) if len(np.unique(labels))>1 else np.nan,
+                  'davies_bouldin': davies_bouldin_score(X, labels) if len(np.unique(labels))>1 else np.nan,
+                  'calinski_harabasz': calinski_harabasz_score(X, labels) if len(np.unique(labels))>1 else np.nan,
+                  'n_clusters': len(np.unique(labels))
+            }
 
         # -------- AGNES --------
         if agnes_chk.value:
