@@ -120,7 +120,6 @@ def index():
 
 
 
-from nicegui import ui, app
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, OneHotEncoder
@@ -139,17 +138,24 @@ state = {
 # -----------------------------
 def preprocess_dataframe(df, handle_missing=True, normalization=None, encode_onehot=False, drop_duplicates=False):
     df_copy = df.copy()
+    
+    # Remplacer '?' par NaN pour qu'ils soient reconnus comme valeurs manquantes
+    df_copy = df_copy.replace('?', np.nan)
 
     # Supprimer doublons
     if drop_duplicates:
         df_copy = df_copy.drop_duplicates()
 
     # Remplir valeurs manquantes
-    for col in df_copy.columns:
-        if df_copy[col].dtype in [np.float64, np.int64]:
-            df_copy[col] = df_copy[col].fillna(df_copy[col].mean())
-        else:
-            df_copy[col] = df_copy[col].fillna(df_copy[col].mode()[0])
+    if handle_missing:
+        for col in df_copy.columns:
+            if df_copy[col].dtype in [np.float64, np.int64]:
+                df_copy[col] = df_copy[col].fillna(df_copy[col].mean())
+            else:
+                if len(df_copy[col].mode()) > 0:
+                    df_copy[col] = df_copy[col].fillna(df_copy[col].mode()[0])
+                else:
+                    df_copy[col] = df_copy[col].fillna('Unknown')
 
     # Encodage OneHot
     if encode_onehot:
@@ -222,6 +228,8 @@ def preprocess_page():
                 rows=processed_df.head(5).to_dict('records'),
                 columns=[{"name": col, "label": col, "field": col} for col in processed_df.columns]
             )
+        
+        ui.notify("✅ Prétraitement appliqué avec succès!", color='positive')
 
     # -----------------------------
     # Bouton lancer prétraitement
@@ -233,8 +241,6 @@ def preprocess_page():
     # -----------------------------
     if state.get('X') is not None:
         ui.button("Aller au clustering", on_click=lambda: ui.run_javascript("window.location.href='/algos'")).classes('mt-2 bg-green-500 text-white px-4 py-2 rounded')
-
-
 
 
 
