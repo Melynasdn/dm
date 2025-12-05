@@ -415,12 +415,22 @@ def algos_page():
                     f"💡 eps suggéré : {diag['suggested_eps']:.2f}"
                 ).classes("text-sm text-gray-500 mb-3")
 
-                eps_val = ui.slider(min=0.1, max=5, step=0.1,
-                                    value=max(0.5, diag['suggested_eps']))
+                # Affichage de la valeur en temps réel
+                eps_label = ui.label(f"Epsilon (eps) : {max(0.5, diag['suggested_eps']):.2f}")
+                eps_val = ui.slider(
+                    min=0.1, 
+                    max=5, 
+                    step=0.1,
+                    value=max(0.5, diag['suggested_eps'])
+                ).props('label-always')
+    
+                # Mise à jour du label quand le slider change
+                eps_val.on_value_change(lambda e: eps_label.set_text(f"Epsilon (eps) : {e.value:.2f}"))
+
                 min_samples = ui.number("min_samples", value=3, min=2)
-
                 dbscan_chk = ui.switch("Activer", value=True)
-
+            
+            
             # -------- AGNES --------
             with ui.card().classes("p-6 shadow-md rounded-xl algo-card"):
                 ui.label("AGNES").classes("section-title mb-3")
