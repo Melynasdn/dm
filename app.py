@@ -5,13 +5,8 @@ import numpy as np
 import io, base64, random
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
-from sklearn.preprocessing import MinMaxScaler, StandardScaler
-from sklearn.decomposition import PCA
-from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score
-from pyclustering.cluster.kmedoids import kmedoids
-from scipy.cluster.hierarchy import linkage, dendrogram
 
-from custom_cluster_optimized import KMeansCustom, DBSCANCustom, AgnesCustom, diagnose_dbscan, DianaCustom
+from custom_cluster_optimized import KMeansCustom, DBSCANCustom, AgnesCustom, diagnose_dbscan, DianaCustom, elbow_method, KMedoidsCustom
 
 # ----------------- ÉTAT GLOBAL -----------------
 state = {
@@ -19,8 +14,14 @@ state = {
     "numeric_columns": None,
     "X": None,
     "X_pca": None,
-    "results": {}
+    "results": {},
+    "optimal_k": {}  # Nouveau: stocker les k optimaux
 }
+
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score
+from scipy.cluster.hierarchy import linkage, dendrogram
 
 # ----------------- FONCTIONS UTILITAIRES -----------------
 def plot_to_base64(fig):
@@ -61,21 +62,6 @@ def preprocess_dataframe(df, handle_missing=True, normalization=None, encode_one
     X_numeric = df_copy.select_dtypes(include=[np.number])
     return df_copy, X_numeric.values.astype(np.float64)
 
-def run_kmedoids(X, n_clusters, random_state=None):
-    data = X.tolist()
-    if random_state is not None:
-        random.seed(random_state)
-    init = random.sample(range(len(data)), n_clusters)
-    kmed = kmedoids(data, init)
-    kmed.process()
-    clusters = kmed.get_clusters()
-    medoids = kmed.get_medoids()
-    labels = np.full(len(X), -1)
-    for cid, pts in enumerate(clusters):
-        for idx in pts:
-            labels[idx] = cid
-    return labels, medoids
-
 def scatter_plot_2d(X_pca, labels, title):
     unique_labels = np.unique(labels)
     colors = ListedColormap(plt.cm.get_cmap('tab10').colors)
@@ -87,37 +73,60 @@ def scatter_plot_2d(X_pca, labels, title):
     ax.legend()
     return plot_to_base64(fig)
 
-def plot_grouped_histogram(metrics_dict, title="Comparaison des algos"):
-    df = pd.DataFrame(metrics_dict).T
-    df_numeric = df[['silhouette','davies_bouldin','calinski_harabasz']].fillna(0)
-    metrics = df_numeric.columns
-    algos = df_numeric.index
-    x = range(len(algos))
-    width = 0.2
-
-    plt.figure(figsize=(10,5))
-    for i, metric in enumerate(metrics):
-        plt.bar([p + i*width for p in x], df_numeric[metric], width=width, label=metric.replace('_',' ').title())
-    plt.xticks([p + width for p in x], [a.upper() for a in algos])
-    plt.ylabel("Valeur")
-    plt.title(title)
-    plt.legend()
-    plt.tight_layout()
-
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png')
-    plt.close()
-    buf.seek(0)
-    return "data:image/png;base64," + base64.b64encode(buf.read()).decode()
-
-
+# ----------------- NOUVELLE FONCTION: PLOT ELBOW -----------------
+def plot_elbow_curve(X, max_k=10, algo='kmeans'):
+    """Génère le graphique Elbow Method et trouve le k optimal"""
+    inertias = []
+    
+    for k in range(1, max_k + 1):
+        if algo == 'kmeans':
+            model = KMeansCustom(n_clusters=k, random_state=0)
+            labels = model.fit_predict(X)
+            inertia = 0
+            for i, center in enumerate(model.cluster_centers_):
+                cluster_points = X[labels == i]
+                if len(cluster_points) > 0:
+                    inertia += np.sum(np.linalg.norm(cluster_points - center, axis=1) ** 2)
+        else:  # kmedoids
+            model = KMedoidsCustom(n_clusters=k, random_state=0)
+            labels = model.fit_predict(X)
+            inertia = 0
+            for i in range(k):
+                cluster_points = X[labels == i]
+                if len(cluster_points) > 0:
+                    medoid = X[model.medoids_[i]]
+                    inertia += np.sum(np.linalg.norm(cluster_points - medoid, axis=1) ** 2)
+        
+        inertias.append(inertia)
+    
+    # Trouver le coude en utilisant la méthode de la dérivée seconde
+    differences = np.diff(inertias)
+    second_diff = np.diff(differences)
+    optimal_k = np.argmax(second_diff) + 2  # +2 car on a perdu 2 indices avec les diff
+    
+    # Si le k optimal est trop proche des bords, ajuster
+    if optimal_k < 2:
+        optimal_k = 2
+    if optimal_k > max_k - 1:
+        optimal_k = max_k - 1
+    
+    # Créer le graphique
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.plot(range(1, max_k + 1), inertias, 'bo-', linewidth=2, markersize=8)
+    ax.axvline(x=optimal_k, color='r', linestyle='--', linewidth=2, 
+               label=f'K optimal suggéré = {optimal_k}')
+    ax.scatter([optimal_k], [inertias[optimal_k-1]], color='red', s=200, zorder=5)
+    ax.set_xlabel('Nombre de clusters (k)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Inertie (SSE)', fontsize=12, fontweight='bold')
+    ax.set_title(f'Méthode du Coude - {algo.upper()}', fontsize=14, fontweight='bold')
+    ax.legend(fontsize=11)
+    ax.grid(True, alpha=0.3)
+    
+    return plot_to_base64(fig), optimal_k
 
 # ----------------- PAGE INDEX -----------------
-# ----------------- PAGE ACCUEIL (CHOIX MODE) -----------------
-
 @ui.page('/')
 def home_page():
-
     ui.add_head_html("""
     <style>
         body {
@@ -136,40 +145,28 @@ def home_page():
     """)
 
     with ui.column().classes("w-full h-screen items-center justify-center gap-8"):
-
         ui.label("Plateforme de Clustering").classes("main-title")
         ui.label("Veuillez choisir le mode d'analyse").classes("sub-title")
 
         with ui.row().classes("gap-10"):
-
-            # -------- NON SUPERVISÉ --------
             with ui.card().classes("p-8 w-72 shadow-md rounded-xl hover:shadow-xl transition"):
-               
                 ui.label("Clustering Non Supervisé").classes("text-xl font-bold mt-2")
-               
-
                 ui.button(
-                "Commencer",
-                on_click=lambda: ui.run_javascript("window.location.href='/upload'")
-            ).classes("mt-6 w-full h-12 text-base")
+                    "Commencer",
+                    on_click=lambda: ui.run_javascript("window.location.href='/upload'")
+                ).classes("mt-6 w-full h-12 text-base")
 
-
-            # -------- SUPERVISÉ --------
             with ui.card().classes("p-8 w-72 shadow-md rounded-xl hover:shadow-xl transition"):
-               
                 ui.label("Clustering Supervisé").classes("text-xl font-bold mt-2")
                 ui.label("À bientôt").classes("text-gray-500 text-sm mt-1")
-
                 ui.button(
-                "Accéder",
-                on_click=lambda: ui.notify(" À bientôt !", color="warning")
-            ).classes("mt-6 w-full h-12 text-base")
+                    "Accéder",
+                    on_click=lambda: ui.notify(" À bientôt !", color="warning")
+                ).classes("mt-6 w-full h-12 text-base")
 
-
-# ----------------- PAGE UPLOAD (DESIGN MODERNE - CORRIGÉE) -----------------
+# ----------------- PAGE UPLOAD -----------------
 @ui.page('/upload')
 def upload_page():
-
     ui.add_head_html("""
     <style>
         body {
@@ -188,15 +185,11 @@ def upload_page():
     """)
 
     with ui.column().classes("w-full h-screen items-center justify-center"):
-
         with ui.card().classes("p-10 w-[420px] shadow-lg rounded-xl"):
-
             ui.label(" Chargement du Dataset").classes("upload-title text-center")
             ui.label("Importez votre fichier CSV pour commencer").classes("upload-sub text-center mb-6")
 
             status_label = ui.label("Aucun fichier chargé").classes("text-red-500 text-sm mb-4")
-
-            #  Bouton suivant désactivé au début
             btn_next = ui.button("Suivant ➡").classes("w-1/2 h-11")
             btn_next.disable()
 
@@ -207,13 +200,8 @@ def upload_page():
 
                 status_label.text = f" Fichier chargé : {df.shape[0]} lignes × {df.shape[1]} colonnes"
                 status_label.classes("text-green-600")
-
                 btn_next.enable() 
-
-                ui.notify(
-                    f"Dataset chargé avec succès !",
-                    color='positive'
-                )
+                ui.notify(f"Dataset chargé avec succès !", color='positive')
 
             ui.upload(
                 on_upload=on_upload,
@@ -227,17 +215,11 @@ def upload_page():
                     "⬅ Retour",
                     on_click=lambda: ui.run_javascript("window.location.href='/'")
                 ).classes("w-1/2 h-11")
-
-             
                 btn_next.on_click(lambda: ui.run_javascript("window.location.href='/preprocess'"))
 
-
-
 # ----------------- PAGE PREPROCESS -----------------
-
 @ui.page('/preprocess')
 def preprocess_page():
-
     if state['raw_df'] is None:
         ui.notify("⚠️ Aucun dataset chargé", color='warning')
         ui.run_javascript("window.location.href='/upload'")
@@ -268,18 +250,12 @@ def preprocess_page():
     """)
 
     with ui.column().classes("w-full min-h-screen items-center py-10 gap-8"):
-
-        # ---------- TITRE ----------
         ui.label(" Prétraitement des Données").classes("pp-title")
         ui.label("Configurez les options avant le clustering").classes("pp-sub")
 
-        # ---------- CARTE PRINCIPALE ----------
         with ui.card().classes("p-8 w-[1000px] shadow-lg rounded-xl"):
+            ui.label(f" Dataset chargé : {df.shape[0]} lignes × {df.shape[1]} colonnes").classes("section-title mb-4")
 
-            ui.label(f" Dataset chargé : {df.shape[0]} lignes × {df.shape[1]} colonnes") \
-              .classes("section-title mb-4")
-
-            # ---------- APERÇU DU DATASET ----------
             with ui.expansion(" Aperçu des données (10 premières lignes)", icon="table_view"):
                 ui.table(
                     rows=df.head(10).to_dict('records'),
@@ -287,16 +263,12 @@ def preprocess_page():
                 )
 
             ui.separator().classes("my-6")
-
-            # ---------- OPTIONS DE PRETRAITEMENT ----------
             ui.label(" Options de prétraitement").classes("section-title mb-3")
 
             with ui.row().classes("gap-10 w-full"):
-
                 drop_dup = ui.switch("Supprimer doublons", value=False)
                 handle_missing = ui.switch("Remplir valeurs manquantes", value=True)
                 onehot = ui.switch("Encodage OneHot", value=False)
-
                 norm_select = ui.select(
                     ['none', 'minmax', 'zscore'],
                     value='minmax',
@@ -305,9 +277,7 @@ def preprocess_page():
 
             ui.separator().classes("my-6")
 
-            # ---------- BOUTONS ----------
             with ui.row().classes("w-full gap-6"):
-
                 ui.button(
                     "⬅ Retour Upload",
                     on_click=lambda: ui.run_javascript("window.location.href='/upload'")
@@ -320,7 +290,6 @@ def preprocess_page():
                     on_click=lambda: ui.run_javascript("window.location.href='/algos'")
                 ).classes("w-1/3 h-11")
 
-        # ---------- ZONE DE RÉSULTAT ----------
         result_container = ui.column().classes("w-[1000px]")
 
         def apply():
@@ -352,12 +321,9 @@ def preprocess_page():
 
         btn_apply.on_click(apply)
 
-
-# ----------------- PAGE ALGOS -----------------
-
+# ----------------- PAGE ALGOS (MODIFIÉE AVEC ELBOW) -----------------
 @ui.page('/algos')
 def algos_page():
-
     if state.get('X') is None:
         ui.notify("⚠️ Prétraitement nécessaire", color='warning')
         ui.run_javascript("window.location.href='/preprocess'")
@@ -387,24 +353,22 @@ def algos_page():
     """)
 
     with ui.column().classes("w-full min-h-screen items-center py-10 gap-8"):
-
-        # ---------- TITRE ----------
         ui.label(" Algorithmes de Clustering").classes("algo-title")
-        ui.label("Configurez les paramètres et lancez l’analyse").classes("text-gray-500")
+        ui.label("Configurez les paramètres et lancez l'analyse").classes("text-gray-500")
 
-        # ---------- GRILLE DES ALGOS ----------
         with ui.row().classes("gap-8 flex-wrap justify-center"):
-
-            # -------- KMEANS --------
+            # -------- KMEANS AVEC ELBOW --------
             with ui.card().classes("p-6 shadow-md rounded-xl algo-card"):
                 ui.label("KMeans").classes("section-title mb-3")
                 k_kmeans = ui.number("Nombre de clusters", value=3, min=2)
+                kmeans_auto = ui.switch("Utiliser Elbow Method (auto)", value=True)
                 kmeans_chk = ui.switch("Activer", value=True)
 
-            # -------- KMEDOIDS --------
+            # -------- KMEDOIDS AVEC ELBOW --------
             with ui.card().classes("p-6 shadow-md rounded-xl algo-card"):
                 ui.label("KMedoids").classes("section-title mb-3")
                 k_kmed = ui.number("Nombre de clusters", value=3, min=2)
+                kmed_auto = ui.switch("Utiliser Elbow Method (auto)", value=True)
                 kmed_chk = ui.switch("Activer", value=True)
 
             # -------- DBSCAN --------
@@ -415,7 +379,6 @@ def algos_page():
                     f"💡 eps suggéré : {diag['suggested_eps']:.2f}"
                 ).classes("text-sm text-gray-500 mb-3")
 
-                # Affichage de la valeur en temps réel
                 eps_label = ui.label(f"Epsilon (eps) : {max(0.5, diag['suggested_eps']):.2f}")
                 eps_val = ui.slider(
                     min=0.1, 
@@ -423,13 +386,10 @@ def algos_page():
                     step=0.1,
                     value=max(0.5, diag['suggested_eps'])
                 ).props('label-always')
-    
-                # Mise à jour du label quand le slider change
                 eps_val.on_value_change(lambda e: eps_label.set_text(f"Epsilon (eps) : {e.value:.2f}"))
 
                 min_samples = ui.number("min_samples", value=3, min=2)
                 dbscan_chk = ui.switch("Activer", value=True)
-            
             
             # -------- AGNES --------
             with ui.card().classes("p-6 shadow-md rounded-xl algo-card"):
@@ -450,9 +410,7 @@ def algos_page():
 
         ui.separator().classes("my-6 w-[900px]")
 
-        # ---------- BOUTONS ----------
         with ui.row().classes("gap-6"):
-
             ui.button(
                 "⬅ Retour Prétraitement",
                 on_click=lambda: ui.run_javascript("window.location.href='/preprocess'")
@@ -460,9 +418,10 @@ def algos_page():
 
             btn_run = ui.button(" Lancer les algorithmes").classes("w-64 h-11")
 
-        # ---------- EXECUTION ----------
         def run_all():
             results = {}
+            elbow_images = {}
+            optimal_ks = {}
 
             try:
                 state['X_pca'] = PCA(n_components=2).fit_transform(X)
@@ -471,34 +430,57 @@ def algos_page():
 
             # -------- KMEANS --------
             if kmeans_chk.value:
-                km = KMeansCustom(n_clusters=int(k_kmeans.value), random_state=0)
+                if kmeans_auto.value:
+                    ui.notify("Calcul Elbow Method pour KMeans...", color='info')
+                    elbow_img, optimal_k = plot_elbow_curve(X, max_k=10, algo='kmeans')
+                    elbow_images['kmeans_elbow'] = elbow_img
+                    optimal_ks['kmeans'] = optimal_k
+                    k_to_use = optimal_k
+                    ui.notify(f"K optimal KMeans: {optimal_k}", color='positive')
+                else:
+                    k_to_use = int(k_kmeans.value)
+                
+                km = KMeansCustom(n_clusters=k_to_use, random_state=0)
                 labels = km.fit_predict(X)
                 results['kmeans'] = {
                     'labels': labels,
                     'silhouette': silhouette_score(X, labels) if len(np.unique(labels)) > 1 else np.nan,
                     'davies_bouldin': davies_bouldin_score(X, labels) if len(np.unique(labels)) > 1 else np.nan,
                     'calinski_harabasz': calinski_harabasz_score(X, labels) if len(np.unique(labels)) > 1 else np.nan,
-                    'n_clusters': len(np.unique(labels))
+                    'n_clusters': len(np.unique(labels)),
+                    'used_elbow': kmeans_auto.value,
+                    'k_used': k_to_use
                 }
 
             # -------- KMEDOIDS --------
             if kmed_chk.value:
-                labels = np.random.randint(0, int(k_kmed.value), size=X.shape[0])
+                if kmed_auto.value:
+                    ui.notify("Calcul Elbow Method pour KMedoids...", color='info')
+                    elbow_img, optimal_k = plot_elbow_curve(X, max_k=10, algo='kmedoids')
+                    elbow_images['kmedoids_elbow'] = elbow_img
+                    optimal_ks['kmedoids'] = optimal_k
+                    k_to_use = optimal_k
+                    ui.notify(f"K optimal KMedoids: {optimal_k}", color='positive')
+                else:
+                    k_to_use = int(k_kmed.value)
+                
+                kmed = KMedoidsCustom(n_clusters=k_to_use, random_state=0)
+                labels = kmed.fit_predict(X)
                 results['kmedoids'] = {
                     'labels': labels,
                     'silhouette': silhouette_score(X, labels) if len(np.unique(labels)) > 1 else np.nan,
                     'davies_bouldin': davies_bouldin_score(X, labels) if len(np.unique(labels)) > 1 else np.nan,
                     'calinski_harabasz': calinski_harabasz_score(X, labels) if len(np.unique(labels)) > 1 else np.nan,
-                    'n_clusters': len(np.unique(labels))
+                    'n_clusters': len(np.unique(labels)),
+                    'used_elbow': kmed_auto.value,
+                    'k_used': k_to_use
                 }
 
             # -------- DBSCAN --------
             if dbscan_chk.value:
                 dbs = DBSCANCustom(eps=float(eps_val.value), min_samples=int(min_samples.value))
                 labels = dbs.fit(X).labels_
-
                 valid_clusters = [l for l in np.unique(labels) if l != -1]
-
                 results['dbscan'] = {
                     'labels': labels,
                     'n_clusters': len(valid_clusters),
@@ -517,94 +499,41 @@ def algos_page():
                 labels = ag.fit_predict(X)
                 results['agnes'] = {'labels': labels}
 
-            state['results'] = results
-            ui.notify("Clustering terminé", color='positive')
+            # Stocker dans state AVANT la redirection
+            state['results'].update(results)
+            state['results'].update(elbow_images)
+            state['optimal_k'] = optimal_ks
+            
+            ui.notify("Clustering terminé ✓", color='positive')
             ui.run_javascript("window.location.href='/results'")
 
         btn_run.on_click(run_all)
 
-
-
-
-
-
-# ------------------ Helpers ------------------
-import matplotlib.pyplot as plt
-import io, base64
-from scipy.cluster.hierarchy import dendrogram, linkage as sch_linkage
-from sklearn.preprocessing import StandardScaler
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.cluster.hierarchy import dendrogram, linkage
-from scipy.spatial.distance import pdist, squareform
-from sklearn.preprocessing import StandardScaler
-import io
-import base64
-
-
-# ------------------ Helpers ------------------
-import matplotlib.pyplot as plt
-import io, base64
-from scipy.cluster.hierarchy import dendrogram, linkage as sch_linkage
-from sklearn.preprocessing import StandardScaler
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.cluster.hierarchy import dendrogram, linkage
-from scipy.spatial.distance import pdist, squareform
-from sklearn.preprocessing import StandardScaler
-import io
-import base64
-
-
-# ------------------ Helpers ------------------
-import matplotlib.pyplot as plt
-import io, base64
-from scipy.cluster.hierarchy import dendrogram, linkage as sch_linkage
-from sklearn.preprocessing import StandardScaler
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.cluster.hierarchy import dendrogram, linkage
-from scipy.spatial.distance import pdist, squareform
-from sklearn.preprocessing import StandardScaler
-import io
-import base64
-
-
-# ============== FONCTIONS DENDROGRAMME ==============
-
+# ----------------- FONCTIONS POUR DENDROGRAMME -----------------
 def fig_to_base64(fig):
-    """Convertit une figure matplotlib en base64"""
     buf = io.BytesIO()
     fig.savefig(buf, format="png", bbox_inches="tight", dpi=120)
     plt.close(fig)
     buf.seek(0)
     return base64.b64encode(buf.read()).decode("utf-8")
 
-
 def diana_linkage(X):
-    """Implémentation simplifiée de DIANA (DIvisive ANAlysis)"""
     n = X.shape[0]
     if n < 2:
         return np.array([])
     
-    # Calcul de la matrice de distances
+    from scipy.spatial.distance import pdist, squareform
     dist_matrix = squareform(pdist(X, metric='euclidean'))
-    
-    # Structure pour stocker le linkage
     linkage_matrix = []
     cluster_id = n
-    
-    # Dictionnaire pour suivre les clusters actifs
     active_clusters = {i: [i] for i in range(n)}
     
     while len(active_clusters) > 1:
-        # Trouver le cluster avec le diamètre maximum
         max_diameter = -1
         cluster_to_split = None
         
         for cid, members in active_clusters.items():
             if len(members) > 1:
-                # Calculer le diamètre (distance max entre membres)
                 diameter = 0
                 for i in members:
                     for j in members:
@@ -618,8 +547,6 @@ def diana_linkage(X):
             break
         
         members = active_clusters[cluster_to_split]
-        
-        # Trouver l'élément le plus éloigné du reste
         max_avg_dist = -1
         splinter = None
         
@@ -630,10 +557,8 @@ def diana_linkage(X):
                 max_avg_dist = avg_dist
                 splinter = member
         
-        # Créer deux nouveaux clusters
         remaining = [m for m in members if m != splinter]
         
-        # Ajouter à la matrice de linkage
         linkage_matrix.append([
             splinter if splinter < n else splinter,
             cluster_id if len(remaining) > 1 else remaining[0],
@@ -641,7 +566,6 @@ def diana_linkage(X):
             len(members)
         ])
         
-        # Mettre à jour les clusters actifs
         del active_clusters[cluster_to_split]
         active_clusters[splinter] = [splinter]
         if len(remaining) > 1:
@@ -652,18 +576,14 @@ def diana_linkage(X):
     
     return np.array(linkage_matrix) if linkage_matrix else np.array([])
 
-
 def plot_grouped_histogram(metrics_dict, title):
-    """Génère un histogramme groupé des métriques"""
     algos = list(metrics_dict.keys())
     n_algos = len(algos)
     
-    # Extraction des métriques
     silhouettes = [metrics_dict[a].get("silhouette") for a in algos]
     davies = [metrics_dict[a].get("davies_bouldin") for a in algos]
     calinski = [metrics_dict[a].get("calinski_harabasz") for a in algos]
     
-    # Remplacer les "N/A" par None pour le plotting
     silhouettes = [s if s != "N/A" else None for s in silhouettes]
     davies = [d if d != "N/A" else None for d in davies]
     calinski = [c if c != "N/A" else None for c in calinski]
@@ -674,7 +594,6 @@ def plot_grouped_histogram(metrics_dict, title):
     
     colors = ['#3b82f6', '#8b5cf6', '#ec4899']
     
-    # Silhouette
     valid_sil = [s if s is not None else 0 for s in silhouettes]
     axes[0].bar(x, valid_sil, width, color=colors[0], alpha=0.8)
     axes[0].set_ylabel('Score', fontsize=12, fontweight='bold')
@@ -684,7 +603,6 @@ def plot_grouped_histogram(metrics_dict, title):
     axes[0].grid(axis='y', alpha=0.3, linestyle='--')
     axes[0].set_ylim([-1, 1])
     
-    # Davies-Bouldin
     valid_dav = [d if d is not None else 0 for d in davies]
     axes[1].bar(x, valid_dav, width, color=colors[1], alpha=0.8)
     axes[1].set_ylabel('Score', fontsize=12, fontweight='bold')
@@ -693,7 +611,6 @@ def plot_grouped_histogram(metrics_dict, title):
     axes[1].set_xticklabels([a.upper() for a in algos], rotation=45, ha='right')
     axes[1].grid(axis='y', alpha=0.3, linestyle='--')
     
-    # Calinski-Harabasz
     valid_cal = [c if c is not None else 0 for c in calinski]
     axes[2].bar(x, valid_cal, width, color=colors[2], alpha=0.8)
     axes[2].set_ylabel('Score', fontsize=12, fontweight='bold')
@@ -708,40 +625,22 @@ def plot_grouped_histogram(metrics_dict, title):
     base64_str = fig_to_base64(fig)
     return f"data:image/png;base64,{base64_str}"
 
-
 def generate_dendrogram(X, algo="agnes"):
-    """
-    Génère un dendrogramme et retourne l'image en base64
-    
-    Parameters:
-    -----------
-    X : array-like, shape (n_samples, n_features)
-        Données à clusteriser
-    algo : str, default="agnes"
-        Algorithme: "agnes" (agglomératif) ou "diana" (divisif)
-    
-    Returns:
-    --------
-    str : Image encodée en base64 avec le préfixe data:image/png;base64,
-    """
     X = np.array(X)
     
     if X.shape[0] < 2:
-        print("Erreur: Au moins 2 échantillons sont nécessaires")
         return None
     
     fig, ax = plt.subplots(figsize=(14, 8))
     
     try:
         if algo.lower() == "agnes":
-            # AGNES: Agglomerative Nesting (bottom-up)
             X_scaled = StandardScaler().fit_transform(X)
             Z = linkage(X_scaled, method='ward')
             dendrogram(Z, ax=ax, color_threshold=0.7*max(Z[:,2]))
             ax.set_title("Dendrogramme - AGNES (Ward)", fontsize=16, fontweight='bold', pad=20)
             
         elif algo.lower() == "diana":
-            # DIANA: DIvisive ANAlysis (top-down)
             X_scaled = StandardScaler().fit_transform(X)
             Z = diana_linkage(X_scaled)
             
@@ -752,10 +651,6 @@ def generate_dendrogram(X, algo="agnes"):
                 ax.text(0.5, 0.5, "Impossible de créer le dendrogramme DIANA", 
                        ha="center", va="center", fontsize=14)
                 ax.set_title("Dendrogramme - DIANA", fontsize=16, fontweight='bold', pad=20)
-        else:
-            ax.text(0.5, 0.5, f"Algorithme '{algo}' non reconnu\nUtilisez 'agnes' ou 'diana'", 
-                   ha="center", va="center", fontsize=14)
-            ax.set_title("Erreur", fontsize=16, fontweight='bold', pad=20)
         
         ax.set_xlabel("Échantillons", fontsize=13, fontweight='bold')
         ax.set_ylabel("Distance", fontsize=13, fontweight='bold')
@@ -764,35 +659,36 @@ def generate_dendrogram(X, algo="agnes"):
         ax.spines['right'].set_visible(False)
         plt.tight_layout()
         
-        # Toujours retourner le base64 avec le préfixe data:image pour NiceGUI
         base64_str = fig_to_base64(fig)
         return f"data:image/png;base64,{base64_str}"
             
     except Exception as e:
-        print(f"Erreur lors de la génération du dendrogramme: {e}")
+        print(f"Erreur: {e}")
         plt.close(fig)
         return None
 
-
-# ============== PAGE RESULTS ==============
-
+# ============== PAGE RESULTS (AVEC ELBOW) ==============
 @ui.page('/results')
 def results_page():
-
     if not state.get('results'):
         ui.notify("⚠️ Aucun résultat", color='warning')
         ui.run_javascript("window.location.href='/algos'")
         return
 
-    
-
     results = state['results']
     X = state.get('X')
     X_pca = state.get('X_pca')
+    
+    # Debug: vérifier ce qui est dans results
+    print("DEBUG - Clés dans state['results']:", list(results.keys()))
+    print("DEBUG - optimal_k:", state.get('optimal_k', {}))
 
-    # ----------------- Calcul des métriques -----------------
+    # Calcul des métriques
     metrics_dict = {}
     for algo, res in results.items():
+        if algo.endswith('_elbow'):
+            continue
+            
         labels = res.get('labels')
         m = {}
 
@@ -802,7 +698,6 @@ def results_page():
             m["n_noise"] = list(labels).count(-1) if -1 in labels else 0
 
             if m["n_clusters"] > 1:
-                from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score
                 m["silhouette"] = round(float(silhouette_score(X[mask], labels[mask])), 3)
                 m["davies_bouldin"] = round(float(davies_bouldin_score(X[mask], labels[mask])), 3)
                 m["calinski_harabasz"] = round(float(calinski_harabasz_score(X[mask], labels[mask])), 2)
@@ -814,11 +709,9 @@ def results_page():
         metrics_dict[algo] = m
         res.update(m)
 
-    # ----------------- Tableau comparatif avec style amélioré -----------------
+    # Tableau comparatif
     with ui.card().classes("w-full shadow-2xl p-6 mb-8"):
-        ui.label("📈 Tableau Comparatif des Métriques").classes(
-            "text-2xl font-bold mb-4 text-gray-800"
-        )
+        ui.label("📈 Tableau Comparatif des Métriques").classes("text-2xl font-bold mb-4 text-gray-800")
         
         rows = [{**{'algo': algo.upper()}, **m} for algo, m in metrics_dict.items()]
         ui.table(
@@ -831,107 +724,122 @@ def results_page():
                 {"name": "davies_bouldin", "label": "Davies-Bouldin ↓", "field": "davies_bouldin", "align": "center"},
                 {"name": "calinski_harabasz", "label": "Calinski-Harabasz ↑", "field": "calinski_harabasz", "align": "center"},
             ],
-        ).classes("w-full").props("flat bordered").style(
-            "font-size: 15px;"
-        )
+        ).classes("w-full").props("flat bordered").style("font-size: 15px;")
 
-    # ----------------- Histogramme comparatif avec dimensions fixes -----------------
+    # Histogramme comparatif
     with ui.card().classes("w-full shadow-2xl p-6 mb-10"):
-        ui.label("📊 Comparaison Visuelle des Métriques").classes(
-            "text-2xl font-bold mb-4 text-gray-800"
-        )
+        ui.label("📊 Comparaison Visuelle des Métriques").classes("text-2xl font-bold mb-4 text-gray-800")
         hist_img = plot_grouped_histogram(metrics_dict, "Comparaison des métriques")
-        ui.image(hist_img).classes("mx-auto").style(
-            "width: 100%; max-width: 1000px; height: auto; border-radius: 8px;"
-        )
+        ui.image(hist_img).classes("mx-auto").style("width: 100%; max-width: 1000px; height: auto; border-radius: 8px;")
 
-    # ----------------- Détail par algorithme -----------------
+    # Détail par algorithme
     for idx, (algo, res) in enumerate(results.items()):
+        if algo.endswith('_elbow'):
+            continue
 
         ui.separator().classes("my-8")
         
-        # Couleur différente pour chaque algo
         colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981']
         color = colors[idx % len(colors)]
         
         with ui.element('div').classes('w-full p-5 rounded-lg mb-6').style(
             f'background: linear-gradient(135deg, {color}22 0%, {color}11 100%); border-left: 4px solid {color};'
         ):
-            ui.label(f"{algo.upper()}").classes(
-                "text-3xl font-bold"
-            ).style(f'color: {color};')
+            ui.label(f"{algo.upper()}").classes("text-3xl font-bold").style(f'color: {color};')
+            
+            # Afficher si Elbow a été utilisé
+            if res.get('used_elbow'):
+                optimal_k = state['optimal_k'].get(algo)
+                ui.label(f"✨ K optimal déterminé par Elbow Method: {optimal_k}").classes(
+                    "text-lg text-green-600 font-semibold mt-2"
+                )
 
         m = metrics_dict[algo]
 
-        # ---------- Résumé dans une card élégante ----------
-        with ui.card().classes("shadow-lg p-6 mb-6 w-full").style(
-            "border-top: 3px solid " + color
-        ):
-            ui.label("📌 Résumé des Métriques").classes(
-                "text-xl font-bold mb-4 text-gray-800"
-            )
+        # Résumé des métriques
+        with ui.card().classes("shadow-lg p-6 mb-6 w-full").style("border-top: 3px solid " + color):
+            ui.label("📌 Résumé des Métriques").classes("text-xl font-bold mb-4 text-gray-800")
             
             with ui.row().classes("gap-4 w-full justify-center items-stretch"):
-                # Clusters
                 with ui.card().classes("p-4 bg-gray-50 text-center flex-1"):
                     ui.label("Clusters").classes("text-sm text-gray-600 font-semibold mb-2")
                     ui.label(str(m["n_clusters"])).classes("text-3xl font-bold").style(f'color: {color};')
                 
-                # Points de bruit
                 with ui.card().classes("p-4 bg-gray-50 text-center flex-1"):
                     ui.label("Points de bruit").classes("text-sm text-gray-600 font-semibold mb-2")
                     ui.label(str(m["n_noise"])).classes("text-3xl font-bold text-orange-600")
                 
-                # Silhouette
                 with ui.card().classes("p-4 bg-gray-50 text-center flex-1"):
                     ui.label("Silhouette ↑").classes("text-sm text-gray-600 font-semibold mb-2")
                     ui.label(str(m["silhouette"])).classes("text-2xl font-bold text-green-600")
                 
-                # Davies-Bouldin
                 with ui.card().classes("p-4 bg-gray-50 text-center flex-1"):
                     ui.label("Davies-Bouldin ↓").classes("text-sm text-gray-600 font-semibold mb-2")
                     ui.label(str(m["davies_bouldin"])).classes("text-2xl font-bold text-blue-600")
                 
-                # Calinski-Harabasz
                 with ui.card().classes("p-4 bg-gray-50 text-center flex-1"):
                     ui.label("Calinski-Harabasz ↑").classes("text-sm text-gray-600 font-semibold mb-2")
                     ui.label(str(m["calinski_harabasz"])).classes("text-2xl font-bold text-purple-600")
 
-        # ---------- Visualisations côte à côte ----------
-        with ui.grid(columns=1 if algo.lower() not in ["agnes", "diana"] else 2).classes("gap-8 mb-8 w-full"):
+        # Visualisations - Afficher Elbow en premier si disponible
+        with ui.column().classes("gap-8 mb-8 w-full"):
             
-            # PCA
-            with ui.card().classes("shadow-lg p-6"):
-                ui.label("🎨 Visualisation PCA").classes("text-2xl font-bold mb-4 text-gray-800")
-                if X_pca is None:
-                    ui.label("PCA non disponible").classes("text-gray-500 text-center py-10")
-                else:
-                    img64 = scatter_plot_2d(X_pca, res['labels'], f"{algo.upper()} - PCA")
-                    ui.image(img64).classes("w-full mx-auto").style(
-                        "max-width: 100%; height: auto; display: block; border-radius: 8px;"
+            # Graphique Elbow si disponible - AFFICHAGE PRIORITAIRE
+            elbow_key = f'{algo}_elbow'
+            has_elbow = res.get('used_elbow') and elbow_key in state['results']
+            
+            # Debug
+            print(f"DEBUG {algo}: used_elbow={res.get('used_elbow')}, elbow_key={elbow_key}, has_elbow={has_elbow}")
+            if has_elbow:
+                print(f"  Image Elbow trouvée pour {algo}")
+            
+            if has_elbow:
+                with ui.card().classes("shadow-lg p-6 w-full"):
+                    ui.label("📉 Méthode du Coude (Elbow Method)").classes("text-2xl font-bold mb-4 text-gray-800")
+                    optimal_k_val = state.get('optimal_k', {}).get(algo, res.get('k_used', 'N/A'))
+                    ui.label(
+                        f"✨ K optimal trouvé : {optimal_k_val} clusters"
+                    ).classes("text-lg text-green-700 font-semibold mb-3")
+                    
+                    elbow_img = state['results'][elbow_key]
+                    ui.image(elbow_img).classes("w-full mx-auto").style(
+                        "max-width: 900px; height: auto; display: block; border-radius: 8px;"
                     )
-
-            # Dendrogramme (si applicable)
+            
+            # Deuxième ligne : PCA et Dendrogramme côte à côte
+            num_cols = 1
             if algo.lower() in ["agnes", "diana"]:
+                num_cols = 2
+                
+            with ui.grid(columns=num_cols).classes("gap-8 w-full"):
+                # PCA
                 with ui.card().classes("shadow-lg p-6"):
-                    ui.label("🌳 Dendrogramme").classes("text-2xl font-bold mb-4 text-gray-800")
-                    try:
-                        dendro64 = generate_dendrogram(X, algo)
-                        if dendro64:
-                            ui.image(dendro64).classes("w-full mx-auto").style(
-                                "max-width: 100%; height: auto; display: block; border-radius: 8px;"
-                            )
-                        else:
-                            ui.label("⚠️ Impossible de générer le dendrogramme").classes(
-                                "text-orange-600 text-center py-10"
-                            )
-                    except Exception as e:
-                        ui.label(f"❌ Erreur : {e}").classes(
-                            "text-red-600 text-center py-10"
+                    ui.label("🎨 Visualisation PCA").classes("text-2xl font-bold mb-4 text-gray-800")
+                    if X_pca is None:
+                        ui.label("PCA non disponible").classes("text-gray-500 text-center py-10")
+                    else:
+                        img64 = scatter_plot_2d(X_pca, res['labels'], f"{algo.upper()} - PCA")
+                        ui.image(img64).classes("w-full mx-auto").style(
+                            "max-width: 100%; height: auto; display: block; border-radius: 8px;"
                         )
 
+                # Dendrogramme
+                if algo.lower() in ["agnes", "diana"]:
+                    with ui.card().classes("shadow-lg p-6"):
+                        ui.label("🌳 Dendrogramme").classes("text-2xl font-bold mb-4 text-gray-800")
+                        try:
+                            dendro64 = generate_dendrogram(X, algo)
+                            if dendro64:
+                                ui.image(dendro64).classes("w-full mx-auto").style(
+                                    "max-width: 100%; height: auto; display: block; border-radius: 8px;"
+                                )
+                            else:
+                                ui.label("⚠️ Impossible de générer le dendrogramme").classes(
+                                    "text-orange-600 text-center py-10"
+                                )
+                        except Exception as e:
+                            ui.label(f"❌ Erreur : {e}").classes("text-red-600 text-center py-10")
 
-
-# ----------------- LANCEMENT -----------------
+# LANCEMENT
 if __name__ in {"__main__", "__mp_main__"}:
     ui.run(title="Clustering Data Mining", port=8080, reload=True)
