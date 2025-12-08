@@ -192,8 +192,8 @@ def home_page():
                 ).style("font-size:15px !important; color:#636e72 !important; margin-top:4px !important; text-align:center !important;")
                 with ui.row().classes("gap-4 mt-6 w-full justify-center"):
                     ui.button(
-                        "Accéder",
-                        on_click=lambda: ui.notify("À venir !", color="warning")
+                        "Commencer",
+                        on_click=lambda: ui.run_javascript("window.location.href='/upload'")
                     ).style(
                         "background: linear-gradient(135deg, #01335A, #09538C) !important; "
                         "color:white !important; font-weight:600 !important; height:48px !important; width:100% !important; border-radius:8px !important;"
