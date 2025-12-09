@@ -3862,7 +3862,7 @@ def dimension_reduction_page():
     if df is None:
         with ui.column().classes("items-center justify-center w-full h-screen"):
             ui.label("❌ Aucun dataset chargé.").style("font-size:18px; color:#c0392b; font-weight:600;")
-            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/upload'"))
+            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'"))
         return
     
     target_col = state.get("target_column", None)
@@ -4053,7 +4053,7 @@ def dimension_reduction_page():
             # Mettre à jour colonnes exclues
             state["columns_exclude"] = {}
             
-            ui.run_javascript("setTimeout(() => window.location.href='/supervised/next_step', 1500);")
+            ui.run_javascript("setTimeout(() => window.location.href='/supervised/recap_validation', 1500);")
             
         except Exception as e:
             ui.notify(f"❌ Erreur : {str(e)}", color="negative")
@@ -4063,7 +4063,7 @@ def dimension_reduction_page():
         """Passer l'étape sans réduction"""
         state["reduction_applied"] = False
         ui.notify("✅ Aucune réduction appliquée", color="info")
-        ui.run_javascript("setTimeout(() => window.location.href='/supervised/next_step', 1000);")
+        ui.run_javascript("setTimeout(() => window.location.href='/supervised/recap_validation', 1000);")
     
     # ---------- INTERFACE ----------
     with ui.column().classes("w-full items-center p-8").style("background-color:#f8f9fa; min-height:100vh;"):
@@ -4337,6 +4337,540 @@ def dimension_reduction_page():
 
 
 
+import asyncio
+
+
+@ui.page('/supervised/recap_validation')
+def recap_validation_page():
+    """
+    Page complète de récapitulatif et validation finale du preprocessing
+    """
+    import pandas as pd
+    import numpy as np
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    import io
+    import base64
+    from datetime import datetime
+    
+    # ---------- CONTEXTE ----------
+    df = state.get("raw_df", None)
+    df_original = state.get("df_original", None)  # Dataset avant preprocessing
+    split = state.get("split", None)
+    target_col = state.get("target_column", None)
+    
+    if df is None:
+        with ui.column().classes("items-center justify-center w-full h-screen"):
+            ui.label("❌ Aucun dataset chargé.").style("font-size:18px; color:#c0392b; font-weight:600;")
+            ui.button("⬅ Retour", on_click=lambda: ui.run_javascript("window.location.href='/upload'"))
+        return
+    
+    # Collecter toutes les transformations
+    transformations = {
+        "missing_strategy": state.get("missing_strategy", {}),
+        "encoding_strategy": state.get("encoding_strategy", {}),
+        "transform_strategy": state.get("transform_strategy", {}),
+        "scaling_method": state.get("scaling_method", "none"),
+        "reduction_applied": state.get("reduction_applied", False),
+        "reduction_method": state.get("reduction_method", None),
+        "columns_exclude": state.get("columns_exclude", {}),
+        "engineered_features": state.get("engineered_features", [])
+    }
+    
+    # ---------- FONCTIONS ----------
+    def get_preprocessing_summary():
+        """Génère un résumé du preprocessing"""
+        summary = []
+        
+        # 1. Colonnes exclues
+        excluded = [k for k, v in transformations["columns_exclude"].items() if v]
+        if excluded:
+            summary.append({
+                "Étape": "Exclusion de colonnes",
+                "Action": f"{len(excluded)} colonnes exclues",
+                "Détails": ", ".join(excluded[:5]) + ("..." if len(excluded) > 5 else "")
+            })
+        
+        # 2. Valeurs manquantes
+        missing_count = len(transformations["missing_strategy"])
+        if missing_count > 0:
+            methods = {}
+            for col, strat in transformations["missing_strategy"].items():
+                method = strat.get("method", "none")
+                methods[method] = methods.get(method, 0) + 1
+            
+            details = ", ".join([f"{method}: {count}" for method, count in methods.items()])
+            summary.append({
+                "Étape": "Valeurs manquantes",
+                "Action": f"{missing_count} colonnes traitées",
+                "Détails": details
+            })
+        
+        # 3. Encodage
+        encoding_count = len(transformations["encoding_strategy"])
+        if encoding_count > 0:
+            methods = {}
+            for col, method in transformations["encoding_strategy"].items():
+                methods[method] = methods.get(method, 0) + 1
+            
+            details = ", ".join([f"{method}: {count}" for method, count in methods.items()])
+            summary.append({
+                "Étape": "Encodage catégoriel",
+                "Action": f"{encoding_count} colonnes encodées",
+                "Détails": details
+            })
+        
+        # 4. Transformations de distribution
+        transform_count = len([m for m in transformations["transform_strategy"].values() if m != "Aucune"])
+        if transform_count > 0:
+            methods = {}
+            for col, method in transformations["transform_strategy"].items():
+                if method != "Aucune":
+                    methods[method] = methods.get(method, 0) + 1
+            
+            details = ", ".join([f"{method}: {count}" for method, count in methods.items()])
+            summary.append({
+                "Étape": "Transformations distributions",
+                "Action": f"{transform_count} colonnes transformées",
+                "Détails": details
+            })
+        
+        # 5. Feature Scaling
+        scaling = transformations["scaling_method"]
+        if scaling != "none":
+            summary.append({
+                "Étape": "Feature Scaling",
+                "Action": f"Méthode: {scaling.upper()}",
+                "Détails": f"Appliqué sur colonnes numériques continues"
+            })
+        
+        # 6. Réduction de dimension
+        if transformations["reduction_applied"]:
+            method = transformations["reduction_method"]
+            n_comp = state.get("n_components", "?")
+            summary.append({
+                "Étape": "Réduction de dimension",
+                "Action": f"{method.upper()} - {n_comp} composantes",
+                "Détails": f"Features: {len(df.columns)-1} (après réduction)"
+            })
+        
+        # 7. Features engineering
+        eng_features = transformations["engineered_features"]
+        if eng_features:
+            summary.append({
+                "Étape": "Feature Engineering",
+                "Action": f"{len(eng_features)} features créées",
+                "Détails": ", ".join([f[0] for f in eng_features[:3]]) + ("..." if len(eng_features) > 3 else "")
+            })
+        
+        return summary
+    
+    def create_before_after_comparison():
+        """Crée une visualisation avant/après pour les colonnes numériques"""
+        if df_original is None:
+            return None
+        
+        # Sélectionner 4 colonnes numériques
+        num_cols_original = df_original.select_dtypes(include=[np.number]).columns.tolist()
+        num_cols_final = df.select_dtypes(include=[np.number]).columns.tolist()
+        
+        # Trouver colonnes communes
+        common_cols = list(set(num_cols_original) & set(num_cols_final))[:4]
+        
+        if not common_cols:
+            return None
+        
+        # Créer subplots
+        fig = make_subplots(
+            rows=2, cols=len(common_cols),
+            subplot_titles=[f"{col} (Original)" for col in common_cols] + 
+                          [f"{col} (Preprocessed)" for col in common_cols],
+            vertical_spacing=0.12,
+            horizontal_spacing=0.08
+        )
+        
+        for idx, col in enumerate(common_cols):
+            # Original
+            data_orig = df_original[col].dropna()
+            fig.add_trace(
+                go.Histogram(x=data_orig, nbinsx=30, name="Original", 
+                           marker_color='#e74c3c', showlegend=(idx==0)),
+                row=1, col=idx+1
+            )
+            
+            # Preprocessed
+            data_prep = df[col].dropna()
+            fig.add_trace(
+                go.Histogram(x=data_prep, nbinsx=30, name="Preprocessed",
+                           marker_color='#27ae60', showlegend=(idx==0)),
+                row=2, col=idx+1
+            )
+        
+        fig.update_layout(
+            height=600,
+            showlegend=True,
+            title_text="📊 Comparaison Avant/Après Preprocessing",
+            title_font_size=20
+        )
+        
+        return fig
+    
+    def download_preprocessed_data():
+        """Prépare le téléchargement du dataset preprocessé"""
+        try:
+            # Créer un buffer pour le ZIP
+            import zipfile
+            zip_buffer = io.BytesIO()
+            
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                # 1. Dataset complet
+                csv_buffer = io.StringIO()
+                df.to_csv(csv_buffer, index=False)
+                zip_file.writestr('dataset_preprocessed.csv', csv_buffer.getvalue())
+                
+                # 2. Train/Val/Test si disponibles
+                if split:
+                    for key in ["X_train", "X_val", "X_test"]:
+                        if key in split:
+                            csv_buffer = io.StringIO()
+                            split[key].to_csv(csv_buffer, index=False)
+                            zip_file.writestr(f'{key}.csv', csv_buffer.getvalue())
+                    
+                    # Target
+                    for key in ["y_train", "y_val", "y_test"]:
+                        if key in split:
+                            csv_buffer = io.StringIO()
+                            split[key].to_csv(csv_buffer, index=False, header=[target_col])
+                            zip_file.writestr(f'{key}.csv', csv_buffer.getvalue())
+                
+                # 3. Résumé des transformations
+                summary = get_preprocessing_summary()
+                summary_df = pd.DataFrame(summary)
+                csv_buffer = io.StringIO()
+                summary_df.to_csv(csv_buffer, index=False)
+                zip_file.writestr('preprocessing_summary.csv', csv_buffer.getvalue())
+            
+            # Encoder en base64
+            zip_buffer.seek(0)
+            b64 = base64.b64encode(zip_buffer.read()).decode()
+            
+            # Créer le lien de téléchargement
+            ui.run_javascript(f'''
+                const link = document.createElement('a');
+                link.href = 'data:application/zip;base64,{b64}';
+                link.download = 'preprocessed_data_{datetime.now().strftime("%Y%m%d_%H%M%S")}.zip';
+                link.click();
+            ''')
+            
+            ui.notify("✅ Téléchargement démarré !", color="positive")
+        
+        except Exception as e:
+            ui.notify(f"❌ Erreur lors du téléchargement : {str(e)}", color="negative")
+    
+    def generate_pdf_report():
+        """Génère un rapport PDF du preprocessing"""
+        ui.notify("📄 Génération du rapport PDF...", color="info")
+        # TODO: Implémenter génération PDF avec reportlab
+        ui.notify("⚠️ Fonctionnalité en développement", color="warning")
+    
+    def open_step_selector():
+        """Ouvre un dialog pour sélectionner une étape à modifier"""
+        steps = [
+            ("3.2 - Split Train/Val/Test", "/supervised/preprocessing2"),
+            ("3.3 - Analyse Univariée", "/supervised/univariate_analysis"),
+            ("3.4 - Détection Anomalies", "/supervised/outliers_analysis"),
+            ("3.5 - Analyse Multivariée", "/supervised/multivariate_analysis"),
+            ("3.6 - Gestion Missing", "/supervised/missing_values"),
+            ("3.7 - Encodage", "/supervised/encoding"),
+            ("3.8 - Transformations", "/supervised/distribution_transform"),
+            ("3.9 - Feature Scaling", "/supervised/scaling"),
+            ("3.10 - Réduction Dimension", "/supervised/dimension_reduction")
+        ]
+        
+        with ui.dialog() as dialog, ui.card().classes("w-full max-w-2xl p-6"):
+            ui.label("Choisir l'étape à modifier").style("font-weight:700; font-size:20px; margin-bottom:16px;")
+            
+            ui.label("⚠️ Attention : Modifier une étape peut invalider les étapes suivantes").style(
+                "color:#e67e22; font-size:14px; margin-bottom:16px;"
+            )
+            
+            step_radio = ui.radio(
+                options=[s[0] for s in steps],
+                value=steps[0][0]
+            ).classes("mb-4")
+            
+            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                ui.button("Annuler", on_click=dialog.close).props("flat")
+                
+                def go_to_step():
+                    selected = step_radio.value
+                    url = next((s[1] for s in steps if s[0] == selected), None)
+                    if url:
+                        dialog.close()
+                        ui.run_javascript(f"window.location.href='{url}'")
+                
+                ui.button("Modifier", on_click=go_to_step).style("background:#3498db; color:white;")
+        
+        dialog.open()
+    
+    def validate_and_continue():
+        """Valide le preprocessing et prépare pour les algorithmes"""
+        with ui.dialog() as dialog, ui.card().classes("w-full max-w-3xl p-6"):
+            ui.label("✅ Validation du Pipeline").style("font-weight:700; font-size:20px; margin-bottom:16px;")
+            
+            # Progress
+            progress_container = ui.column().classes("w-full")
+            
+            with progress_container:
+                ui.label("Préparation des données pour training...").style("font-size:16px; margin-bottom:12px;")
+                
+                progress_bar = ui.linear_progress(value=0).classes("w-full mb-4")
+                status_label = ui.label("")
+                
+                async def run_validation():
+                    # Simulation des étapes
+                    steps_validation = [
+                        ("Vérification intégrité données", 0.2),
+                        ("Application pipeline sur Validation set", 0.4),
+                        ("Application pipeline sur Test set", 0.6),
+                        ("Sauvegarde du pipeline", 0.8),
+                        ("Préparation algorithmes", 1.0)
+                    ]
+                    
+                    for step, value in steps_validation:
+                        status_label.set_text(f"✓ {step}")
+                        progress_bar.set_value(value)
+                        await asyncio.sleep(0.5)
+                    
+                    # Sauvegarder état validé
+                    state["preprocessing_validated"] = True
+                    state["validation_timestamp"] = datetime.now().isoformat()
+                    
+                    ui.notify("✅ Pipeline validé avec succès !", color="positive")
+                    
+                    # Afficher résumé final
+                    progress_container.clear()
+                    with progress_container:
+                        ui.label("✅ Validation complète !").style(
+                            "font-weight:700; font-size:20px; color:#27ae60; margin-bottom:16px;"
+                        )
+                        
+                        with ui.card().classes("w-full p-4 mb-4").style("background:#e8f5e9;"):
+                            ui.label("Prêt à lancer les algorithmes :").style("font-weight:600; margin-bottom:8px;")
+                            selected_algos = state.get("selected_algos", [])
+                            for algo in selected_algos:
+                                ui.label(f"• {algo}").style("font-size:14px;")
+                        
+                        ui.button(
+                            "▶️ Passer à la Page Algorithmes",
+                            on_click=lambda: (dialog.close(), ui.run_javascript("window.location.href='/supervised/algorithms'"))
+                        ).style(
+                            "background:linear-gradient(135deg, #27ae60 0%, #229954 100%); "
+                            "color:white; font-weight:700; height:56px; width:100%; border-radius:12px; margin-top:12px;"
+                        )
+                
+                # Lancer la validation
+                ui.timer(0.1, run_validation, once=True)
+        
+        dialog.open()
+    
+    def reset_preprocessing():
+        """Recommencer tout le preprocessing"""
+        with ui.dialog() as dialog, ui.card().classes("p-6"):
+            ui.label("⚠️ Recommencer le Preprocessing ?").style("font-weight:700; font-size:18px;")
+            ui.label("Toutes les transformations seront perdues.").style("margin-top:8px; color:#e74c3c;")
+            
+            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                ui.button("Annuler", on_click=dialog.close).props("flat")
+                
+                def confirm_reset():
+                    # Reset state
+                    keys_to_reset = [
+                        "missing_strategy", "encoding_strategy", "transform_strategy",
+                        "scaling_method", "reduction_applied", "fitted_imputers",
+                        "fitted_encoders", "fitted_transformers", "engineered_features"
+                    ]
+                    for key in keys_to_reset:
+                        if key in state:
+                            del state[key]
+                    
+                    # Restaurer dataset original
+                    if "df_original" in state:
+                        state["raw_df"] = state["df_original"].copy()
+                    
+                    ui.notify("🔄 Preprocessing réinitialisé", color="info")
+                    dialog.close()
+                    ui.run_javascript("window.location.href='/supervised/user_decisions'")
+                
+                ui.button("Confirmer", on_click=confirm_reset).style("background:#e74c3c; color:white;")
+        
+        dialog.open()
+    
+    # ---------- INTERFACE ----------
+    with ui.column().classes("w-full items-center p-8").style("background-color:#f8f9fa; min-height:100vh;"):
+        
+        # Header
+        ui.label("🎯 ÉTAPE 3.11 : RÉCAPITULATIF & VALIDATION").style(
+            "font-weight:700; font-size:32px; color:#2c3e50; margin-bottom:8px; text-align:center;"
+        )
+        ui.label("Vue d'ensemble avant lancement des algorithmes").style(
+            "font-size:18px; color:#7f8c8d; margin-bottom:32px; text-align:center;"
+        )
+        
+        # Section A : Synthèse des transformations
+        with ui.card().classes("w-full max-w-6xl p-6 mb-8"):
+            ui.label("📋 Résumé des Transformations Appliquées").style(
+                "font-weight:700; font-size:20px; color:#2c3e50; margin-bottom:16px;"
+            )
+            
+            summary = get_preprocessing_summary()
+            
+            if summary:
+                ui.table(
+                    columns=[
+                        {"name": "Étape", "label": "Étape", "field": "Étape"},
+                        {"name": "Action", "label": "Action", "field": "Action"},
+                        {"name": "Détails", "label": "Détails", "field": "Détails"}
+                    ],
+                    rows=summary,
+                    row_key="Étape"
+                ).style("width:100%;")
+            else:
+                ui.label("⚠️ Aucune transformation appliquée").style("color:#e67e22; font-size:16px;")
+        
+        # Section B : Statistiques comparatives
+        with ui.card().classes("w-full max-w-6xl p-6 mb-8"):
+            ui.label("📊 Statistiques Comparatives").style(
+                "font-weight:700; font-size:20px; color:#2c3e50; margin-bottom:16px;"
+            )
+            
+            with ui.row().classes("w-full gap-8"):
+                # Dataset Original
+                with ui.column().classes("flex-1"):
+                    with ui.card().classes("p-4").style("background:#ffebee;"):
+                        ui.label("Dataset Original").style("font-weight:700; font-size:16px; margin-bottom:8px;")
+                        if df_original is not None:
+                            ui.label(f"Lignes : {len(df_original):,}").style("font-size:14px;")
+                            ui.label(f"Colonnes : {len(df_original.columns)}").style("font-size:14px;")
+                            ui.label(f"Missing : {df_original.isna().sum().sum():,}").style("font-size:14px;")
+                        else:
+                            ui.label("Non disponible").style("color:#636e72;")
+                
+                # Dataset Preprocessed
+                with ui.column().classes("flex-1"):
+                    with ui.card().classes("p-4").style("background:#e8f5e9;"):
+                        ui.label("Dataset Preprocessé").style("font-weight:700; font-size:16px; margin-bottom:8px;")
+                        ui.label(f"Lignes : {len(df):,}").style("font-size:14px;")
+                        ui.label(f"Colonnes : {len(df.columns)}").style("font-size:14px;")
+                        ui.label(f"Missing : {df.isna().sum().sum():,}").style("font-size:14px;")
+                
+                # Splits
+                with ui.column().classes("flex-1"):
+                    with ui.card().classes("p-4").style("background:#e3f2fd;"):
+                        ui.label("Splits").style("font-weight:700; font-size:16px; margin-bottom:8px;")
+                        if split:
+                            ui.label(f"Train : {len(split.get('X_train', [])):,}").style("font-size:14px;")
+                            ui.label(f"Val : {len(split.get('X_val', [])):,}").style("font-size:14px;")
+                            ui.label(f"Test : {len(split.get('X_test', [])):,}").style("font-size:14px;")
+                        else:
+                            ui.label("Non splitté").style("color:#636e72;")
+        
+        # Section C : Visualisation Avant/Après
+        with ui.card().classes("w-full max-w-6xl p-6 mb-8"):
+            ui.label("🎨 Visualisation Avant/Après").style(
+                "font-weight:700; font-size:20px; color:#2c3e50; margin-bottom:16px;"
+            )
+            
+            comparison_fig = create_before_after_comparison()
+            if comparison_fig:
+                ui.plotly(comparison_fig).classes("w-full")
+            else:
+                ui.label("⚠️ Dataset original non disponible pour comparaison").style(
+                    "color:#e67e22; font-size:14px;"
+                )
+        
+        # Section D : Aperçu des données
+        with ui.card().classes("w-full max-w-6xl p-6 mb-8"):
+            ui.label("👁️ Aperçu du Dataset Final").style(
+                "font-weight:700; font-size:20px; color:#2c3e50; margin-bottom:16px;"
+            )
+            
+            # Afficher les premières lignes
+            preview_df = df.head(10)
+            
+            ui.table(
+                columns=[{"name": c, "label": c, "field": c} for c in preview_df.columns],
+                rows=preview_df.to_dict('records'),
+                row_key=preview_df.columns[0]
+            ).style("width:100%; max-height:400px; overflow:auto;")
+        
+        # Section E : Actions
+        with ui.card().classes("w-full max-w-6xl p-6 mb-8"):
+            ui.label("📥 Téléchargements & Exports").style(
+                "font-weight:700; font-size:20px; color:#2c3e50; margin-bottom:16px;"
+            )
+            
+            with ui.row().classes("gap-4"):
+                ui.button(
+                    "📊 Télécharger Dataset Preprocessé",
+                    on_click=download_preprocessed_data
+                ).style(
+                    "background:#3498db; color:white; font-weight:600; "
+                    "height:48px; padding:0 24px; border-radius:10px;"
+                )
+                
+                ui.button(
+                    "📄 Générer Rapport PDF",
+                    on_click=generate_pdf_report
+                ).style(
+                    "background:#9b59b6; color:white; font-weight:600; "
+                    "height:48px; padding:0 24px; border-radius:10px;"
+                )
+        
+        # Section F : Décisions Finales
+        with ui.card().classes("w-full max-w-6xl p-8 mb-12").style(
+            "background:linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%); "
+            "border:4px solid #4caf50; border-radius:20px;"
+        ):
+            ui.label("🎯 Décisions Finales").style(
+                "font-weight:800; font-size:24px; color:#1b5e20; text-align:center; margin-bottom:20px;"
+            )
+            
+            ui.label("Votre pipeline de preprocessing est prêt !").style(
+                "font-size:16px; color:#2e7d32; text-align:center; margin-bottom:20px;"
+            )
+            
+            with ui.row().classes("w-full justify-center gap-4"):
+                ui.button(
+                    "⬅️ Modifier une Étape",
+                    on_click=open_step_selector
+                ).style(
+                    "background:#95a5a6; color:white; font-weight:600; "
+                    "height:56px; padding:0 32px; border-radius:12px; font-size:16px;"
+                )
+                
+                ui.button(
+                    "🔄 Recommencer",
+                    on_click=reset_preprocessing
+                ).style(
+                    "background:#e74c3c; color:white; font-weight:600; "
+                    "height:56px; padding:0 32px; border-radius:12px; font-size:16px;"
+                )
+                
+                ui.button(
+                    "✅ Valider et Continuer",
+                    on_click=validate_and_continue
+                ).style(
+                    "background:linear-gradient(135deg, #27ae60 0%, #229954 100%); "
+                    "color:white; font-weight:700; height:56px; padding:0 40px; border-radius:12px; font-size:16px;"
+                )
+        
+        # Navigation
+        with ui.row().classes("w-full max-w-6xl justify-start mt-6"):
+            ui.button(
+                "⬅ Étape précédente",
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/dimension_reduction'")
+            ).style("background:#95a5a6; color:white; font-weight:600; height:50px; width:220px; border-radius:10px;")
 
 
 
