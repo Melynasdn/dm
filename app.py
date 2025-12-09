@@ -161,7 +161,7 @@ def home_page():
                 with ui.row().classes("gap-4 mt-6 w-full justify-center"):
                     ui.button(
                         "Commencer",
-                        on_click=lambda: ui.run_javascript("window.location.href='/upload'")
+                        on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/upload'")
                     ).style(
                         "background: linear-gradient(135deg, #01335A, #09538C) !important; "
                         "color:white !important; font-weight:600 !important; height:48px !important; width:100% !important; border-radius:8px !important;"
@@ -193,7 +193,7 @@ def home_page():
                 with ui.row().classes("gap-4 mt-6 w-full justify-center"):
                     ui.button(
                         "Commencer",
-                        on_click=lambda: ui.run_javascript("window.location.href='/upload'")
+                        on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")
                     ).style(
                         "background: linear-gradient(135deg, #01335A, #09538C) !important; "
                         "color:white !important; font-weight:600 !important; height:48px !important; width:100% !important; border-radius:8px !important;"
@@ -210,14 +210,16 @@ def home_page():
 
 
 
+
 # ----------------- PAGE UPLOAD -----------------
 from nicegui import ui
 import pandas as pd, io
 
 
 
-@ui.page('/upload')
-def upload_page():
+@ui.page('/unsupervised/upload')
+def unsupervised_upload_page():
+
 
     # Conteneur principal
     with ui.column() as main_col:
@@ -411,109 +413,673 @@ def upload_page():
 
 
 
-# ----------------- PAGE PREPROCESS -----------------
-@ui.page('/preprocess')
-def preprocess_page():
-    if state['raw_df'] is None:
-        ui.notify("⚠️ Aucun dataset chargé", color='warning')
-        ui.run_javascript("window.location.href='/upload'")
-        return
+@ui.page('/supervised/upload')
+def supervised_upload_page():
 
-    df = state['raw_df']
 
-    ui.add_head_html("""
-    <style>
-        body {
-            background-color: #f5f6fa;
-        }
-        .pp-title {
-            font-size: 26px;
-            font-weight: 700;
-            color: #2c3e50;
-        }
-        .pp-sub {
-            font-size: 14px;
-            color: #636e72;
-        }
-        .section-title {
-            font-size: 18px;
-            font-weight: 600;
-            color: #2c3e50;
-        }
-    </style>
-    """)
+    # Conteneur principal
+    with ui.column() as main_col:
+        main_col.style(
+            """
+            width: 100% !important;
+            min-height: 100vh !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: flex-start !important;
+            background-color: #f5f6fa !important;
+            padding-top: 60px !important;
+            font-family: 'Inter', sans-serif !important;
+            """
+        )
 
-    with ui.column().classes("w-full min-h-screen items-center py-10 gap-8"):
-        ui.label(" Prétraitement des Données").classes("pp-title")
-        ui.label("Configurez les options avant le clustering").classes("pp-sub")
+        # Titre
+        ui.label("Phase 2 : Chargement et Validation des Données").style(
+            """
+            font-weight: 700 !important;
+            font-size: 32px !important;
+            color: #01335A !important;
+            margin-bottom: 24px !important;
+            text-align: center !important;
+            """
+        )
 
-        with ui.card().classes("p-8 w-[1000px] shadow-lg rounded-xl"):
-            ui.label(f" Dataset chargé : {df.shape[0]} lignes × {df.shape[1]} colonnes").classes("section-title mb-4")
-
-            with ui.expansion(" Aperçu des données (10 premières lignes)", icon="table_view"):
-                ui.table(
-                    rows=df.head(10).to_dict('records'),
-                    columns=[{"name": c, "label": c, "field": c} for c in df.columns]
-                )
-
-            ui.separator().classes("my-6")
-            ui.label(" Options de prétraitement").classes("section-title mb-3")
-
-            with ui.row().classes("gap-10 w-full"):
-                drop_dup = ui.switch("Supprimer doublons", value=False)
-                handle_missing = ui.switch("Remplir valeurs manquantes", value=True)
-                onehot = ui.switch("Encodage OneHot", value=False)
-                norm_select = ui.select(
-                    ['none', 'minmax', 'zscore'],
-                    value='minmax',
-                    label='Normalisation'
-                ).classes("w-48")
-
-            ui.separator().classes("my-6")
-
-            with ui.row().classes("w-full gap-6"):
-                ui.button(
-                    "⬅ Retour Upload",
-                    on_click=lambda: ui.run_javascript("window.location.href='/upload'")
-                ).classes("w-1/3 h-11")
-
-                btn_apply = ui.button(" Appliquer le prétraitement").classes("w-1/3 h-11")
-
-                ui.button(
-                    "➡ Continuer au clustering",
-                    on_click=lambda: ui.run_javascript("window.location.href='/algos'")
-                ).classes("w-1/3 h-11")
-
-        result_container = ui.column().classes("w-[1000px]")
-
-        def apply():
-            processed_df, X = preprocess_dataframe(
-                df,
-                handle_missing.value,
-                None if norm_select.value == 'none' else norm_select.value,
-                encode_onehot=onehot.value,
-                drop_duplicates=drop_dup.value
+        # Carte centrale
+        with ui.card() as card:
+            card.style(
+                """
+                padding: 32px !important;
+                width: 580px !important;
+                border-radius: 12px !important;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.12) !important;
+                display: flex !important;
+                flex-direction: column !important;
+                align-items: center !important;
+                background-color: white !important;
+                """
             )
 
-            state['X'] = X
-            state['numeric_columns'] = list(processed_df.select_dtypes(include=[np.number]).columns)
+            ui.label("📂 Importer un Dataset CSV").style(
+                """
+                font-weight: 700 !important;
+                font-size: 24px !important;
+                color: #01335A !important;
+                text-align: center !important;
+                margin-bottom: 10px !important;
+                """
+            )
 
-            result_container.clear()
+            ui.label("Glissez-déposez un fichier CSV ou cliquez pour parcourir").style(
+                """
+                color: #09538C !important;
+                font-size: 15px !important;
+                text-align: center !important;
+                margin-bottom: 24px !important;
+                """
+            )
 
-            with result_container:
-                with ui.card().classes("p-6 shadow-md rounded-xl mt-6"):
-                    ui.label(
-                        f" Dataset après prétraitement : {processed_df.shape[0]} × {processed_df.shape[1]}"
-                    ).classes("section-title mb-3")
+            status_label = ui.label("Aucun fichier chargé").style(
+                """
+                color: #e74c3c !important;
+                font-size: 14px !important;
+                margin-bottom: 18px !important;
+                font-weight: 600 !important;
+                """
+            )
 
-                    ui.table(
-                        rows=processed_df.head(10).to_dict('records'),
-                        columns=[{"name": c, "label": c, "field": c} for c in processed_df.columns]
+            btn_next = ui.button("Continuer ➡")
+            btn_next.disable()
+            btn_next.style(
+                """
+                width: 100% !important;
+                height: 48px !important;
+                margin-top: 14px !important;
+                border-radius: 8px !important;
+                background: linear-gradient(135deg, #01335A, #09538C) !important;
+                color: white !important;
+                font-weight: 600 !important;
+                font-size: 15px !important;
+                border: none !important;
+                cursor: pointer !important;
+                """
+            )
+
+            table_placeholder = ui.column().style(
+                """
+                width: 100% !important;
+                margin-top: 20px !important;
+                border-top: 1px solid #ecf0f1 !important;
+                padding-top: 20px !important;
+                """
+            )
+
+            async def on_upload(e):
+                try:
+                    content = await e.file.read()
+                    df = pd.read_csv(io.BytesIO(content))
+                    state["raw_df"] = df
+
+                    # Mise à jour du statut
+                    status_label.text = f"Fichier chargé : {df.shape[0]} lignes × {df.shape[1]} colonnes"
+                    status_label.style(
+                        """
+                        color: #27ae60 !important;
+                        font-size: 14px !important;
+                        margin-bottom: 18px !important;
+                        font-weight: 600 !important;
+                        """
                     )
 
-            ui.notify("Prétraitement appliqué avec succès", color='positive')
+                    # Affichage aperçu
+                    table_placeholder.clear()
+                    with table_placeholder:
+                        ui.label("Aperçu des 10 premières lignes :").style(
+                            """
+                            font-weight: 600 !important;
+                            color: #01335A !important;
+                            font-size: 16px !important;
+                            margin-bottom: 8px !important;
+                            """
+                        )
+                        ui.table(rows=df.head(10).to_dict(orient="records")).style(
+                            """
+                            width: 100% !important;
+                            font-size: 14px !important;
+                            border: 1px solid #dfe6e9 !important;
+                            border-radius: 6px !important;
+                            background-color: #fafafa !important;
+                            """
+                        )
 
-        btn_apply.on_click(apply)
+                    btn_next.enable()
+                    ui.notify("Dataset chargé avec succès !", color='positive')
+
+                except Exception as err:
+                    ui.notify(f"Erreur lors de l'import : {err}", color='negative')
+
+            # Zone de drag & drop
+            ui.upload(
+                on_upload=on_upload,
+                label="Glissez-déposez un fichier CSV ou cliquez ici"
+            ).style(
+                """
+                width: 100% !important;
+                padding: 24px !important;
+                margin-bottom: 24px !important;
+                border: 2px dashed #09538C !important;
+                border-radius: 10px !important;
+                text-align: center !important;
+                font-size: 15px !important;
+                color: #01335A !important;
+                cursor: pointer !important;
+                background-color: #fdfdfd !important;
+                transition: all 0.2s ease !important;
+                """
+            ).props('accept=".csv"')
+
+            # Boutons navigation
+            with ui.row() as buttons_row:
+                buttons_row.style(
+                    """
+                    width: 100% !important;
+                    display: flex !important;
+                    gap: 16px !important;
+                    margin-top: 12px !important;
+                    """
+                )
+
+                ui.button(
+                    "⬅ Retour",
+                    on_click=lambda: ui.run_javascript("window.location.href='/'")
+                ).style(
+                    """
+                    width: 100% !important;
+                    height: 48px !important;
+                    border-radius: 8px !important;
+                    background: #dfe6e9 !important;
+                    color: #2c3e50 !important;
+                    font-weight: 600 !important;
+                    border: none !important;
+                    cursor: pointer !important;
+                    """
+                )
+
+                btn_next.on_click(lambda: ui.run_javascript("window.location.href='/supervised/preprocessing'"))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+###########################################################
+
+# ----------------- PAGE PREPROCESS -----------------
+# ----------------- PAGE PREPROCESS (UNSUPERVISED) -----------------
+@ui.page('/preprocess')
+def preprocess_page():
+    if state["raw_df"] is None:
+        ui.notify("⚠️ Aucun dataset chargé", color='warning')
+        # 🔧 Correction : on revient vers la page upload UNSUPERVISÉE
+        ui.run_javascript("window.location.href='/unsupervised/upload'")
+        return
+
+    df = state["raw_df"]
+
+    with ui.column().classes("p-10"):
+
+        ui.label("Prétraitement des Données").classes("text-3xl font-bold")
+
+        # 🔧 Correction : redirection correcte
+        ui.button("⬅ Retour Upload", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/upload'"))
+
+        ui.button(
+            "➡ Continuer au clustering",
+            on_click=lambda: ui.run_javascript("window.location.href='/algos'")
+        )
+
+
+# ----------------- PAGE PREPROCESS (SUPERVISE) -----------------
+# ----------------- PAGE /supervised/preprocessing -----------------
+from nicegui import ui
+import numpy as np
+import pandas as pd
+
+@ui.page('/supervised/preprocessing')
+def supervised_preprocessing_page():
+    df = state.get("raw_df", None)
+
+    if df is None:
+        with ui.column().classes("items-center justify-center w-full h-screen"):
+            ui.label("❌ Aucun dataset chargé. Veuillez importer un fichier avant de continuer.").style(
+                "font-size:18px !important; color:#c0392b !important; font-weight:600 !important;"
+            )
+            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/upload'")).style(
+                "margin-top:20px !important; background:#01335A !important; color:white !important; font-weight:600 !important;"
+            )
+        return
+
+    # ----------- STYLES GÉNÉRAUX -----------
+    with ui.column().classes("w-full h-auto items-center p-10").style(
+        "background-color:#f5f6fa !important; font-family:'Inter', sans-serif !important;"
+    ):
+
+        ui.label("Phase 3.1 : Data Understanding & Schema Definition").style(
+            "font-weight:700 !important; font-size:32px !important; color:#01335A !important; margin-bottom:32px !important; text-align:center !important;"
+        )
+
+        # ---------- SECTION A : VUE D'ENSEMBLE ----------
+        with ui.card().classes("w-full max-w-5xl p-6 mb-8").style(
+            "background-color:white !important; border-radius:12px !important; box-shadow:0 4px 15px rgba(0,0,0,0.08) !important;"
+        ):
+            ui.label("📊 Vue d’Ensemble du Dataset").style(
+                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; margin-bottom:12px !important;"
+            )
+
+            n_rows, n_cols = df.shape
+            mem_mb = round(df.memory_usage(deep=True).sum() / 1e6, 2)
+
+            with ui.row().classes("justify-around w-full mt-2"):
+                def metric(label, value, color):
+                    with ui.column().classes("items-center"):
+                        ui.label(label).style("font-size:15px !important; color:#636e72 !important;")
+                        ui.label(value).style(f"font-weight:700 !important; font-size:20px !important; color:{color} !important;")
+                metric("Nombre de lignes", f"{n_rows:,}", "#01335A")
+                metric("Nombre de colonnes", f"{n_cols:,}", "#01335A")
+                metric("Taille mémoire", f"{mem_mb} MB", "#09538C")
+
+        # ---------- SECTION B : TABLEAU DES COLONNES ----------
+        with ui.card().classes("w-full max-w-6xl p-6").style(
+            "background-color:white !important; border-radius:12px !important; box-shadow:0 4px 15px rgba(0,0,0,0.08) !important;"
+        ):
+            ui.label("🧾 Schéma du Dataset (Colonnes)").style(
+                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; margin-bottom:16px !important;"
+            )
+
+            # --------- CALCUL DES INFORMATIONS DE COLONNES ---------
+            columns_info = []
+
+            for col in df.columns:
+                series = df[col]
+                series_clean = series.replace('', np.nan).replace('?', np.nan)
+                conv = pd.to_numeric(series_clean.dropna(), errors='coerce')
+                detected_type = "Texte"  # default
+
+                if conv.notna().sum() / max(1, len(series_clean.dropna())) >= 0.9:
+                    n_unique = conv.nunique(dropna=True)
+                    ratio_unique = n_unique / max(1, len(series_clean))
+                    integer_like = np.all(np.abs(conv - conv.round()) < 1e-6)
+
+                    if integer_like:
+                        detected_type = "Numérique Discrète"
+                    else:
+                        if n_unique > 20 or ratio_unique > 0.05:
+                            detected_type = "Numérique Continue"
+                        else:
+                            detected_type = "Numérique Discrète"
+
+                missing_pct = round(series_clean.isna().mean() * 100, 2)
+                cardinality = int(series_clean.nunique(dropna=True))
+                unique_vals = series_clean.dropna().astype(str).unique()
+                examples = ", ".join(unique_vals[:3]) if len(unique_vals) > 0 else ""
+
+                columns_info.append({
+                    "Colonne": col,
+                    "Type Détecté": detected_type,
+                    "Type Réel": detected_type,
+                    "Rôle": "Feature",
+                    "% Missing": f"{missing_pct}%",
+                    "Cardinalité": cardinality,
+                    "Exemples": examples
+                })
+
+            # Sauvegarde pour la page suivante
+            state["columns_info"] = columns_info
+
+            # --------- TABLEAU ---------
+            ui.table(
+                columns=[
+                    {"name": "Colonne", "label": "Colonne", "field": "Colonne", "sortable": True},
+                    {"name": "Type Détecté", "label": "Type Détecté", "field": "Type Détecté"},
+                    {"name": "Type Réel", "label": "Type Réel", "field": "Type Réel"},
+                    {"name": "Rôle", "label": "Rôle", "field": "Rôle"},
+                    {"name": "% Missing", "label": "% Missing", "field": "% Missing"},
+                    {"name": "Cardinalité", "label": "Cardinalité", "field": "Cardinalité"},
+                    {"name": "Exemples", "label": "Exemples", "field": "Exemples"},
+                ],
+                rows=columns_info,
+                row_key="Colonne",
+            ).style(
+                "width:100% !important; font-size:14px !important; background:#fafafa !important; border-radius:8px !important;"
+            )
+
+        # ---------- BOUTONS NAVIGATION ----------
+        with ui.row().classes("justify-between w-full max-w-6xl mt-8"):
+            ui.button("⬅ Retour", on_click=lambda: ui.run_javascript("window.location.href='/upload'")).style(
+                "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
+            )
+
+            ui.button("➡ Étape suivante", on_click=lambda: ui.run_javascript("window.location.href='/supervised/user_decisions'")).style(
+                "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
+            )
+
+
+# ----------------- PAGE /supervised/user_decisions -----------------
+from nicegui import ui
+
+def map_detected_type(detected_type):
+    # Remap pour dropdown
+    if detected_type in ["Texte", "Catégorielle / Texte"]:
+        return "Texte"
+    elif detected_type == "Numérique Discrète":
+        return "Numérique Discrète"
+    elif detected_type == "Numérique Continue":
+        return "Numérique Continue"
+    else:
+        return "Texte"
+
+@ui.page('/supervised/user_decisions')
+def user_decisions_page():
+    df = state.get("raw_df", None)
+    columns_info = state.get("columns_info", None)
+
+    if df is None or columns_info is None:
+        with ui.column().classes("w-full h-screen").style("display:flex; align-items:center; justify-content:center;"):
+            ui.label("❌ Aucun dataset chargé ou informations de colonnes manquantes.").style(
+                "font-size:18px; color:#c0392b; font-weight:600;"
+            )
+            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/upload'")).style(
+                "margin-top:20px; background:#01335A; color:white; font-weight:600;"
+            )
+        return
+
+    # ----------- STYLES GÉNÉRAUX ----------- 
+    with ui.column().style(
+        "width:100%; min-height:100vh; padding:40px; background-color:#f5f6fa; font-family:'Inter', sans-serif;"
+    ):
+        ui.label("Phase 3.2 : Décisions Utilisateur").style(
+            "font-weight:700; font-size:32px; color:#01335A; margin-bottom:32px; text-align:center;"
+        )
+
+        # ---------- 1️⃣ Sélection de la Target ----------
+        with ui.card().style(
+            "width:100%; max-width:900px; padding:24px; margin-bottom:24px; background:white; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.08);"
+        ):
+            ui.label("🎯 Sélection de la colonne Target").style(
+                "font-weight:700; font-size:20px; color:#01335A; margin-bottom:12px;"
+            )
+
+            target_dropdown = ui.select(
+                options=[col["Colonne"] for col in columns_info],
+                label="Sélectionnez la colonne cible",
+                on_change=lambda e: on_target_change(e.value)
+            ).props("clearable dense")
+
+            target_warning = ui.label("").style("color:#e67e22; font-weight:600; margin-top:6px;")
+            imbalance_label = ui.label("").style("margin-top:6px; font-size:14px; color:#2c3e50;")
+            smote_cb = ui.checkbox("Appliquer un rééquilibrage (SMOTE/undersampling)").disable()
+
+        # ---------- 2️⃣ Correction des Types ----------
+        with ui.card().style(
+            "width:100%; max-width:1200px; padding:24px; margin-bottom:24px; background:white; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.08);"
+        ):
+            ui.label("🛠 Correction des types de colonnes").style(
+                "font-weight:700; font-size:20px; color:#01335A; margin-bottom:12px;"
+            )
+
+            column_type_widgets = {}
+            column_exclude_widgets = {}
+
+            for col in columns_info:
+                with ui.row().style("display:flex; align-items:center; gap:12px; margin-bottom:8px;"):
+                    ui.label(col["Colonne"]).style("width:180px; font-weight:600;")
+                    col_type = ui.select(
+                        options=[
+                            "Numérique Continue",
+                            "Numérique Discrète",
+                            "Catégorielle Nominale",
+                            "Catégorielle Ordinale",
+                            "Date/Datetime",
+                            "Texte",
+                            "Identifiant"
+                        ],
+                        value=map_detected_type(col["Type Détecté"])
+                    )
+                    column_type_widgets[col["Colonne"]] = col_type
+
+                    # Checkbox Exclusion
+                    auto_exclude = False
+                    if col["Cardinalité"] == 1:
+                        auto_exclude = True
+                    if "%" in col["% Missing"]:
+                        if float(col["% Missing"].replace("%","")) >= 100:
+                            auto_exclude = True
+                    if col["Colonne"].lower().startswith("id") or col["Cardinalité"] / len(df) > 0.95:
+                        auto_exclude = True
+                    exclude_cb = ui.checkbox("Exclure", value=auto_exclude)
+                    column_exclude_widgets[col["Colonne"]] = exclude_cb
+
+        # ---------- BOUTONS CONFIRMER + SUIVANT ----------
+        with ui.row().style("display:flex; gap:12px; margin-top:20px; justify-content:center;"):
+            ui.button("✅ Valider les décisions", on_click=lambda: on_confirm()).style(
+                "background:linear-gradient(135deg, #01335A, #09538C); color:white; font-weight:600; border-radius:8px; height:46px; width:250px;"
+            )
+            ui.button("➡ Passer à Split", on_click=lambda: save_and_go_to_split()).style(
+                "background:#27ae60; color:white; font-weight:600; border-radius:8px; height:46px; width:250px;"
+            )
+
+    # ----------------- FONCTIONS INTERNES -----------------
+    def on_target_change(target_col):
+        if target_col is None:
+            target_warning.text = ""
+            imbalance_label.text = "Sélectionnez la target pour voir la distribution"
+            smote_cb.disable()
+            return
+        n_unique = df[target_col].nunique(dropna=True)
+        if n_unique > 20:
+            target_warning.text = "⚠️ Attention : cela semble être une régression"
+        else:
+            target_warning.text = ""
+        counts = df[target_col].value_counts()
+        if n_unique <= 20:
+            imbalance_label.text = "Distribution des classes : " + ", ".join([f"{k}: {v}" for k,v in counts.items()])
+            smote_cb.enable()
+        else:
+            imbalance_label.text = "C'est une variable continue (régression)"
+            smote_cb.disable()
+
+    def on_confirm():
+        target_col = target_dropdown.value
+        if target_col is None:
+            ui.notify("Veuillez sélectionner une colonne target avant de continuer.", color="negative")
+            return
+        state["target_column"] = target_col
+        for col_name, widget in column_type_widgets.items():
+            state.setdefault("columns_types", {})[col_name] = widget.value
+        for col_name, cb in column_exclude_widgets.items():
+            state.setdefault("columns_exclude", {})[col_name] = cb.value
+        ui.notify("✅ Décisions enregistrées avec succès !", color="positive")
+
+    def save_and_go_to_split():
+        on_confirm()  # Sauvegarde des décisions avant de passer à la page suivante
+        ui.run_javascript("window.location.href='/supervised/preprocessing2'")
+
+
+
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from collections import Counter
+
+@ui.page('/supervised/preprocessing2')
+def preprocessing2_page():
+    df = state.get("raw_df")
+    target_col = state.get("target_column")
+    columns_exclude = state.get("columns_exclude", {})
+
+    if df is None or target_col is None:
+        with ui.column().classes("items-center justify-center w-full h-screen"):
+            ui.label("❌ Dataset ou target manquants.").style(
+                "font-size:18px; color:#c0392b; font-weight:600;"
+            )
+            ui.button("⬅ Retour", on_click=lambda: ui.run_javascript("window.location.href='/supervised/user_decisions'")).style(
+                "margin-top:20px; background:#01335A; color:white; font-weight:600;"
+            )
+        return
+
+    # Colonnes utilisées pour l'analyse
+    active_cols = [c for c in df.columns if not columns_exclude.get(c, False) and c != target_col]
+    df_active = df[active_cols + [target_col]].copy()
+
+    # ----------- STYLES GÉNÉRAUX -----------
+    with ui.column().classes("w-full h-auto items-center p-10").style(
+        "background-color:#f5f6fa; font-family:'Inter', sans-serif;"
+    ):
+        ui.label("Phase 3.2 : Split Train/Validation/Test").style(
+            "font-weight:700; font-size:32px; color:#01335A; margin-bottom:32px; text-align:center;"
+        )
+
+        # ---------- 1️⃣ Vérification du déséquilibre ----------
+        with ui.card().classes("w-full max-w-4xl p-6 mb-6").style(
+            "background:white; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.08);"
+        ):
+            ui.label(f"🎯 Distribution de la target '{target_col}'").style(
+                "font-weight:700; font-size:20px; color:#01335A; margin-bottom:12px;"
+            )
+
+            counts = df_active[target_col].value_counts()
+            total = len(df_active)
+            imbalance_detected = False
+            for cls, cnt in counts.items():
+                pct = round(cnt / total * 100, 1)
+                bar = "█" * int(pct // 2)
+                ui.label(f"Classe {cls}: {cnt} ({pct}%) {bar}").style("font-family:monospace;")
+
+            if len(counts) > 1:
+                min_pct = counts.min() / total * 100
+                if min_pct < 30:
+                    imbalance_detected = True
+                    ui.label("⚠️ Déséquilibre détecté !").style("color:#e67e22; font-weight:600; margin-top:6px;")
+                    ui.label("Recommandation : Stratified split + métriques adaptées (F1-score, recall)").style(
+                        "font-size:14px; margin-top:4px;"
+                    )
+
+            smote_cb = ui.checkbox("Appliquer un rééquilibrage (SMOTE/undersampling)").disable()
+            if imbalance_detected:
+                smote_cb.enable()
+
+        # ---------- 2️⃣ Configuration du Split ----------
+        with ui.card().classes("w-full max-w-4xl p-6 mb-6").style(
+            "background:white; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.08);"
+        ):
+            ui.label("📂 Configuration du Split").style(
+                "font-weight:700; font-size:20px; color:#01335A; margin-bottom:12px;"
+            )
+
+            # Défault ratios
+            n_samples = len(df_active)
+            if n_samples < 1000:
+                train_ratio, val_ratio, test_ratio = 0.6, 0.2, 0.2
+            elif n_samples > 10000:
+                train_ratio, val_ratio, test_ratio = 0.8, 0.1, 0.1
+            else:
+                train_ratio, val_ratio, test_ratio = 0.7, 0.15, 0.15
+
+            with ui.row().classes("items-center gap-6 mb-4"):
+                ui.label(f"Train: {int(train_ratio*100)}%").style("width:80px;")
+                train_slider = ui.slider(value=int(train_ratio*100), min=50, max=90, step=1).props("show-value")
+                ui.label(f"Val: {int(val_ratio*100)}%").style("width:60px;")
+                val_slider = ui.slider(value=int(val_ratio*100), min=5, max=30, step=1).props("show-value")
+                ui.label(f"Test: {int(test_ratio*100)}%").style("width:60px;")
+                test_slider = ui.slider(value=int(test_ratio*100), min=5, max=30, step=1).props("show-value")
+
+            # Stratified / Random / Time-based
+            strategy_radio = ui.radio(
+                options=["Stratified (recommandé)", "Random", "Time-based (si date)"],
+                value="Stratified (recommandé)"
+            ).style("margin-top:12px;")
+
+            seed_input = ui.input(label="Random Seed", value=42).style("margin-top:12px; width:150px;")
+
+        # ---------- 3️⃣ Bouton Split ----------
+        def do_split():
+            # Ajuster ratios pour total=100
+            tr = train_slider.value
+            vr = val_slider.value
+            te = test_slider.value
+            total = tr + vr + te
+            tr /= total
+            vr /= total
+            te /= total
+
+            stratify_col = df_active[target_col] if "Stratified" in strategy_radio.value else None
+
+            # Split train
+            X = df_active.drop(columns=[target_col])
+            y = df_active[target_col]
+            X_train, X_temp, y_train, y_temp = train_test_split(
+                X, y, train_size=tr, random_state=seed_input.value, stratify=stratify_col
+            )
+
+            # Split val/test
+            strat_temp = y_temp if stratify_col is not None else None
+            val_size = vr / (vr + te)
+            X_val, X_test, y_val, y_test = train_test_split(
+                X_temp, y_temp, train_size=val_size, random_state=seed_input.value, stratify=strat_temp
+            )
+
+            # Stocker dans state
+            state["split"] = {
+                "X_train": X_train, "y_train": y_train,
+                "X_val": X_val, "y_val": y_val,
+                "X_test": X_test, "y_test": y_test
+            }
+
+            # Affichage post-split
+            ui.notify("✅ Split effectué avec succès !", color="positive")
+
+            def format_dist(y_set, name):
+                counts = y_set.value_counts()
+                total = len(y_set)
+                lines = [f"{name} set : {total} samples"]
+                for cls, cnt in counts.items():
+                    pct = round(cnt / total * 100, 1)
+                    lines.append(f"  - Classe {cls}: {cnt} ({pct}%)")
+                return "\n".join(lines)
+
+            ui.label(format_dist(y_train, "Train")).style("font-family:monospace; margin-top:8px;")
+            ui.label(format_dist(y_val, "Validation")).style("font-family:monospace; margin-top:4px;")
+            ui.label(format_dist(y_test, "Test")).style("font-family:monospace; margin-top:4px;")
+
+        ui.button("✅ Effectuer le split", on_click=do_split).style(
+            "background:linear-gradient(135deg, #01335A, #09538C); color:white; font-weight:600; border-radius:8px; height:46px; width:250px; margin-top:20px;"
+        )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # ----------------- PAGE ALGOS (MODIFIÉE POUR SCIKIT-LEARN) -----------------
 @ui.page('/algos')
