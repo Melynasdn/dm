@@ -213,55 +213,138 @@ def home_page():
 # ----------------- PAGE UPLOAD -----------------
 @ui.page('/upload')
 def upload_page():
-    ui.add_head_html("""
-    <style>
-        body {
-            background-color: #f5f6fa;
-        }
-        .upload-title {
-            font-weight: 700;
-            font-size: 28px;
-            color: #2c3e50;
-        }
-        .upload-sub {
-            color: #636e72;
-            font-size: 14px;
-        }
-    </style>
-    """)
 
-    with ui.column().classes("w-full h-screen items-center justify-center"):
-        with ui.card().classes("p-10 w-[420px] shadow-lg rounded-xl"):
-            ui.label(" Chargement du Dataset").classes("upload-title text-center")
-            ui.label("Importez votre fichier CSV pour commencer").classes("upload-sub text-center mb-6")
+    with ui.column().style(
+        """
+        width: 100% !important;
+        height: 100vh !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background-color: #f5f6fa !important;
+        """
+    ):
+        with ui.card().style(
+            """
+            padding: 32px !important;
+            width: 460px !important;
+            border-radius: 12px !important;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12) !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            background-color: white !important;
+            """
+        ):
 
-            status_label = ui.label("Aucun fichier chargé").classes("text-red-500 text-sm mb-4")
-            btn_next = ui.button("Suivant ➡").classes("w-1/2 h-11")
+            ui.label("Chargement du Dataset").style(
+                """
+                font-weight: 700 !important;
+                font-size: 28px !important;
+                color: #01335A !important;
+                text-align: center !important;
+                margin-bottom: 10px !important;
+                """
+            )
+
+            ui.label("Importez votre fichier CSV pour commencer").style(
+                """
+                color: #09538C !important;
+                font-size: 15px !important;
+                text-align: center !important;
+                margin-bottom: 24px !important;
+                """
+            )
+
+            status_label = ui.label("Aucun fichier chargé").style(
+                """
+                color: #e74c3c !important;
+                font-size: 14px !important;
+                margin-bottom: 18px !important;
+                font-weight: 600 !important;
+                """
+            )
+
+            btn_next = ui.button("Continuer ➡")
             btn_next.disable()
+            btn_next.style(
+                """
+                width: 100% !important;
+                height: 48px !important;
+                margin-top: 14px !important;
+                border-radius: 8px !important;
+                background: linear-gradient(135deg, #01335A, #09538C) !important;
+                color: white !important;
+                font-weight: 600 !important;
+                font-size: 15px !important;
+                border: none !important;
+                cursor: pointer !important;
+                """
+            )
 
             async def on_upload(e):
+                import pandas as pd, io
                 content = await e.file.read()
                 df = pd.read_csv(io.BytesIO(content))
                 state['raw_df'] = df
 
-                status_label.text = f" Fichier chargé : {df.shape[0]} lignes × {df.shape[1]} colonnes"
-                status_label.classes("text-green-600")
-                btn_next.enable() 
-                ui.notify(f"Dataset chargé avec succès !", color='positive')
+                status_label.text = f"Fichier chargé : {df.shape[0]} lignes × {df.shape[1]} colonnes"
+                status_label.style(
+                    """
+                    color: #27ae60 !important;
+                    font-size: 14px !important;
+                    margin-bottom: 18px !important;
+                    font-weight: 600 !important;
+                    """
+                )
+                btn_next.enable()
+                ui.notify("Dataset chargé avec succès !", color='positive')
 
+            # Zone de drag & drop
             ui.upload(
                 on_upload=on_upload,
-                label="Sélectionner un fichier CSV"
-            ).props('accept=".csv"').classes("w-full mb-4")
+                label="Glissez-déposez un fichier CSV ou cliquez pour parcourir"
+            ).style(
+                """
+                width: 100% !important;
+                padding: 24px !important;
+                margin-bottom: 24px !important;
+                border: 2px dashed #09538C !important;
+                border-radius: 10px !important;
+                text-align: center !important;
+                font-size: 15px !important;
+                color: #01335A !important ;
+                cursor: pointer !important;
+                """
+            ).props('accept=".csv"')
 
-            ui.separator().classes("my-4")
 
-            with ui.row().classes("w-full gap-4"):
+            with ui.row().style(
+                """
+                width: 100% !important;
+                display: flex !important;
+                gap: 16px !important;
+                """
+            ):
                 ui.button(
                     "⬅ Retour",
                     on_click=lambda: ui.run_javascript("window.location.href='/'")
-                ).classes("w-1/2 h-11")
+                ).style(
+                    """
+                    width: 100% !important;
+                    height: 48px !important;
+                    border-radius: 8px !important;
+                    background: #dfe6e9 !important;
+                    color: #2c3e50 !important;
+                    font-weight: 600 !important;
+                    border: none !important;
+                    cursor: pointer !important;
+                    """
+                )
+
                 btn_next.on_click(lambda: ui.run_javascript("window.location.href='/preprocess'"))
+
+
 
 # ----------------- PAGE PREPROCESS -----------------
 @ui.page('/preprocess')
