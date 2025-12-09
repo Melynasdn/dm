@@ -1197,19 +1197,20 @@ def univariate_analysis_page():
 
 
 
+
+
+
 from nicegui import ui
+
 import pandas as pd
 import numpy as np
 import io, base64
 import matplotlib.pyplot as plt
 
-# ----------------- GLOBAL STATE -----------------
 global_state = state
-
 
 @ui.page('/supervised/outliers_analysis')
 def outliers_analysis_page():
-    # === Vérification des données ===
     split = global_state.get("split")
     if not split or "X_train" not in split:
         with ui.column().classes("items-center justify-center w-full h-screen"):
@@ -1222,9 +1223,8 @@ def outliers_analysis_page():
         return
 
     df_train = split["X_train"].copy()
-    global_state["cleaned_train"] = df_train.copy()  # sauvegarde initiale
+    global_state["cleaned_train"] = df_train.copy()
 
-    # === Titre principal ===
     with ui.column().classes("w-full p-6").style("background-color:#f5f6fa; font-family:'Inter', sans-serif;"):
         ui.label("🔍 Étape 3.4 : Gestion des Outliers (Train)").style(
             "font-weight:700; font-size:32px; color:#01335A; margin-bottom:24px; text-align:center;"
@@ -1235,10 +1235,9 @@ def outliers_analysis_page():
             ui.label("Aucune variable numérique détectée.").style("color:#e74c3c; font-weight:600;")
             return
 
-        # === Fonction de génération d’image matplotlib ===
         def generate_hist(data, title):
             fig, ax = plt.subplots(figsize=(4, 2.5))
-            ax.hist(data.dropna(), bins=20, color="#3498db", alpha=0.7)
+            ax.hist(data.dropna(), bins=20, alpha=0.7)
             ax.set_title(title, fontsize=10)
             ax.grid(alpha=0.3)
             buffer = io.BytesIO()
@@ -1248,7 +1247,36 @@ def outliers_analysis_page():
             buffer.seek(0)
             return "data:image/png;base64," + base64.b64encode(buffer.read()).decode()
 
-        # === Boucle sur chaque feature numérique ===
+        # fabrique de handlers qui lie feature, after_plot et info_label
+        def make_handlers(feature, after_plot, info_label):
+            def remove_outliers():
+                df = global_state["cleaned_train"]
+                q1, q3 = df[feature].quantile([0.25, 0.75])
+                iqr = q3 - q1
+                mask = ~((df[feature] < (q1 - 1.5 * iqr)) |
+                         (df[feature] > (q3 + 1.5 * iqr)))
+                nb_outliers = len(df) - mask.sum()
+                df.loc[~mask, feature] = np.nan
+                after_plot.set_source(generate_hist(df[feature].dropna(), "Après suppression"))
+                info_label.text = f"🧹 {nb_outliers} outliers supprimés ({nb_outliers/len(df)*100:.1f} %)."
+
+            def winsorise():
+                df = global_state["cleaned_train"]
+                lower, upper = np.percentile(df[feature].dropna(), [1, 99])
+                total = ((df[feature] < lower) | (df[feature] > upper)).sum()
+                df[feature] = df[feature].clip(lower, upper)
+                after_plot.set_source(generate_hist(df[feature], "Après Winsorisation (1%-99%)"))
+                info_label.text = f"📉 {total} valeurs winsorisées (1%-99 %)."
+
+            def log_transform():
+                df = global_state["cleaned_train"]
+                positive = df[feature].clip(lower=0)
+                df[feature] = np.log1p(positive)
+                after_plot.set_source(generate_hist(df[feature], "Après Log Transform"))
+                info_label.text = "🔁 Transformation logarithmique appliquée."
+
+            return remove_outliers, winsorise, log_transform
+
         for feature in numeric_features:
             with ui.card().style(
                 "background:white; padding:16px; border-radius:10px; "
@@ -1268,47 +1296,22 @@ def outliers_analysis_page():
 
                 info_label = ui.label("").style("margin-top:10px; color:#555; font-size:14px;")
 
-                # --- Méthodes de traitement ---
-                def remove_outliers():
-                    df = global_state["cleaned_train"]
-                    q1, q3 = df[feature].quantile([0.25, 0.75])
-                    iqr = q3 - q1
-                    mask = ~((df[feature] < (q1 - 1.5 * iqr)) |
-                             (df[feature] > (q3 + 1.5 * iqr)))
-                    nb_outliers = len(df) - mask.sum()
-                    df.loc[~mask, feature] = np.nan  # optionnel: remplacer par NaN
-                    after_plot.set_source(generate_hist(df[feature].dropna(), "Après suppression"))
-                    info_label.text = f"🧹 {nb_outliers} outliers supprimés ({nb_outliers/len(df)*100:.1f} %)."
-
-                def winsorise():
-                    df = global_state["cleaned_train"]
-                    lower, upper = np.percentile(df[feature].dropna(), [1, 99])
-                    total = ((df[feature] < lower) | (df[feature] > upper)).sum()
-                    df[feature] = df[feature].clip(lower, upper)
-                    after_plot.set_source(generate_hist(df[feature], "Après Winsorisation (1%-99%)"))
-                    info_label.text = f"📉 {total} valeurs winsorisées (1%-99 %)."
-
-                def log_transform():
-                    df = global_state["cleaned_train"]
-                    positive = df[feature].clip(lower=0)
-                    df[feature] = np.log1p(positive)
-                    after_plot.set_source(generate_hist(df[feature], "Après Log Transform"))
-                    info_label.text = "🔁 Transformation logarithmique appliquée."
+                # obtenir handlers bindés à la feature courante
+                remove_cb, winsor_cb, log_cb = make_handlers(feature, after_plot, info_label)
 
                 with ui.row().style("justify-content:center; margin-top:12px; gap:10px;"):
-                    ui.button("Supprimer Outliers", on_click=remove_outliers).style(
+                    ui.button("Supprimer Outliers", on_click=remove_cb).style(
                         "background:#e74c3c; color:white; font-weight:600; border-radius:6px; padding:8px 18px;"
                     )
-                    ui.button("Winsorisation", on_click=winsorise).style(
+                    ui.button("Winsorisation", on_click=winsor_cb).style(
                         "background:#f39c12; color:white; font-weight:600; border-radius:6px; padding:8px 18px;"
                     )
-                    ui.button("Log Transform", on_click=log_transform).style(
+                    ui.button("Log Transform", on_click=log_cb).style(
                         "background:#2980b9; color:white; font-weight:600; border-radius:6px; padding:8px 18px;"
                     )
 
-        # === Bouton suivant ===
         ui.button("➡ Étape suivante", on_click=lambda: ui.run_javascript(
-            "window.location.href='/supervised/next_step'"
+            "window.location.href='/supervised/multivariate_analysis'"
         )).style(
             "background:linear-gradient(135deg, #01335A, #09538C); color:white; font-weight:600; "
             "border-radius:8px; height:46px; width:280px; margin-top:20px;"
@@ -1321,6 +1324,813 @@ def outliers_analysis_page():
 
 
 
+
+
+
+# ----------------- PAGE 3.5 : ANALYSE MULTIVARIÉE -----------------
+from nicegui import ui
+import plotly.graph_objs as go
+from plotly.subplots import make_subplots
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+import statsmodels.api as sm
+import math
+
+@ui.page('/supervised/multivariate_analysis')
+def multivariate_analysis_page():
+    df = state.get("raw_df", None)
+    target_col = state.get("target_column", None)
+    columns_exclude = state.get("columns_exclude", {}) or {}
+
+    if df is None:
+        with ui.column().classes("items-center justify-center w-full h-screen"):
+            ui.label("❌ Aucun dataset chargé.").style("font-size:18px; color:#c0392b; font-weight:600;")
+            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/upload'"))
+        return
+
+    # Préparations
+    numeric_cols = df.select_dtypes(include=[int, float, "number"]).columns.tolist()
+    # Exclure colonnes marquées "Exclure" et target
+    active_numeric = [c for c in numeric_cols if not columns_exclude.get(c, False) and c != target_col]
+
+    if "engineered_features" not in state:
+        state["engineered_features"] = []  # list of tuples (name, formula)
+
+    # Container principal
+    with ui.column().classes("w-full items-center p-8").style("background-color:#f5f6fa;"):
+        ui.label("### ÉTAPE 3.5 : ANALYSE MULTIVARIÉE (Corrélations & Redondance)").style(
+            "font-weight:700; font-size:28px; color:#01335A; margin-bottom:12px;"
+        )
+
+        # ----- SECTION A : Heatmap interactive -----
+        with ui.card().classes("w-full max-w-6xl p-6 mb-6").style("background:white; border-radius:12px;"):
+            ui.label("A — Heatmap de Corrélation (click sur cellule pour zoom)").style(
+                "font-weight:700; font-size:18px; color:#01335A; margin-bottom:8px;"
+            )
+
+            if len(active_numeric) < 2:
+                ui.label("Pas assez de colonnes numériques actives pour calculer la corrélation.").style("color:#e67e22")
+            else:
+                corr = df[active_numeric].corr()
+
+                # Plotly heatmap
+                heatmap_fig = go.Figure(
+                    data=go.Heatmap(
+                        z=corr.values,
+                        x=corr.columns,
+                        y=corr.index,
+                        zmin=-1, zmax=1,
+                        colorscale='RdBu',
+                        colorbar=dict(title="r"),
+                        hovertemplate='Feature A: %{y}<br>Feature B: %{x}<br>r = %{z:.3f}<extra></extra>'
+                    )
+                )
+                heatmap_fig.update_layout(margin=dict(l=60, r=20, t=30, b=60), height=560)
+
+                plot = ui.plotly(heatmap_fig).classes("w-full").style("max-width:100%;")
+                # callback when user clicks a heatmap cell
+                def on_heatmap_click(e):
+                    # e contains points with x and y labels
+                    try:
+                        point = e["points"][0]
+                        feat_b = point["x"]
+                        feat_a = point["y"]
+                        r_val = float(point["z"])
+                        open_pair_modal(feat_a, feat_b, r_val)
+                    except Exception as exc:
+                        ui.notify("Erreur lecture cellule heatmap.", color="negative")
+                plot.on("plotly_click", on_heatmap_click)
+
+        # ----- SECTION B : Liste des corrélations élevées -----
+        with ui.card().classes("w-full max-w-6xl p-6 mb-6").style("background:white; border-radius:12px;"):
+            ui.label("B — Paires fortement corrélées (|r| > 0.8)").style(
+                "font-weight:700; font-size:18px; color:#01335A; margin-bottom:8px;"
+            )
+
+            correlations = []
+            if len(active_numeric) >= 2:
+                corr_vals = corr.where(~np.eye(len(corr),dtype=bool))  # mask diagonal
+                # find pairs
+                pairs = []
+                for i, a in enumerate(corr_vals.index):
+                    for j, b in enumerate(corr_vals.columns):
+                        if j <= i: continue
+                        r = corr_vals.iloc[i, j]
+                        if pd.isna(r): continue
+                        if abs(r) >= 0.8:
+                            pairs.append((a, b, float(r)))
+                # sort by abs(r) desc
+                pairs = sorted(pairs, key=lambda x: -abs(x[2]))
+
+                # build rows
+                rows = []
+                for a, b, r in pairs:
+                    if abs(r) > 0.9:
+                        mark = "🔴"
+                    elif abs(r) >= 0.8:
+                        mark = "🟡"
+                    else:
+                        mark = "🟢"
+                    # model impacts (simple heuristics)
+                    impact_nb = "🔴" if abs(r) > 0.85 else "🟡"
+                    impact_knn = "🟡" if abs(r) >= 0.8 else "🟢"
+                    impact_c45 = "🟢"
+                    rows.append({
+                        "Feature A": a,
+                        "Feature B": b,
+                        "Corrélation": f"{r:.3f} {mark}",
+                        "Impact NaiveBayes": impact_nb,
+                        "Impact KNN": impact_knn,
+                        "Impact C4.5": impact_c45
+                    })
+                if len(rows) == 0:
+                    ui.label("Aucune paire avec |r| > 0.8").style("color:#2c3e50")
+                else:
+                    ui.table(
+                        columns=[
+                            {"name":"Feature A","label":"Feature A","field":"Feature A"},
+                            {"name":"Feature B","label":"Feature B","field":"Feature B"},
+                            {"name":"Corrélation","label":"Corrélation","field":"Corrélation"},
+                            {"name":"Impact NaiveBayes","label":"Impact NB","field":"Impact NaiveBayes"},
+                            {"name":"Impact KNN","label":"Impact KNN","field":"Impact KNN"},
+                            {"name":"Impact C4.5","label":"Impact C4.5","field":"Impact C4.5"},
+                        ],
+                        rows=rows,
+                        row_key="Feature A"
+                    ).style("width:100%")
+
+            else:
+                ui.label("Pas assez de variables numériques actives pour détecter des corrélations.").style("color:#e67e22")
+
+        # ----- SECTION C : VIF -----
+        with ui.card().classes("w-full max-w-6xl p-6 mb-6").style("background:white; border-radius:12px;"):
+            ui.label("C — VIF (Variance Inflation Factor)").style(
+                "font-weight:700; font-size:18px; color:#01335A; margin-bottom:8px;"
+            )
+            if len(active_numeric) < 2:
+                ui.label("Pas assez de colonnes numériques actives pour calculer le VIF.").style("color:#e67e22")
+            else:
+                vif_df = []
+                try:
+                    # Prepare design matrix (add constant to avoid perfect collinearity)
+                    X_vif = df[active_numeric].dropna()
+                    # To compute VIF we need no constant columns; use add_constant for statsmodels
+                    X_vif_const = sm.add_constant(X_vif)
+                    for i, col in enumerate(active_numeric):
+                        vif_val = variance_inflation_factor(X_vif_const.values, i+1)  # +1 because 0 is const
+                        level = "🟢" if vif_val <= 5 else "🔴"
+                        vif_df.append({"Feature": col, "VIF": f"{vif_val:.2f}", "Niveau": level})
+                except Exception as e:
+                    ui.label("Erreur calcul VIF: " + str(e)).style("color:#c0392b")
+                    vif_df = []
+
+                if len(vif_df) > 0:
+                    ui.table(
+                        columns=[
+                            {"name":"Feature","label":"Feature","field":"Feature"},
+                            {"name":"VIF","label":"VIF","field":"VIF"},
+                            {"name":"Niveau","label":"Niveau","field":"Niveau"}
+                        ],
+                        rows=vif_df
+                    ).style("width:100%")
+
+        # ----- SECTION D : Cartes comparatives + Actions utilisateur -----
+        with ui.card().classes("w-full max-w-6xl p-6 mb-8").style("background:white; border-radius:12px;"):
+            ui.label("D — Cartes comparatives & Actions").style(
+                "font-weight:700; font-size:18px; color:#01335A; margin-bottom:8px;"
+            )
+
+            # Buttons: appliquer recommandations globales
+            with ui.row().classes("items-center gap-4").style("margin-bottom:12px;"):
+                ui.button("Appliquer recommandation : supprimer redondance (Naive Bayes)")\
+                    .on("click", lambda e: apply_naivebayes_prune()).style("background:#09538C; color:white;")
+                ui.button("Créer feature combinée (multi) ...").on("click", lambda e: open_bulk_engineer_modal())
+
+            # For each correlated pair (we reuse pairs found above)
+            if len(active_numeric) >= 2 and len(pairs) > 0:
+                for a, b, r in pairs:
+                    with ui.row().classes("items-start gap-4").style("margin-bottom:16px;"):
+                        # Left card (A)
+                        with ui.card().style("width:48%; padding:8px;"):
+                            ui.label(f"{a}").style("font-weight:700; margin-bottom:6px;")
+                            # plotly histogram for A
+                            hist_a = make_histogram_plot(df[a].dropna(), a)
+                            ui.plotly(hist_a).style("height:220px; width:100%;")
+                            ui.label(f"Mean: {float(df[a].dropna().mean()):.3f}")
+                            corr_to_target_a = df[a].corr(df[target_col]) if target_col and df[target_col].dtype in [int,float,"number"] else None
+                            ui.label(f"Importance*: {corr_to_target_a:.3f}" if corr_to_target_a is not None else "Importance*: N/A")
+
+                        # Right card (B)
+                        with ui.card().style("width:48%; padding:8px;"):
+                            ui.label(f"{b}").style("font-weight:700; margin-bottom:6px;")
+                            hist_b = make_histogram_plot(df[b].dropna(), b)
+                            ui.plotly(hist_b).style("height:220px; width:100%;")
+                            ui.label(f"Mean: {float(df[b].dropna().mean()):.3f}")
+                            corr_to_target_b = df[b].corr(df[target_col]) if target_col and df[target_col].dtype in [int,float,"number"] else None
+                            ui.label(f"Importance*: {corr_to_target_b:.3f}" if corr_to_target_b is not None else "Importance*: N/A")
+
+                    # Actions for this pair
+                    with ui.row().classes("items-center gap-3").style("margin-bottom:12px;"):
+                        ui.label("Action :").style("width:80px;")
+                        btn_keep_a = ui.button(f"Garder {a}", on_click=lambda e, a=a, b=b: keep_feature(a, b, keep=a))
+                        btn_keep_b = ui.button(f"Garder {b}", on_click=lambda e, a=a, b=b: keep_feature(a, b, keep=b)).style("background:#09538C;color:white;")
+                        btn_keep_b.set_props("title='Recommandé (plus corrélé à la target)'")
+                        ui.button("Garder les deux", on_click=lambda e, a=a, b=b: keep_feature(a, b, keep="both"))
+                        ui.button("Créer feature combinée", on_click=lambda e, a=a, b=b: open_pair_modal(a,b,r))
+
+            else:
+                ui.label("Aucune paire corrélée à afficher pour les cartes comparatives.").style("color:#636e72")
+
+        # Navigation buttons
+        with ui.row().classes("w-full max-w-6xl justify-between").style("margin-top:12px;"):
+            ui.button("⬅ Étape précédente", on_click=lambda: ui.run_javascript("window.location.href='/supervised/preprocessing2'"))
+            ui.button("➡ Étape suivante", on_click=lambda: ui.run_javascript("window.location.href='/supervised/missing_values'"))
+
+    # ----------------- Fonctions internes -----------------
+    def make_histogram_plot(series, name):
+        # returns a plotly Figure histogram for consistency/ interactivity
+        fig = go.Figure()
+        fig.add_trace(go.Histogram(x=series, nbinsx=30, opacity=0.9, name=name))
+        fig.update_layout(margin=dict(l=40, r=10, t=20, b=40), height=220, showlegend=False)
+        return fig
+
+    def open_pair_modal(feat_a, feat_b, r_val):
+        # modal with pair details, combined feature creation form
+        dlg = ui.dialog()
+        with dlg:
+            with ui.card().style("width:800px; padding:18px;"):
+                ui.label(f"Détails paire : {feat_a}  —  {feat_b}   (r = {r_val:.3f})").style("font-weight:700; font-size:16px; margin-bottom:8px;")
+                # Scatter plot
+                scatter = go.Figure()
+                scatter.add_trace(go.Scatter(x=df[feat_a], y=df[feat_b], mode='markers', marker=dict(opacity=0.6), name="points"))
+                scatter.update_layout(height=360, xaxis_title=feat_a, yaxis_title=feat_b)
+                ui.plotly(scatter).style("width:100%; height:360px;")
+
+                # feature creation form
+                with ui.row().classes("items-center gap-8").style("margin-top:8px;"):
+                    name_input = ui.input(label="Nom nouvelle feature", placeholder=f"{feat_b}_par_{feat_a}")
+                    formula_select = ui.select(options=[f"{feat_b} / {feat_a}", f"{feat_b} - {feat_a}", f"{feat_b} + {feat_a}", f"{feat_b} * {feat_a}"], label="Formule", value=f"{feat_b} / {feat_a}")
+                    create_btn = ui.button("Créer", on_click=lambda e: create_engineered_feature(feat_a, feat_b, name_input.value, formula_select.value, dlg))
+                    ui.button("Annuler", on_click=lambda e: dlg.close())
+
+        dlg.open()
+
+    def create_engineered_feature(a, b, new_name, formula_str, dialog_obj):
+        if not new_name:
+            ui.notify("Donne un nom à la nouvelle feature.", color="negative")
+            return
+        # compute safely
+        try:
+            s_a = df[a].astype(float)
+            s_b = df[b].astype(float)
+            if "/" in formula_str:
+                new_series = s_b / s_a.replace({0: np.nan})
+            elif "-" in formula_str:
+                new_series = s_b - s_a
+            elif "+" in formula_str:
+                new_series = s_b + s_a
+            elif "*" in formula_str:
+                new_series = s_b * s_a
+            else:
+                ui.notify("Formule non reconnue.", color="negative")
+                return
+            # add to df and state
+            df[new_name] = new_series
+            state.setdefault("raw_df", df)
+            state.setdefault("engineered_features", []).append((new_name, f"{formula_str} of {b} and {a}"))
+            ui.notify(f"✅ Feature '{new_name}' créée.", color="positive")
+            dialog_obj.close()
+        except Exception as e:
+            ui.notify("Erreur création feature: " + str(e), color="negative")
+
+    def keep_feature(a, b, keep="both"):
+        # keep = a or b or "both"
+        if keep == a:
+            state.setdefault("columns_exclude", {})[b] = True
+            ui.notify(f"✅ On garde {a} et on exclut {b}.", color="positive")
+        elif keep == b:
+            state.setdefault("columns_exclude", {})[a] = True
+            ui.notify(f"✅ On garde {b} et on exclut {a}.", color="positive")
+        else:
+            # keep both: ensure none excluded
+            state.setdefault("columns_exclude", {})[a] = False
+            state.setdefault("columns_exclude", {})[b] = False
+            ui.notify(f"✅ Les deux features sont conservées.", color="positive")
+
+    def apply_naivebayes_prune():
+        # For each highly correlated pair, exclude the feature with smaller corr to target (if target exists), otherwise exclude the one with higher VIF
+        if not pairs:
+            ui.notify("Aucune paire corrélée à traiter.", color="warning")
+            return
+        for a, b, r in pairs:
+            if target_col and target_col in df.columns:
+                try:
+                    corr_a = abs(df[a].corr(df[target_col]))
+                    corr_b = abs(df[b].corr(df[target_col]))
+                except:
+                    corr_a = corr_b = 0
+                if corr_a >= corr_b:
+                    state.setdefault("columns_exclude", {})[b] = True
+                else:
+                    state.setdefault("columns_exclude", {})[a] = True
+            else:
+                # fallback: exclude the one with higher VIF (if computed)
+                try:
+                    # recompute vif local
+                    X_v = df[[a,b]].dropna()
+                    Xc = sm.add_constant(X_v)
+                    vif_a = variance_inflation_factor(Xc.values, 1)
+                    vif_b = variance_inflation_factor(Xc.values, 2)
+                    if vif_a > vif_b:
+                        state.setdefault("columns_exclude", {})[a] = True
+                    else:
+                        state.setdefault("columns_exclude", {})[b] = True
+                except:
+                    # default: exclude second
+                    state.setdefault("columns_exclude", {})[b] = True
+        ui.notify("✅ Recommandation appliquée (pruning Naive Bayes).", color="positive")
+
+    def open_bulk_engineer_modal():
+        # simple modal to create a combined feature from two chosen columns (free choice)
+        dlg = ui.dialog()
+        with dlg:
+            with ui.card().style("width:560px; padding:18px;"):
+                ui.label("Créer nouvelle feature combinée (manuelle)").style("font-weight:700; margin-bottom:8px;")
+                col_a = ui.select(options=active_numeric, label="Feature A")
+                col_b = ui.select(options=active_numeric, label="Feature B")
+                name_input = ui.input(label="Nom nouvelle feature")
+                formula_select = ui.select(options=["A / B", "B / A", "A - B", "B - A", "A + B", "A * B"], label="Formule", value="B / A")
+                def create_btn_action(e):
+                    a = col_a.value; b = col_b.value
+                    if not a or not b or not name_input.value:
+                        ui.notify("Choisis A, B et un nom.", color="negative")
+                        return
+                    # map formula text to actual
+                    mapping = {
+                        "A / B": f"{a} / {b}",
+                        "B / A": f"{b} / {a}",
+                        "A - B": f"{a} - {b}",
+                        "B - A": f"{b} - {a}",
+                        "A + B": f"{a} + {b}",
+                        "A * B": f"{a} * {b}",
+                    }
+                    formula = mapping.get(formula_select.value, f"{b} / {a}")
+                    create_engineered_feature(a, b, name_input.value, formula, dlg)
+                ui.button("Créer", on_click=create_btn_action)
+                ui.button("Annuler", on_click=lambda e: dlg.close())
+        dlg.open()
+
+
+
+# ----------------- PAGE 3.6 : GESTION DES VALEURS MANQUANTES -----------------
+from nicegui import ui
+import plotly.graph_objs as go
+
+# ----------------- PAGE 3.6 : GESTION DES VALEURS MANQUANTES (REFONTE) -----------------
+from nicegui import ui
+import plotly.graph_objs as go
+import numpy as np
+import pandas as pd
+from sklearn.impute import SimpleImputer, KNNImputer
+from sklearn.experimental import enable_iterative_imputer  # noqa: F401
+from sklearn.impute import IterativeImputer
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import OrdinalEncoder
+from sklearn.preprocessing import LabelEncoder
+
+@ui.page('/supervised/missing_values')
+def missing_values_page():
+    """
+    Page refondue pour gestion fiable des valeurs manquantes.
+    - Fit des imputers sur df_train si disponible (state['split'])
+    - Preview applique les imputers sur une copie (ne modifie pas state)
+    - Apply fit & transforme train/val/test (ou raw_df si split manquant)
+    """
+    # --- Lecture des données et context ---
+    df = state.get("raw_df", None)
+    split = state.get("split", None)  # dict avec X_train, y_train, X_val, y_val, X_test, y_test
+    columns_exclude = state.get("columns_exclude", {}) or {}
+    target_col = state.get("target_column", None)
+
+    if df is None:
+        with ui.column().classes("items-center justify-center w-full h-screen"):
+            ui.label("❌ Aucun dataset chargé.").style("font-size:18px; color:#c0392b; font-weight:600;")
+            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/upload'"))
+        return
+
+    # Reconstituer df_train (X+y) si possible, sinon utiliser whole df as fallback
+    df_train = None
+    if split:
+        Xtr = split.get("X_train")
+        ytr = split.get("y_train")
+        if isinstance(Xtr, pd.DataFrame) and ytr is not None:
+            try:
+                df_train = Xtr.copy()
+                # ytr may be Series or DataFrame single column
+                df_train[target_col] = ytr
+            except Exception:
+                df_train = None
+    if df_train is None:
+        df_train = df.copy()
+
+    # Colonnes actives (exclure celles marquées)
+    active_cols = [c for c in df.columns if not columns_exclude.get(c, False)]
+    # quick missing stats
+    miss_counts = df[active_cols].isna().sum()
+    miss_pct = (miss_counts / len(df) * 100).round(2)
+    affected = (miss_counts > 0).sum()
+    total_missing = int(miss_counts.sum())
+    total_pct = round(total_missing / (df.shape[0] * df.shape[1]) * 100, 2)
+
+    # Ensure storage places
+    state.setdefault("missing_strategy", {})        # per-feature configs
+    state.setdefault("fitted_imputers", {})         # where fitted imputers will be stored after apply
+    state.setdefault("engineered_features", state.get("engineered_features", []))
+
+    # ---------- UI ----------
+    with ui.column().classes("w-full items-center p-8").style("background-color:#f5f6fa;"):
+        ui.label("### ÉTAPE 3.6 : GESTION DES VALEURS MANQUANTES").style(
+            "font-weight:700; font-size:28px; color:#01335A; margin-bottom:10px;"
+        )
+
+        # A - OVERVIEW
+        with ui.card().classes("w-full max-w-6xl p-6 mb-6").style("background:white; border-radius:12px;"):
+            ui.label("Vue d'ensemble des valeurs manquantes (dataset complet)").style("font-weight:700;")
+            with ui.row().classes("gap-6").style("margin-top:6px;"):
+                def metric(label, value, sub=""):
+                    with ui.column().classes("items-start"):
+                        ui.label(label).style("font-size:13px; color:#636e72;")
+                        ui.label(value).style("font-weight:700; font-size:18px; color:#01335A;")
+                        if sub:
+                            ui.label(sub).style("font-size:12px; color:#2c3e50;")
+                metric("Total missing", f"{total_missing}", f"{total_pct}% du dataset")
+                metric("Features affectées", f"{affected} / {len(active_cols)}", "")
+                metric("Lignes", f"{len(df):,}", "")
+
+        # B - TABLE DETAIL
+        with ui.card().classes("w-full max-w-6xl p-6 mb-6").style("background:white; border-radius:12px;"):
+            ui.label("Détail par colonne").style("font-weight:700;")
+            rows = []
+            for col in active_cols:
+                n_missing = int(miss_counts.get(col, 0))
+                pct = float(miss_pct.get(col, 0.0))
+                dtype = "Numérique" if pd.api.types.is_numeric_dtype(df[col]) else "Catégoriel/Autre"
+                tag = "🔴" if pct > 20 else ("🟡" if pct >= 5 else ("🟢" if pct > 0 else ""))
+                rows.append({"Feature": col, "Type": dtype, "Missing": n_missing, "% Missing": f"{pct}%", "Niveau": tag})
+            table = ui.table(
+                columns=[
+                    {"name":"Feature","label":"Feature","field":"Feature"},
+                    {"name":"Type","label":"Type","field":"Type"},
+                    {"name":"Missing","label":"Missing","field":"Missing"},
+                    {"name":"% Missing","label":"% Missing","field":"% Missing"},
+                    {"name":"Niveau","label":"Niveau","field":"Niveau"},
+                ],
+                rows=rows, row_key="Feature"
+            ).style("width:100%")
+            ui.label("Clique sur une ligne pour éditer la stratégie d'imputation pour cette feature.").style("font-size:12px; color:#636e72; margin-top:8px;")
+
+            def on_row_click(e):
+                try:
+                    feature = e["row"]["Feature"]
+                    open_feature_modal(feature)
+                except Exception:
+                    ui.notify("Erreur ouverture détail colonne.", color="negative")
+            table.on("row:click", on_row_click)
+
+        # C - GLOBAL STRATEGY PRESETS
+        with ui.card().classes("w-full max-w-6xl p-6 mb-6").style("background:white; border-radius:12px;"):
+            ui.label("Stratégie Globale (rapide)").style("font-weight:700;")
+            strategy_radio = ui.radio(
+                options=[
+                    "Conservative (drop cols>20% or rows>50%)",
+                    "Balanced (median numeric, mode cat)",
+                    "Aggressive (KNN numeric)",
+                    "Custom (configure per feature)"
+                ],
+                value=state.get("missing_strategy_global", "Balanced (median numeric, mode cat)")
+            )
+            def apply_global_strategy():
+                val = strategy_radio.value
+                state["missing_strategy_global"] = val
+                if val.startswith("Conservative"):
+                    for col in active_cols:
+                        if (miss_pct.get(col, 0.0) > 20):
+                            state.setdefault("columns_exclude", {})[col] = True
+                    ui.notify("Conservative: colonnes >20% marquées pour exclusion.", color="positive")
+                elif val.startswith("Balanced"):
+                    for col in active_cols:
+                        if df[col].isna().sum() == 0:
+                            continue
+                        method = "median" if pd.api.types.is_numeric_dtype(df[col]) else "mode"
+                        state.setdefault("missing_strategy", {})[col] = {"method": method, "params": {}}
+                    ui.notify("Balanced: stratégies définies (median/mode).", color="positive")
+                elif val.startswith("Aggressive"):
+                    for col in active_cols:
+                        if df[col].isna().sum() == 0: continue
+                        if pd.api.types.is_numeric_dtype(df[col]):
+                            state.setdefault("missing_strategy", {})[col] = {"method": "knn", "params": {"n_neighbors": 5}}
+                    ui.notify("Aggressive: KNN configuré pour colonnes numériques.", color="positive")
+                else:
+                    ui.notify("Mode Custom : configure par colonne.", color="info")
+            ui.button("Appliquer stratégie globale", on_click=lambda e: apply_global_strategy()).style("background:#09538C;color:white;")
+
+        # D - PREVIEW & APPLY
+        with ui.card().classes("w-full max-w-6xl p-6 mb-6").style("background:white; border-radius:12px;"):
+            ui.label("Preview & Application").style("font-weight:700;")
+            preview_info = ui.label("").style("font-size:14px; color:#2c3e50;")
+            def preview_imputation():
+                strategies = state.get("missing_strategy", {})
+                if not strategies:
+                    preview_info.text = "Aucune stratégie définie. Utilise Balanced ou configure des colonnes."
+                    return
+                # Fit imputers on df_train and apply them to a copy of df_train to preview results
+                try:
+                    fitted = fit_imputers(strategies, df_train)
+                    df_preview = df_train.copy()
+                    apply_fitted_imputers(df_preview, fitted)
+                    before = int(df_train.isna().sum().sum())
+                    after = int(df_preview.isna().sum().sum())
+                    preview_info.text = f"Avant : {before} missing  → Après (train preview) : {after} missing"
+                except Exception as ex:
+                    preview_info.text = "Erreur preview : " + str(ex)
+            ui.button("Preview (train)", on_click=lambda e: preview_imputation()).style("background:#2d9cdb;color:white;")
+
+            def apply_and_propagate():
+                strategies = state.get("missing_strategy", {})
+                if not strategies:
+                    ui.notify("Aucune stratégie définie. Configure d'abord les features.", color="warning")
+                    return
+                try:
+                    # 1) fit imputers on df_train
+                    fitted = fit_imputers(strategies, df_train)
+
+                    # 2) apply to X_train/y_train -> update state['split']
+                    if split and isinstance(split.get("X_train"), pd.DataFrame):
+                        Xtr = split["X_train"].copy()
+                        # If target is part of df_train originally, careful: imputers operate on features; we'll apply to Xtr
+                        apply_fitted_imputers(Xtr, fitted)
+                        state.setdefault("split", {})["X_train"] = Xtr
+                        # y_train preserved
+                    # 3) apply to val/test if present
+                    if split and isinstance(split.get("X_val"), pd.DataFrame):
+                        Xval = split["X_val"].copy()
+                        apply_fitted_imputers(Xval, fitted)
+                        state.setdefault("split", {})["X_val"] = Xval
+                    if split and isinstance(split.get("X_test"), pd.DataFrame):
+                        Xte = split["X_test"].copy()
+                        apply_fitted_imputers(Xte, fitted)
+                        state.setdefault("split", {})["X_test"] = Xte
+
+                    # 4) apply to whole raw_df as well (useful)
+                    df_all = state.get("raw_df", df).copy()
+                    apply_fitted_imputers(df_all, fitted)
+                    state["raw_df"] = df_all
+
+                    # 5) save fitted imputers for future use
+                    state["fitted_imputers"] = serialize_fitted_imputers(fitted)
+                    ui.notify("✅ Imputation appliquée et sauvegardée dans state (train/val/test/raw_df).", color="positive")
+                except Exception as ex:
+                    ui.notify("Erreur lors de l'application: " + str(ex), color="negative")
+
+            ui.button("Appliquer maintenant (train → val/test/raw_df)", on_click=lambda e: apply_and_propagate()).style("background:#27ae60;color:white; margin-left:8px;")
+
+        # NAV
+        with ui.row().classes("w-full max-w-6xl justify-between").style("margin-top:12px;"):
+            ui.button("⬅ Étape précédente", on_click=lambda: ui.run_javascript("window.location.href='/supervised/multivariate_analysis'"))
+            ui.button("➡ Étape suivante", on_click=lambda: ui.run_javascript("window.location.href='/supervised/feature_selection'"))
+
+    # ---------- HELPERS (fitting & applying imputers) ----------
+
+    def fit_imputers(strategies: dict, df_train_local: pd.DataFrame):
+        """
+        Fit per-column imputers according to strategies on df_train_local.
+        Returns a dict keyed by column with fitted imputer/info objects.
+        """
+        fitted = {}
+        # Precompute numeric columns of train
+        numeric_cols_train = df_train_local.select_dtypes(include=[np.number]).columns.tolist()
+
+        for col, cfg in strategies.items():
+            if col not in df_train_local.columns:
+                continue
+            method = cfg.get("method")
+            params = cfg.get("params", {})
+            create_indicator = params.get("create_indicator", False)
+            entry = {"method": method, "create_indicator": create_indicator, "params": params}
+
+            if method in ("mean", "median", "mode"):
+                strat = "mean" if method == "mean" else ("median" if method == "median" else "most_frequent")
+                if strat == "most_frequent":
+                    imp = SimpleImputer(strategy="most_frequent")
+                else:
+                    imp = SimpleImputer(strategy=strat)
+                # SimpleImputer expects 2D
+                imp.fit(df_train_local[[col]])
+                entry["imputer"] = imp
+
+            elif method == "knn":
+                # KNNImputer works on numeric matrix; we will fit on numeric columns
+                n = int(params.get("n_neighbors", 5))
+                if col not in numeric_cols_train:
+                    # can't fit knn on non-numeric
+                    entry["imputer"] = None
+                    entry["warning"] = "non-numeric; knn skipped"
+                else:
+                    imp = KNNImputer(n_neighbors=n)
+                    imp.fit(df_train_local[numeric_cols_train])
+                    entry["imputer"] = imp
+                    entry["numeric_cols_used"] = numeric_cols_train
+
+            elif method == "iterative":
+                numeric_cols = numeric_cols_train
+                if len(numeric_cols) == 0:
+                    entry["imputer"] = None
+                else:
+                    imp = IterativeImputer(max_iter=10, random_state=0)
+                    imp.fit(df_train_local[numeric_cols])
+                    entry["imputer"] = imp
+                    entry["numeric_cols_used"] = numeric_cols
+
+            elif method == "group_median":
+                grp = params.get("group_by")
+                if grp is None or grp not in df_train_local.columns:
+                    entry["group_medians"] = {}
+                else:
+                    # median by group computed on df_train_local
+                    med = df_train_local.groupby(grp)[col].median()
+                    entry["group_medians"] = med.to_dict()
+                    entry["global_median"] = float(df_train_local[col].median(skipna=True)) if col in df_train_local.columns else None
+                    entry["group_by"] = grp
+
+            elif method == "add_unknown":
+                entry["imputer"] = "add_unknown"  # marker
+
+            elif method == "predictive_cat":
+                # Train a predictive classifier to predict col from other columns (use numeric + ordinal-encoded small-cardinality categoricals)
+                notnull_idx = df_train_local[col].notna()
+                if not notnull_idx.any():
+                    entry["predictive"] = None
+                else:
+                    Xp = df_train_local.loc[notnull_idx].drop(columns=[col]).copy()
+                    # Build X_enc with numeric columns + low-card categorical encoded
+                    X_enc = pd.DataFrame(index=Xp.index)
+                    encoders = {}
+                    for c in Xp.columns:
+                        if pd.api.types.is_numeric_dtype(Xp[c]):
+                            X_enc[c] = Xp[c].fillna(Xp[c].median())
+                        else:
+                            vals = Xp[c].astype(str).fillna("NA")
+                            top = vals.value_counts().index[:50]
+                            if len(top) > 0:
+                                oe = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
+                                try:
+                                    oe.fit(vals.values.reshape(-1,1))
+                                    X_enc[c] = oe.transform(vals.values.reshape(-1,1)).ravel()
+                                    encoders[c] = oe
+                                except Exception:
+                                    # fallback skip
+                                    continue
+                    if X_enc.shape[1] == 0:
+                        entry["predictive"] = None
+                    else:
+                        y_enc = df_train_local.loc[notnull_idx, col].astype(str)
+                        clf = RandomForestClassifier(n_estimators=100, random_state=0)
+                        clf.fit(X_enc.fillna(0), y_enc)
+                        entry["predictive"] = {"clf": clf, "encoders": encoders, "features": list(X_enc.columns)}
+
+            else:
+                entry["imputer"] = None
+
+            fitted[col] = entry
+        return fitted
+
+    def apply_fitted_imputers(df_target: pd.DataFrame, fitted: dict):
+        """
+        Applies fitted imputers in-place to df_target.
+        """
+        if not isinstance(df_target, pd.DataFrame):
+            return
+        for col, info in fitted.items():
+            if col not in df_target.columns:
+                continue
+            method = info.get("method")
+            create_indicator = info.get("create_indicator", False)
+            if create_indicator:
+                df_target[f"{col}_was_missing"] = df_target[col].isna().astype(int)
+
+            if method in ("mean", "median", "mode"):
+                imp = info.get("imputer")
+                if imp is None:
+                    continue
+                try:
+                    df_target[col] = imp.transform(df_target[[col]])
+                except Exception:
+                    # fallback: fill with simple statistic
+                    if method == "mean":
+                        df_target[col] = df_target[col].fillna(df_target[col].mean())
+                    elif method == "median":
+                        df_target[col] = df_target[col].fillna(df_target[col].median())
+                    else:
+                        df_target[col] = df_target[col].fillna(df_target[col].mode().iloc[0] if not df_target[col].mode().empty else df_target[col])
+
+            elif method == "knn":
+                imp = info.get("imputer")
+                numeric_cols_used = info.get("numeric_cols_used", [])
+                if imp is None or not numeric_cols_used:
+                    continue
+                # Apply transform to numeric subset and reassign
+                try:
+                    out = imp.transform(df_target[numeric_cols_used])
+                    df_target[numeric_cols_used] = pd.DataFrame(out, columns=numeric_cols_used, index=df_target.index)
+                except Exception:
+                    continue
+
+            elif method == "iterative":
+                imp = info.get("imputer")
+                numeric_cols_used = info.get("numeric_cols_used", [])
+                if imp is None or not numeric_cols_used:
+                    continue
+                try:
+                    out = imp.transform(df_target[numeric_cols_used])
+                    df_target[numeric_cols_used] = pd.DataFrame(out, columns=numeric_cols_used, index=df_target.index)
+                except Exception:
+                    continue
+
+            elif method == "group_median":
+                medians = info.get("group_medians", {})
+                global_med = info.get("global_median", None)
+                grp = info.get("group_by")
+                if not grp:
+                    continue
+                def fill_row(r):
+                    if pd.isna(r[col]):
+                        g = r.get(grp)
+                        if g in medians and not pd.isna(medians[g]):
+                            return medians[g]
+                        else:
+                            return global_med
+                    else:
+                        return r[col]
+                try:
+                    df_target[col] = df_target.apply(fill_row, axis=1)
+                except Exception:
+                    # fallback global median
+                    if global_med is not None:
+                        df_target[col] = df_target[col].fillna(global_med)
+
+            elif method == "add_unknown":
+                df_target[col] = df_target[col].fillna("Unknown")
+
+            elif method == "predictive_cat":
+                pred_info = info.get("predictive")
+                if not pred_info:
+                    continue
+                clf = pred_info.get("clf")
+                encs = pred_info.get("encoders", {})
+                feats = pred_info.get("features", [])
+                if clf is None or not feats:
+                    continue
+                # prepare X_apply
+                X_apply = pd.DataFrame(index=df_target.index)
+                for c in feats:
+                    if c not in df_target.columns:
+                        # missing feature -> fill 0
+                        X_apply[c] = 0
+                        continue
+                    if pd.api.types.is_numeric_dtype(df_target[c]):
+                        X_apply[c] = df_target[c].fillna(df_target[c].median())
+                    else:
+                        enc = encs.get(c)
+                        if enc is not None:
+                            vals = df_target[c].astype(str).fillna("NA").values.reshape(-1,1)
+                            try:
+                                X_apply[c] = enc.transform(vals).ravel()
+                            except Exception:
+                                # unseen categories -> unknown code (-1)
+                                X_apply[c] = np.full(len(df_target), -1)
+                        else:
+                            X_apply[c] = np.full(len(df_target), -1)
+                try:
+                    preds = clf.predict(X_apply.fillna(0))
+                    # only fill where missing
+                    missing_mask = df_target[col].isna()
+                    df_target.loc[missing_mask, col] = preds[missing_mask.values]
+                except Exception:
+                    pass
+            else:
+                continue
+
+    def serialize_fitted_imputers(fitted: dict):
+        """
+        Serialize fitted imputers to a light-weight dict for storage in state.
+        We cannot serialize sklearn objects reliably across sessions, but we record
+        the methods and params so the UI indicates what was fitted.
+        """
+        serial = {}
+        for col, info in fitted.items():
+            serial[col] = {"method": info.get("method"), "create_indicator": info.get("create_indicator"), "params": info.get("params", {})}
+        return serial
+
+# ----------------- END PAGE -----------------
 
 
 
