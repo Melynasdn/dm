@@ -37,6 +37,21 @@ class GlobalData:
 global_data = GlobalData()
 # --------------------------------------------------------
 
+# ========================
+# 🔧 FONCTION UTILITAIRE GLOBALE
+# ========================
+
+def ensure_original_saved():
+    """
+    Sauvegarde df_original si pas déjà fait.
+    À appeler au début de chaque fonction de transformation.
+    """
+    if "df_original" not in state:
+        if "raw_df" in state:
+            state["df_original"] = state["raw_df"].copy()
+            print("✅ df_original sauvegardé automatiquement")
+        else:
+            print("⚠️ Impossible de sauvegarder df_original : raw_df absent")
 
 # ----------------- FONCTIONS UTILITAIRES -----------------
 # ... (plot_to_base64, preprocess_dataframe, scatter_plot_2d restent inchangées)
@@ -332,6 +347,8 @@ def unsupervised_upload_page():
                 try:
                     content = await e.file.read()
                     df = pd.read_csv(io.BytesIO(content))
+                    #  CORRECTION : Sauvegarder AVANT toute modification
+                    state["df_original"] = df.copy()  # ⚠️ CRUCIAL : .copy() pour snapshot
                     state["raw_df"] = df
 
                     # Mise à jour du statut
@@ -1050,11 +1067,19 @@ def preprocessing2_page():
 
             stratify_col = df_active[target_col] if "Stratified" in strategy_radio.value else None
 
+            # ✅ NOUVEAU : Sauvegarder l'état original AVANT split
+            if "df_original" not in state:
+                state["df_original"] = df_active.copy()  # Dataset AVANT transformations
+
             X = df_active.drop(columns=[target_col])
             y = df_active[target_col]
+
+            # Premier split : Train vs (Val + Test)
             X_train, X_temp, y_train, y_temp = train_test_split(
                 X, y, train_size=tr, random_state=int(seed_input.value), stratify=stratify_col
             )
+
+            # Deuxième split : Val vs Test
             strat_temp = y_temp if stratify_col is not None else None
             val_size = vr / (vr + te)
             X_val, X_test, y_val, y_test = train_test_split(
@@ -1068,13 +1093,14 @@ def preprocessing2_page():
             }
 
             result_container.clear()
-            for name, y_set in [("Train", y_train), ("Validation", y_val), ("Test", y_test)]:
-                counts = y_set.value_counts()
-                total = len(y_set)
-                ui.label(f"{name} set : {total} samples").style("font-weight:600; color:#01335A; margin-top:8px;")
-                for cls, cnt in counts.items():
-                    pct = round(cnt / total * 100, 1)
-                    ui.label(f"  - {cls}: {cnt} ({pct}%)").style("font-family:monospace; margin-left:10px;")
+            with result_container:
+                for name, y_set in [("Train", y_train), ("Validation", y_val), ("Test", y_test)]:
+                    counts = y_set.value_counts()
+                    total = len(y_set)
+                    ui.label(f"{name} set : {total} samples").style("font-weight:600; color:#01335A; margin-top:8px;")
+                    for cls, cnt in counts.items():
+                        pct = round(cnt / total * 100, 1)
+                        ui.label(f"  - {cls}: {cnt} ({pct}%)").style("font-family:monospace; margin-left:10px;")
 
             ui.notify("✅ Split effectué avec succès !", color="positive")
  
@@ -1083,7 +1109,6 @@ def preprocessing2_page():
                 "font-weight:600; color:#01335A;"
             )
 
-            # ---- NOUVEAU BOUTON pour aller à l'étape 3.3 ----
             ui.button(
                 "➡ Étape 3.3 : Analyse Univariée",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/univariate_analysis'"),
@@ -1688,6 +1713,8 @@ def multivariate_analysis_page():
 
 
 # ----------------- PAGE 3.6 : GESTION DES VALEURS MANQUANTES (VERSION FINALE) -----------------
+
+# ----------------- PAGE 3.6 : GESTION DES VALEURS MANQUANTES (VERSION COMPLÈTE) -----------------
 from nicegui import ui
 import plotly.graph_objs as go
 import numpy as np
@@ -1695,26 +1722,16 @@ import pandas as pd
 from sklearn.impute import SimpleImputer, KNNImputer
 from sklearn.experimental import enable_iterative_imputer  # noqa: F401
 from sklearn.impute import IterativeImputer
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import OrdinalEncoder
-from sklearn.preprocessing import LabelEncoder
-import copy
 
 @ui.page('/supervised/missing_values')
 def missing_values_page():
     """
-    Page finale pour gestion des valeurs manquantes :
-    - Preview : fit sur df_train, appliquer sur copie et afficher before/after + histogrammes
-    - Apply : fit sur df_train, appliquer sur X_train/X_val/X_test (si présents) et raw_df
-    - Confirmation avant suppression de lignes/colonnes
-    - Sauvegarde d'un résumé d'imputers dans state['fitted_imputers']
+    Page complète pour gestion des valeurs manquantes avec visualisation before/after
     """
     import pandas as pd
     import numpy as np
     import plotly.graph_objects as go
     from sklearn.impute import SimpleImputer, KNNImputer, IterativeImputer
-    from sklearn.preprocessing import OrdinalEncoder
-    from sklearn.ensemble import RandomForestClassifier
 
     # ---------- CONTEXTE ----------
     df = state.get("raw_df", None)
@@ -1728,18 +1745,17 @@ def missing_values_page():
             ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/upload'"))
         return
 
+    # ✅ Sauvegarde df_original si pas déjà fait
+    if "df_original" not in state:
+        state["df_original"] = df.copy()
+
+    # Déterminer df_train pour le fit
     df_train = None
-    if split:
-        Xtr = split.get("X_train")
-        ytr = split.get("y_train")
-        if isinstance(Xtr, pd.DataFrame) and ytr is not None:
-            try:
-                df_train = Xtr.copy()
-                if target_col is not None:
-                    df_train[target_col] = ytr
-            except Exception:
-                df_train = None
-    if df_train is None:
+    if split and "X_train" in split:
+        df_train = split["X_train"].copy()
+        if target_col and "y_train" in split and target_col not in df_train.columns:
+            df_train[target_col] = split["y_train"]
+    else:
         df_train = df.copy()
 
     active_cols = [c for c in df.columns if not columns_exclude.get(c, False)]
@@ -1751,7 +1767,6 @@ def missing_values_page():
 
     state.setdefault("missing_strategy", {})
     state.setdefault("fitted_imputers", {})
-    state.setdefault("engineered_features", state.get("engineered_features", []))
 
     # ---------- HELPERS ----------
     def fit_imputers(strategies: dict, df_train_local: pd.DataFrame):
@@ -1800,7 +1815,7 @@ def missing_values_page():
                     fitted[col] = {"method": "backward_fill", "params": params}
             
             except Exception as e:
-                print(f"Erreur fit imputer pour {col}: {e}")
+                print(f"❌ Erreur fit imputer pour {col}: {e}")
         
         return fitted
 
@@ -1835,7 +1850,7 @@ def missing_values_page():
                     df_result[col] = df_result[col].fillna(method='bfill')
             
             except Exception as e:
-                print(f"Erreur apply imputer pour {col}: {e}")
+                print(f"❌ Erreur apply imputer pour {col}: {e}")
         
         return df_result
 
@@ -1845,34 +1860,55 @@ def missing_values_page():
             col: {
                 "method": info.get("method"),
                 "params": info.get("params", {}),
-                "create_indicator": info.get("create_indicator", False)
             } 
             for col, info in fitted.items()
         }
 
+    def get_rows_with_missing(df_data: pd.DataFrame, cols: list, max_rows: int = 20):
+        """Récupère les indices des lignes contenant des valeurs manquantes"""
+        mask = df_data[cols].isna().any(axis=1)
+        indices = df_data[mask].index.tolist()
+        return indices[:max_rows]  # Limiter pour performance
+
     def apply_and_propagate():
-        """Applique l'imputation sur raw_df et tous les splits"""
+        """✅ Applique l'imputation sur raw_df ET tous les splits"""
         try:
             strategies = state.get("missing_strategy", {})
+            if not strategies:
+                ui.notify("⚠️ Aucune stratégie configurée", color="warning")
+                return
             
-            # Fit sur df_train
-            fitted = fit_imputers(strategies, df_train)
+            split = state.get("split", {})
+            
+            # ✅ 1. FIT sur le bon dataset
+            if split and "X_train" in split:
+                df_train_for_fit = split["X_train"].copy()
+                if target_col and "y_train" in split and target_col not in df_train_for_fit.columns:
+                    df_train_for_fit[target_col] = split["y_train"]
+            else:
+                df_train_for_fit = state["raw_df"].copy()
+            
+            # Fit des imputers
+            fitted = fit_imputers(strategies, df_train_for_fit)
             state["fitted_imputers"] = serialize_fitted_imputers(fitted)
             
-            # Application sur raw_df
-            state["raw_df"] = apply_fitted_imputers(df, fitted, active_cols)
+            # ✅ 2. APPLICATION sur raw_df
+            state["raw_df"] = apply_fitted_imputers(state["raw_df"], fitted, active_cols)
             
-            # Application sur splits si présents
+            # ✅ 3. APPLICATION sur les splits si présents
             if split:
                 for key in ["X_train", "X_val", "X_test"]:
                     if key in split and isinstance(split[key], pd.DataFrame):
                         split[key] = apply_fitted_imputers(split[key], fitted, active_cols)
+                
+                state["split"] = split
             
-            ui.notify("✅ Imputation appliquée avec succès sur tous les datasets!", color="positive")
+            ui.notify("✅ Imputation appliquée sur raw_df et tous les splits!", color="positive")
             ui.run_javascript("setTimeout(() => window.location.reload(), 1000);")
         
         except Exception as e:
-            ui.notify(f"Erreur lors de l'application : {str(e)}", color="negative")
+            ui.notify(f"❌ Erreur lors de l'application : {str(e)}", color="negative")
+            print(f"Détail erreur: {e}")
 
     def open_feature_modal(col_name):
         """Ouvre un dialog pour configurer la stratégie d'imputation d'une colonne"""
@@ -1950,7 +1986,7 @@ def missing_values_page():
                         "params": params
                     }
                     
-                    ui.notify(f"Stratégie sauvegardée pour {col_name}", color="positive")
+                    ui.notify(f"✅ Stratégie sauvegardée pour {col_name}", color="positive")
                     dialog.close()
                 
                 ui.button("Sauvegarder", on_click=save_strategy).style("background:#27ae60; color:white;")
@@ -1958,42 +1994,141 @@ def missing_values_page():
         dialog.open()
 
     def preview_imputation():
-        """Prévisualise l'imputation sur une copie de df_train"""
+        """✅ Prévisualise l'imputation avec tableaux BEFORE/AFTER des lignes affectées"""
         strategies = state.get("missing_strategy", {})
         
         if not strategies:
-            ui.notify("Aucune stratégie configurée. Utilisez la stratégie globale ou configurez les colonnes.", color="warning")
+            ui.notify("⚠️ Aucune stratégie configurée", color="warning")
             return
         
         try:
             # Fit sur df_train
             fitted = fit_imputers(strategies, df_train)
             
-            # Application sur copie
+            # ✅ Récupérer les lignes avec missing values AVANT traitement
+            cols_with_strategy = list(strategies.keys())
+            cols_to_check = [c for c in cols_with_strategy if c in df_train.columns]
+            
+            if not cols_to_check:
+                ui.notify("⚠️ Aucune colonne valide à traiter", color="warning")
+                return
+            
+            missing_indices = get_rows_with_missing(df_train, cols_to_check, max_rows=15)
+            
+            if not missing_indices:
+                ui.notify("ℹ️ Aucune ligne avec valeurs manquantes dans les colonnes sélectionnées", color="info")
+                return
+            
+            # BEFORE : lignes originales
+            df_before = df_train.loc[missing_indices, cols_to_check].copy()
+            
+            # Application sur copie complète
             df_preview = df_train.copy()
             df_preview = apply_fitted_imputers(df_preview, fitted, active_cols)
             
-            # Affichage before/after
+            # AFTER : mêmes lignes après imputation
+            df_after = df_preview.loc[missing_indices, cols_to_check].copy()
+            
+            # Stats globales
             before_missing = df_train[active_cols].isna().sum().sum()
             after_missing = df_preview[active_cols].isna().sum().sum()
             
             preview_info.set_text(
-                f"✅ Preview généré : {before_missing} valeurs manquantes → {after_missing} après imputation"
+                f"✅ Preview généré : {before_missing} valeurs manquantes → {after_missing} après imputation | {len(missing_indices)} lignes affichées"
             )
             
-            # Histogrammes comparatifs (première colonne numérique avec missing)
-            num_cols_with_missing = [c for c in active_cols if pd.api.types.is_numeric_dtype(df[c]) and df[c].isna().sum() > 0]
+            # ✅ Affichage des tableaux BEFORE/AFTER
+            table_before_container.clear()
+            table_after_container.clear()
+            
+            with table_before_container:
+                ui.label("📋 AVANT Imputation (lignes avec missing)").style(
+                    "font-weight:700; font-size:16px; color:#e74c3c; margin-bottom:8px;"
+                )
+                
+                # Formater les valeurs manquantes en rouge
+                rows_before = []
+                for idx in missing_indices:
+                    row_dict = {"Index": idx}
+                    for col in cols_to_check:
+                        val = df_before.loc[idx, col]
+                        if pd.isna(val):
+                            row_dict[col] = "❌ NaN"
+                        else:
+                            row_dict[col] = str(val)[:30]  # Limiter taille
+                    rows_before.append(row_dict)
+                
+                columns_before = [{"name": "Index", "label": "Index", "field": "Index"}]
+                columns_before.extend([{"name": c, "label": c, "field": c} for c in cols_to_check])
+                
+                ui.table(
+                    columns=columns_before,
+                    rows=rows_before,
+                    row_key="Index"
+                ).style("width:100%; font-size:12px;").props("dense")
+            
+            with table_after_container:
+                ui.label("✅ APRÈS Imputation (mêmes lignes)").style(
+                    "font-weight:700; font-size:16px; color:#27ae60; margin-bottom:8px;"
+                )
+                
+                rows_after = []
+                for idx in missing_indices:
+                    row_dict = {"Index": idx}
+                    for col in cols_to_check:
+                        val = df_after.loc[idx, col]
+                        if pd.isna(val):
+                            row_dict[col] = "⚠️ Still NaN"
+                        else:
+                            # Marquer les valeurs imputées en vert
+                            was_nan = pd.isna(df_before.loc[idx, col])
+                            display_val = str(val)[:30]
+                            if was_nan:
+                                row_dict[col] = f"✅ {display_val}"
+                            else:
+                                row_dict[col] = display_val
+                    rows_after.append(row_dict)
+                
+                columns_after = [{"name": "Index", "label": "Index", "field": "Index"}]
+                columns_after.extend([{"name": c, "label": c, "field": c} for c in cols_to_check])
+                
+                ui.table(
+                    columns=columns_after,
+                    rows=rows_after,
+                    row_key="Index"
+                ).style("width:100%; font-size:12px;").props("dense")
+            
+            # Histogrammes comparatifs (première colonne numérique)
+            num_cols_with_missing = [c for c in cols_to_check if pd.api.types.is_numeric_dtype(df[c]) and df[c].isna().sum() > 0]
             
             if num_cols_with_missing:
                 sample_col = num_cols_with_missing[0]
                 
                 fig_before = go.Figure()
-                fig_before.add_trace(go.Histogram(x=df_train[sample_col].dropna(), name="Before", marker_color="#e74c3c"))
-                fig_before.update_layout(title=f"{sample_col} - Before Imputation", height=300)
+                fig_before.add_trace(go.Histogram(
+                    x=df_train[sample_col].dropna(), 
+                    name="Before", 
+                    marker_color="#e74c3c",
+                    opacity=0.7
+                ))
+                fig_before.update_layout(
+                    title=f"{sample_col} - Distribution AVANT Imputation",
+                    height=300,
+                    showlegend=True
+                )
                 
                 fig_after = go.Figure()
-                fig_after.add_trace(go.Histogram(x=df_preview[sample_col].dropna(), name="After", marker_color="#27ae60"))
-                fig_after.update_layout(title=f"{sample_col} - After Imputation", height=300)
+                fig_after.add_trace(go.Histogram(
+                    x=df_preview[sample_col].dropna(), 
+                    name="After", 
+                    marker_color="#27ae60",
+                    opacity=0.7
+                ))
+                fig_after.update_layout(
+                    title=f"{sample_col} - Distribution APRÈS Imputation",
+                    height=300,
+                    showlegend=True
+                )
                 
                 chart_before.update_figure(fig_before)
                 chart_before.style("display:block;")
@@ -2001,19 +2136,25 @@ def missing_values_page():
                 chart_after.style("display:block;")
             
         except Exception as e:
-            ui.notify(f"Erreur lors du preview : {str(e)}", color="negative")
+            ui.notify(f"❌ Erreur lors du preview : {str(e)}", color="negative")
+            print(f"Détail erreur preview: {e}")
 
     def confirm_and_apply():
         """Confirme et applique l'imputation sur tous les datasets"""
         strategies = state.get("missing_strategy", {})
         
         if not strategies:
-            ui.notify("Aucune stratégie configurée.", color="warning")
+            ui.notify("⚠️ Aucune stratégie configurée", color="warning")
             return
         
-        with ui.dialog() as dialog, ui.card():
-            ui.label("⚠️ Confirmation").style("font-weight:700; font-size:18px;")
-            ui.label("Voulez-vous appliquer l'imputation sur tous les datasets (train/val/test) ?").style("margin-top:8px;")
+        with ui.dialog() as dialog, ui.card().classes("p-6"):
+            ui.label(" Confirmation").style("font-weight:700; font-size:18px;")
+            ui.label("Voulez-vous appliquer l'imputation sur raw_df et tous les datasets (train/val/test) ?").style(
+                "margin-top:8px; color:#2c3e50;"
+            )
+            ui.label(" Cette action est irréversible (sauf si vous rechargez le fichier)").style(
+                "margin-top:4px; color:#e74c3c; font-size:13px;"
+            )
             
             with ui.row().classes("w-full justify-end gap-2 mt-4"):
                 ui.button("Annuler", on_click=dialog.close).props("flat")
@@ -2027,37 +2168,39 @@ def missing_values_page():
         
         dialog.open()
 
-    # ---------- GLOBAL STRATEGY FUNCTION ----------
     def apply_global_strategy():
-        """
-        Applique une stratégie globale de gestion des valeurs manquantes
-        pour toutes les colonnes actives selon le choix de strategy_radio.
-        """
+        """Applique une stratégie globale de gestion des valeurs manquantes"""
         val = strategy_radio.value
         state["missing_strategy_global"] = val
 
         if val.startswith("Conservative"):
+            excluded_count = 0
             for col in active_cols:
                 if miss_pct.get(col, 0.0) > 20:
                     state.setdefault("columns_exclude", {})[col] = True
-            ui.notify("Conservative : colonnes >20% marquées pour exclusion.", color="positive")
+                    excluded_count += 1
+            ui.notify(f"✅ Conservative : {excluded_count} colonnes >20% marquées pour exclusion", color="positive")
 
         elif val.startswith("Balanced"):
+            strategy_count = 0
             for col in active_cols:
                 if df[col].isna().sum() == 0:
                     continue
                 method = "median" if pd.api.types.is_numeric_dtype(df[col]) else "mode"
                 state.setdefault("missing_strategy", {})[col] = {"method": method, "params": {}}
-            ui.notify("Balanced : Median pour numeric, Mode pour catégoriel.", color="positive")
+                strategy_count += 1
+            ui.notify(f"✅ Balanced : {strategy_count} colonnes configurées (Median/Mode)", color="positive")
 
         elif val.startswith("Aggressive"):
+            knn_count = 0
             for col in active_cols:
                 if pd.api.types.is_numeric_dtype(df[col]) and df[col].isna().sum() > 0:
                     state.setdefault("missing_strategy", {})[col] = {"method": "knn", "params": {"n_neighbors": 5}}
-            ui.notify("Aggressive : KNN appliqué aux colonnes numériques.", color="positive")
+                    knn_count += 1
+            ui.notify(f"✅ Aggressive : KNN appliqué à {knn_count} colonnes numériques", color="positive")
 
         elif val.startswith("Custom"):
-            ui.notify("Choix Custom : configure colonne par colonne.", color="info")
+            ui.notify("ℹ️ Choix Custom : configure colonne par colonne via le tableau", color="info")
 
     # ---------- UI ----------
     with ui.column().classes("w-full items-center p-8").style("background-color:#f5f6fa;"):
@@ -2067,7 +2210,7 @@ def missing_values_page():
 
         # --- A - Overview ---
         with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
-            ui.label("Vue d'ensemble des valeurs manquantes").style("font-weight:700; font-size:18px; color:#2c3e50;")
+            ui.label("📊 Vue d'ensemble des valeurs manquantes").style("font-weight:700; font-size:18px; color:#2c3e50;")
             with ui.row().classes("gap-6").style("margin-top:12px;"):
                 def metric(label, value, sub=""):
                     with ui.column().classes("items-start"):
@@ -2082,19 +2225,25 @@ def missing_values_page():
 
         # --- B - Table of columns ---
         with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
-            ui.label("Détail par colonne").style("font-weight:700; font-size:18px; color:#2c3e50;")
+            ui.label("📋 Détail par colonne").style("font-weight:700; font-size:18px; color:#2c3e50;")
             rows = []
             for col in active_cols:
                 n_missing = int(miss_counts.get(col, 0))
                 pct = float(miss_pct.get(col, 0.0))
                 dtype = "Numérique" if pd.api.types.is_numeric_dtype(df[col]) else "Catégoriel/Autre"
                 tag = "🔴" if pct > 20 else ("🟡" if pct >= 5 else ("🟢" if pct > 0 else ""))
+                
+                # Afficher stratégie actuelle
+                current_strat = state.get("missing_strategy", {}).get(col, {})
+                method = current_strat.get("method", "none")
+                
                 rows.append({
                     "Feature": col,
                     "Type": dtype,
                     "Missing": n_missing,
                     "% Missing": f"{pct}%",
-                    "Niveau": tag
+                    "Niveau": tag,
+                    "Stratégie": method
                 })
             
             table = ui.table(
@@ -2103,27 +2252,30 @@ def missing_values_page():
                     {"name": "Type", "label": "Type", "field": "Type"},
                     {"name": "Missing", "label": "Missing", "field": "Missing"},
                     {"name": "% Missing", "label": "% Missing", "field": "% Missing"},
-                    {"name": "Niveau", "label": "Niveau", "field": "Niveau"}
+                    {"name": "Niveau", "label": "Niveau", "field": "Niveau"},
+                    {"name": "Stratégie", "label": "Stratégie", "field": "Stratégie"}
                 ],
                 rows=rows,
                 row_key="Feature"
-            ).style("width:100%;")
+            ).style("width:100%;").props("dense")
             
-            ui.label("Clique sur une ligne pour éditer la stratégie d'imputation.").style(
+            ui.label("💡 Clique sur une ligne pour configurer la stratégie d'imputation").style(
                 "font-size:12px; color:#636e72; margin-top:8px;"
             )
             
             def handle_row_click(e):
                 if e and "row" in e and "Feature" in e["row"]:
                     open_feature_modal(e["row"]["Feature"])
-                else:
-                    ui.notify("Erreur ouverture colonne.", color="negative")
             
             table.on("row:click", handle_row_click)
 
         # --- C - Global strategy ---
         with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
-            ui.label("Stratégie Globale (rapide)").style("font-weight:700; font-size:18px; color:#2c3e50;")
+            ui.label("⚡ Stratégie Globale (rapide)").style("font-weight:700; font-size:18px; color:#2c3e50;")
+            ui.label("Applique une stratégie prédéfinie à toutes les colonnes concernées").style(
+                "font-size:13px; color:#636e72; margin-top:4px;"
+            )
+            
             strategy_radio = ui.radio(
                 options=[
                     "Conservative (drop cols>20% or rows>50%)",
@@ -2141,23 +2293,33 @@ def missing_values_page():
 
         # --- D - Preview & Apply ---
         with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
-            ui.label("Preview & Application").style("font-weight:700; font-size:18px; color:#2c3e50;")
-            preview_info = ui.label("").style("font-size:14px; color:#2c3e50; margin-top:8px;")
+            ui.label("🔍 Preview & Application").style("font-weight:700; font-size:18px; color:#2c3e50;")
+            preview_info = ui.label("Cliquez sur 'Preview' pour visualiser l'impact de l'imputation").style(
+                "font-size:14px; color:#636e72; margin-top:8px;"
+            )
             
-            with ui.row().classes("gap-4 w-full").style("margin-top:12px;"):
+            # ✅ Conteneurs pour les tableaux BEFORE/AFTER
+            with ui.row().classes("gap-4 w-full").style("margin-top:16px;"):
+                with ui.column().classes("flex-1"):
+                    table_before_container = ui.column().classes("w-full")
+                with ui.column().classes("flex-1"):
+                    table_after_container = ui.column().classes("w-full")
+            
+            # Histogrammes comparatifs
+            with ui.row().classes("gap-4 w-full").style("margin-top:16px;"):
                 with ui.column().classes("flex-1"):
                     chart_before = ui.plotly({}).style("width:100%; display:none;")
                 with ui.column().classes("flex-1"):
                     chart_after = ui.plotly({}).style("width:100%; display:none;")
             
-            with ui.row().classes("gap-2").style("margin-top:12px;"):
+            with ui.row().classes("gap-2").style("margin-top:16px;"):
                 ui.button(
-                    "Preview (train)",
+                    " Preview (train)",
                     on_click=lambda e: preview_imputation()
                 ).style("background:#2d9cdb; color:white;")
                 
                 ui.button(
-                    "Appliquer maintenant ✅",
+                    " Appliquer maintenant",
                     on_click=lambda e: confirm_and_apply()
                 ).style("background:#27ae60; color:white;")
 
@@ -2172,6 +2334,12 @@ def missing_values_page():
                 "➡ Étape suivante",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/encoding'")
             ).style("background:#09538C; color:white;")
+
+
+
+
+
+
 
 
 
@@ -2548,8 +2716,10 @@ Principe : Remplace par la moyenne de la target
     
     def apply_all_encodings():
         """Applique tous les encodages et passe à l'étape suivante"""
+        ensure_original_saved()
         strategies = state.get("encoding_strategy", {})
-        
+        split = state.get("split", {})
+
         if not strategies:
             ui.notify("⚠️ Aucun encodage configuré", color="warning")
             return
@@ -2565,17 +2735,24 @@ Principe : Remplace par la moyenne de la target
                     try:
                         params = state.get("encoding_params", {})
                         
-                        # 1. FIT sur raw_df (train data)
-                        df_encoded, encoders = apply_encoding(
-                            df, 
+                        # ✅ CORRECTION : FIT sur X_train uniquement
+                        if split and "X_train" in split:
+                            df_train_for_fit = split["X_train"].copy()
+                            if target_col and "y_train" in split:
+                                df_train_for_fit[target_col] = split["y_train"]
+                        else:
+                            df_train_for_fit = df_train.copy()
+                    
+                        # ✅ FIT sur train
+                        _, encoders = apply_encoding(
+                            df_train_for_fit, 
                             strategies, 
                             params, 
                             fit_on_train=True
                         )
-                        state["raw_df"] = df_encoded
                         state["fitted_encoders"] = encoders
-                        
-                        # 2. TRANSFORM sur splits avec encoders fitted
+                    
+                        #  TRANSFORM sur chaque split séparément
                         if split:
                             for key in ["X_train", "X_val", "X_test"]:
                                 if key in split and isinstance(split[key], pd.DataFrame):
@@ -3178,6 +3355,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
     def apply_all_transforms():
         """Applique toutes les transformations"""
         strategies = state.get("transform_strategy", {})
+        split = state.get("split", {})
         
         if not strategies:
             ui.notify("⚠️ Aucune transformation configurée", color="warning")
@@ -3195,24 +3373,27 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                         params = state.get("transform_params", {})
                         transformers = {}
                         
-                        # Application sur raw_df
-                        df_transformed = df.copy()
+                        #  FIT sur X_train uniquement
+                        if split and "X_train" in split:
+                            df_train_for_fit = split["X_train"].copy()
+                        else:
+                            df_train_for_fit = df_train.copy()
+
+                        # ✅ FIT sur train et sauvegarder paramètres
                         for col, method in strategies.items():
-                            if method != "Aucune" and col in df_transformed.columns:
+                            if method != "Aucune" and col in df_train_for_fit.columns:
                                 col_params = params.get(col, {})
                                 transformed_data, transform_info = apply_transform(
-                                    df_transformed[col].values, 
+                                    df_train_for_fit[col].values, 
                                     method, 
                                     col_params
                                 )
                                 if transformed_data is not None and transform_info is not None:
-                                    df_transformed[col] = transformed_data
                                     transformers[col] = {"method": method, "params": transform_info}
-                        
-                        state["raw_df"] = df_transformed
+                    
                         state["fitted_transformers"] = transformers
                         
-                        # Application sur splits
+                        # TRANSFORM sur chaque split avec paramètres fittés
                         if split:
                             for key in ["X_train", "X_val", "X_test"]:
                                 if key in split and isinstance(split[key], pd.DataFrame):
@@ -3593,6 +3774,7 @@ def feature_scaling_page():
                 ui.label("⚠️ Aucune visualisation disponible").style("color:#e67e22; font-size:16px;")
     
     def apply_scaling(method):
+        ensure_original_saved()
         scalers = {
             "standard": StandardScaler(),
             "minmax": MinMaxScaler(),
@@ -3606,45 +3788,49 @@ def feature_scaling_page():
             ui.run_javascript("setTimeout(() => window.location.href='/supervised/dimension_reduction', 1000);")
             return
         
-        if method not in scalers:
-            ui.notify("⚠️ Méthode invalide", color="warning")
-            return
-        
+        split = state.get("split", {})
+
         with ui.dialog() as dialog, ui.card().classes("p-6"):
             ui.label("⚠️ Confirmer l'application").style("font-weight:700; font-size:18px;")
             ui.label(f"Appliquer **{method.upper()}** sur {len(num_cols)} features continues ?").style("margin-top:8px;")
-            
-            if cat_encoded:
-                ui.label(f"⚠️ {len(cat_encoded)} variables catégorielles seront préservées").style(
-                    "margin-top:8px; color:#e67e22; font-size:13px;"
-                )
-            
+        
             with ui.row().classes("w-full justify-end gap-2 mt-4"):
                 ui.button("❌ Annuler", on_click=dialog.close).props("flat")
-                
+            
                 def do_apply():
                     try:
                         scaler = scalers[method]
-                        df_new = df.copy()
-                        
-                        # Scaler UNIQUEMENT les variables continues
-                        for col in num_cols:
-                            df_new[col] = scaler.fit_transform(df_new[[col]]).flatten()
-                        
-                        state["raw_df"] = df_new
+                    
+                        # ✅ CORRECTION : FIT sur X_train uniquement
+                        if split and "X_train" in split:
+                            X_train_for_fit = split["X_train"][num_cols].copy()
+                        else:
+                            X_train_for_fit = df_train[num_cols].copy()
+                    
+                        # ✅ FIT sur train
+                        scaler.fit(X_train_for_fit)
+                    
+                        # ✅ TRANSFORM sur chaque split
+                        if split:
+                            for key in ["X_train", "X_val", "X_test"]:
+                                if key in split and isinstance(split[key], pd.DataFrame):
+                                    split[key][num_cols] = scaler.transform(split[key][num_cols])
+                    
                         state["scaling_method"] = method
+                        state["fitted_scaler"] = scaler  # Sauvegarder le scaler fitté
                         state["scaled_columns"] = num_cols
-                        state["categorical_encoded"] = cat_encoded
-                        
-                        ui.notify(f"✅ Scaling appliqué sur {len(num_cols)} features continues !", color="positive")
+                    
+                        ui.notify(f"✅ Scaling appliqué sans data leakage!", color="positive")
                         dialog.close()
                         ui.run_javascript("setTimeout(() => window.location.href='/supervised/dimension_reduction', 1000);")
+                
                     except Exception as e:
                         ui.notify(f"❌ Erreur: {str(e)}", color="negative")
-                        print(f"Erreur scaling: {e}")
-                
+            
                 ui.button("✅ Confirmer", on_click=do_apply).style("background:#27ae60; color:white; font-weight:600;")
+    
         dialog.open()
+
     
     # ---------- ANALYSE ----------
     features_info = analyze_features()
@@ -4871,6 +5057,12 @@ def recap_validation_page():
                 "⬅ Étape précédente",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/dimension_reduction'")
             ).style("background:#95a5a6; color:white; font-weight:600; height:50px; width:220px; border-radius:10px;")
+
+
+
+
+
+
 
 
 
