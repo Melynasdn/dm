@@ -1184,119 +1184,102 @@ def univariate_analysis_page():
 
 
 
-
 from nicegui import ui
 import pandas as pd
 import numpy as np
-from scipy.stats import zscore, iqr
 
 @ui.page('/supervised/outliers_analysis')
 def outliers_analysis_page():
     split = state.get("split")
     if split is None:
-        with ui.column().classes("items-center justify-center w-full h-screen"):
-            ui.label("❌ Aucun split trouvé. Veuillez d'abord effectuer le split.").style(
-                "font-size:18px; color:#c0392b; font-weight:600;"
-            )
-            ui.button("⬅ Retour au Univariate Analysis", on_click=lambda: ui.run_javascript(
-                "window.location.href='/supervised/univariate_analysis'"
-            )).style("margin-top:20px; background:#01335A; color:white; font-weight:600;")
+        ui.label("❌ Aucun split trouvé. Faites d'abord le split des données.")
         return
 
     X_train = split["X_train"]
+    y_train = split["y_train"]
 
-    numeric_cols = X_train.select_dtypes(include=['int64','float64']).columns.tolist()
+    ui.label("🔍 Analyse des Outliers / Classes rares (Train Set)").style(
+        "font-weight:700; font-size:24px; margin-bottom:16px;"
+    )
+
+    # --- Features numériques ---
+    ui.label("📌 Features numériques").style("font-weight:600; font-size:20px; margin-top:12px; margin-bottom:8px;")
     
-    # --------- Container principal scrollable ----------
-    with ui.column().classes("w-full h-screen overflow-auto p-6").style(
-        "background-color:#f5f6fa; font-family:'Inter', sans-serif;"
-    ):
-        ui.label("Phase 3.4 : Détection et gestion des outliers").style(
-            "font-weight:700; font-size:32px; color:#01335A; margin-bottom:24px; text-align:center;"
-        )
+    def detect_outliers(series):
+        q1 = series.quantile(0.25)
+        q3 = series.quantile(0.75)
+        iqr = q3 - q1
+        lower = q1 - 1.5 * iqr
+        upper = q3 + 1.5 * iqr
+        outliers = series[(series < lower) | (series > upper)]
+        return outliers
 
-        # ---------- Section A : Synthèse globale ----------
-        outlier_summary = []
-        total_outliers = 0
-        for col in numeric_cols:
-            series = X_train[col]
-            iqr_ = iqr(series)
-            q1, q3 = series.quantile(0.25), series.quantile(0.75)
-            lower, upper = q1 - 1.5*iqr_, q3 + 1.5*iqr_
-            out_iqr = series[(series < lower) | (series > upper)]
-            
-            zscores = np.abs(zscore(series))
-            out_z = series[zscores > 3]
-            
-            out_count = len(set(out_iqr.index.tolist() + out_z.index.tolist()))
-            total_outliers += out_count
-            
-            method = "IQR" if len(out_iqr) >= len(out_z) else "Z-score"
-            pct = round(out_count/len(series)*100,2)
-            if out_count > 0:
-                outlier_summary.append(f"{col} : {out_count} outliers ({pct}%) [Méthode: {method}]")
+    for col in X_train.select_dtypes(include=np.number).columns:
+        outliers = detect_outliers(X_train[col])
+        total = len(X_train[col])
+        pct = round(len(outliers)/total*100,1)
 
-        with ui.card().style("padding:12px; border-radius:10px; box-shadow:0 3px 10px rgba(0,0,0,0.08); margin-bottom:12px; background:white;"):
-            ui.label("🔍 Synthèse Globale des Outliers (Train Set)").style(
-                "font-weight:700; font-size:18px; color:#01335A; margin-bottom:6px;"
-            )
-            ui.label("Méthodes : Z-score (|z|>3) + IQR (Q1-1.5*IQR, Q3+1.5*IQR)").style("font-size:14px; margin-bottom:6px;")
-            for line in outlier_summary:
-                ui.label(f"├─ {line}").style("font-family:monospace; font-size:14px;")
-            ui.label(f"Total lignes affectées : {total_outliers} ({round(total_outliers/len(X_train)*100,2)}% du dataset)").style(
-                "font-weight:600; margin-top:6px;"
-            )
+        with ui.card().classes("w-full max-w-4xl p-4 mb-4").style(
+            "background:white; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.08);"
+        ):
+            ui.label(f"📊 {col} (Numérique)").style("font-weight:600; font-size:18px; margin-bottom:6px;")
+            ui.label(f"Outliers détectés : {len(outliers)} ({pct}%)").style("color:#e67e22; margin-bottom:6px;")
+            ui.label(f"Valeurs : {list(outliers[:10])} {'...' if len(outliers)>10 else ''}").style("font-family:monospace; font-size:14px; margin-bottom:6px;")
 
-        # ---------- Section B : Détail par feature ----------
-        cards_container = ui.column().classes("w-full gap-4 mt-4")
-        
-        def add_outlier_card(col):
-            series = X_train[col]
-            iqr_ = iqr(series)
-            q1, q3 = series.quantile(0.25), series.quantile(0.75)
-            lower, upper = q1 - 1.5*iqr_, q3 + 1.5*iqr_
-            out_iqr = series[(series < lower) | (series > upper)]
+            def keep_outliers(col=col):
+                ui.notify(f"✅ Outliers de {col} conservés", color="positive")
+            def drop_outliers(col=col):
+                mask = ~X_train[col].isin(detect_outliers(X_train[col]))
+                X_train[col] = X_train[col][mask]
+                ui.notify(f"🗑️ Outliers de {col} supprimés", color="warning")
+
+            with ui.row().classes("gap-2"):
+                ui.button("Garder les outliers", on_click=keep_outliers).style(
+                    "background:#3498db; color:white; font-weight:600; border-radius:6px;"
+                )
+                ui.button("Supprimer les outliers", on_click=drop_outliers).style(
+                    "background:#e74c3c; color:white; font-weight:600; border-radius:6px;"
+                )
+
+    # --- Features catégorielles ---
+    ui.label("📌 Features catégorielles").style("font-weight:600; font-size:20px; margin-top:16px; margin-bottom:8px;")
+
+    for col in X_train.select_dtypes(exclude=np.number).columns:
+        counts = X_train[col].value_counts(normalize=True)*100
+        rare_classes = counts[counts < 5]  # classes <5% considérées rares
+
+        with ui.card().classes("w-full max-w-4xl p-4 mb-4").style(
+            "background:white; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.08);"
+        ):
+            ui.label(f"📊 {col} (Catégorielle)").style("font-weight:600; font-size:18px; margin-bottom:6px;")
+            if len(rare_classes) == 0:
+                ui.label("Aucune classe rare détectée").style("color:green; margin-bottom:6px;")
+            else:
+                ui.label(f"Classes rares (<5%) : {list(rare_classes.index)}").style("color:#e67e22; margin-bottom:6px;")
             
-            zscores = np.abs(zscore(series))
-            out_z = series[zscores > 3]
-            
-            outliers_idx = set(out_iqr.index.tolist() + out_z.index.tolist())
-            outliers_values = series[list(outliers_idx)].tolist()
-            out_count = len(outliers_idx)
-            method = "IQR" if len(out_iqr) >= len(out_z) else "Z-score"
-            normal_min, normal_max = series.min(), series.max()
-            if len(outliers_values) > 0:
-                with cards_container:
-                    with ui.card().style(
-                        "padding:12px; border-radius:10px; box-shadow:0 3px 10px rgba(0,0,0,0.08); background:white;"
-                    ):
-                        ui.label(f"📊 {col} (Numérique)").style("font-weight:700; font-size:18px; color:#01335A; margin-bottom:6px;")
-                        ui.label(f"Outliers détectés : {out_count} valeurs").style("font-family:monospace; margin-bottom:4px;")
-                        ui.label(f"• Méthode : {method}").style("font-size:14px;")
-                        ui.label(f"• Range normal : [{round(normal_min,2)} - {round(normal_max,2)}]").style("font-size:14px; margin-bottom:6px;")
-                        if out_count > 0:
-                            ui.label(f"• Outliers range : [{', '.join([str(round(v,2)) for v in outliers_values[:10]])} ...]").style("font-size:14px; margin-bottom:6px;")
-                        
-                        # Dropdown Stratégie de traitement
-                        strategies = [
-                            "Garder les outliers",
-                            "Supprimer les lignes",
-                            "Winsorisation",
-                            "Transformation robuste",
-                            "Imputation par quantile"
-                        ]
-                        ui.select(strategies, label="Stratégie de traitement").style("margin-top:6px; width:300px;")
+                def keep_rare(col=col):
+                    ui.notify(f"✅ Classes rares de {col} conservées", color="positive")
+                def drop_rare(col=col):
+                    mask = ~X_train[col].isin(rare_classes.index)
+                    X_train[col] = X_train[col][mask]
+                    ui.notify(f"🗑️ Classes rares de {col} supprimées", color="warning")
 
-        for col in numeric_cols:
-            add_outlier_card(col)
+                with ui.row().classes("gap-2"):
+                    ui.button("Garder les classes rares", on_click=keep_rare).style(
+                        "background:#3498db; color:white; font-weight:600; border-radius:6px;"
+                    )
+                    ui.button("Supprimer les classes rares", on_click=drop_rare).style(
+                        "background:#e74c3c; color:white; font-weight:600; border-radius:6px;"
+                    )
 
-        # Bouton pour aller à étape suivante (feature engineering / encodage)
-        ui.button("➡ Étape 3.5 : Feature Engineering", on_click=lambda: ui.run_javascript(
+        # --- Bouton pour passer à l'étape suivante ---
+    
+    with ui.row().classes("justify-end mt-6"):
+        ui.button("➡ Passer à Feature Engineering", on_click=lambda: ui.run_javascript(
             "window.location.href='/supervised/feature_engineering'"
         )).style(
-            "background:linear-gradient(135deg, #01335A, #09538C); color:white; font-weight:600; border-radius:8px; height:46px; width:300px; margin-top:20px;"
+            "background:linear-gradient(135deg, #01335A, #09538C); color:white; font-weight:600; border-radius:8px; height:46px; padding:0 20px;"
         )
-
 
 
 
