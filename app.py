@@ -27,6 +27,17 @@ state = {
 }
 
 
+# ----------------- GLOBAL DATA STORAGE -----------------
+class GlobalData:
+    df = None
+    df_train = None
+    df_val = None
+    df_test = None
+
+global_data = GlobalData()
+# --------------------------------------------------------
+
+
 # ----------------- FONCTIONS UTILITAIRES -----------------
 # ... (plot_to_base64, preprocess_dataframe, scatter_plot_2d restent inchangées)
 
@@ -1184,102 +1195,130 @@ def univariate_analysis_page():
 
 
 
+
+
 from nicegui import ui
 import pandas as pd
 import numpy as np
+import io, base64
+import matplotlib.pyplot as plt
+
+# ----------------- GLOBAL STATE -----------------
+global_state = state
+
 
 @ui.page('/supervised/outliers_analysis')
 def outliers_analysis_page():
-    split = state.get("split")
-    if split is None:
-        ui.label("❌ Aucun split trouvé. Faites d'abord le split des données.")
+    # === Vérification des données ===
+    split = global_state.get("split")
+    if not split or "X_train" not in split:
+        with ui.column().classes("items-center justify-center w-full h-screen"):
+            ui.label("❌ Données d'entraînement introuvables. Veuillez d'abord effectuer le split.").style(
+                "font-size:18px; color:#c0392b; font-weight:600;"
+            )
+            ui.button("⬅ Retour au Split",
+                      on_click=lambda: ui.run_javascript("window.location.href='/supervised/split'"),
+            ).style("margin-top:20px; background:#01335A; color:white; font-weight:600;")
         return
 
-    X_train = split["X_train"]
-    y_train = split["y_train"]
+    df_train = split["X_train"].copy()
+    global_state["cleaned_train"] = df_train.copy()  # sauvegarde initiale
 
-    ui.label("🔍 Analyse des Outliers / Classes rares (Train Set)").style(
-        "font-weight:700; font-size:24px; margin-bottom:16px;"
-    )
-
-    # --- Features numériques ---
-    ui.label("📌 Features numériques").style("font-weight:600; font-size:20px; margin-top:12px; margin-bottom:8px;")
-    
-    def detect_outliers(series):
-        q1 = series.quantile(0.25)
-        q3 = series.quantile(0.75)
-        iqr = q3 - q1
-        lower = q1 - 1.5 * iqr
-        upper = q3 + 1.5 * iqr
-        outliers = series[(series < lower) | (series > upper)]
-        return outliers
-
-    for col in X_train.select_dtypes(include=np.number).columns:
-        outliers = detect_outliers(X_train[col])
-        total = len(X_train[col])
-        pct = round(len(outliers)/total*100,1)
-
-        with ui.card().classes("w-full max-w-4xl p-4 mb-4").style(
-            "background:white; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.08);"
-        ):
-            ui.label(f"📊 {col} (Numérique)").style("font-weight:600; font-size:18px; margin-bottom:6px;")
-            ui.label(f"Outliers détectés : {len(outliers)} ({pct}%)").style("color:#e67e22; margin-bottom:6px;")
-            ui.label(f"Valeurs : {list(outliers[:10])} {'...' if len(outliers)>10 else ''}").style("font-family:monospace; font-size:14px; margin-bottom:6px;")
-
-            def keep_outliers(col=col):
-                ui.notify(f"✅ Outliers de {col} conservés", color="positive")
-            def drop_outliers(col=col):
-                mask = ~X_train[col].isin(detect_outliers(X_train[col]))
-                X_train[col] = X_train[col][mask]
-                ui.notify(f"🗑️ Outliers de {col} supprimés", color="warning")
-
-            with ui.row().classes("gap-2"):
-                ui.button("Garder les outliers", on_click=keep_outliers).style(
-                    "background:#3498db; color:white; font-weight:600; border-radius:6px;"
-                )
-                ui.button("Supprimer les outliers", on_click=drop_outliers).style(
-                    "background:#e74c3c; color:white; font-weight:600; border-radius:6px;"
-                )
-
-    # --- Features catégorielles ---
-    ui.label("📌 Features catégorielles").style("font-weight:600; font-size:20px; margin-top:16px; margin-bottom:8px;")
-
-    for col in X_train.select_dtypes(exclude=np.number).columns:
-        counts = X_train[col].value_counts(normalize=True)*100
-        rare_classes = counts[counts < 5]  # classes <5% considérées rares
-
-        with ui.card().classes("w-full max-w-4xl p-4 mb-4").style(
-            "background:white; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.08);"
-        ):
-            ui.label(f"📊 {col} (Catégorielle)").style("font-weight:600; font-size:18px; margin-bottom:6px;")
-            if len(rare_classes) == 0:
-                ui.label("Aucune classe rare détectée").style("color:green; margin-bottom:6px;")
-            else:
-                ui.label(f"Classes rares (<5%) : {list(rare_classes.index)}").style("color:#e67e22; margin-bottom:6px;")
-            
-                def keep_rare(col=col):
-                    ui.notify(f"✅ Classes rares de {col} conservées", color="positive")
-                def drop_rare(col=col):
-                    mask = ~X_train[col].isin(rare_classes.index)
-                    X_train[col] = X_train[col][mask]
-                    ui.notify(f"🗑️ Classes rares de {col} supprimées", color="warning")
-
-                with ui.row().classes("gap-2"):
-                    ui.button("Garder les classes rares", on_click=keep_rare).style(
-                        "background:#3498db; color:white; font-weight:600; border-radius:6px;"
-                    )
-                    ui.button("Supprimer les classes rares", on_click=drop_rare).style(
-                        "background:#e74c3c; color:white; font-weight:600; border-radius:6px;"
-                    )
-
-        # --- Bouton pour passer à l'étape suivante ---
-    
-    with ui.row().classes("justify-end mt-6"):
-        ui.button("➡ Passer à Feature Engineering", on_click=lambda: ui.run_javascript(
-            "window.location.href='/supervised/feature_engineering'"
-        )).style(
-            "background:linear-gradient(135deg, #01335A, #09538C); color:white; font-weight:600; border-radius:8px; height:46px; padding:0 20px;"
+    # === Titre principal ===
+    with ui.column().classes("w-full p-6").style("background-color:#f5f6fa; font-family:'Inter', sans-serif;"):
+        ui.label("🔍 Étape 3.4 : Gestion des Outliers (Train)").style(
+            "font-weight:700; font-size:32px; color:#01335A; margin-bottom:24px; text-align:center;"
         )
+
+        numeric_features = df_train.select_dtypes(include=np.number).columns.tolist()
+        if not numeric_features:
+            ui.label("Aucune variable numérique détectée.").style("color:#e74c3c; font-weight:600;")
+            return
+
+        # === Fonction de génération d’image matplotlib ===
+        def generate_hist(data, title):
+            fig, ax = plt.subplots(figsize=(4, 2.5))
+            ax.hist(data.dropna(), bins=20, color="#3498db", alpha=0.7)
+            ax.set_title(title, fontsize=10)
+            ax.grid(alpha=0.3)
+            buffer = io.BytesIO()
+            plt.tight_layout()
+            fig.savefig(buffer, format='png')
+            plt.close(fig)
+            buffer.seek(0)
+            return "data:image/png;base64," + base64.b64encode(buffer.read()).decode()
+
+        # === Boucle sur chaque feature numérique ===
+        for feature in numeric_features:
+            with ui.card().style(
+                "background:white; padding:16px; border-radius:10px; "
+                "box-shadow:0 3px 10px rgba(0,0,0,0.08); margin-bottom:24px;"
+            ):
+                ui.label(f"📊 Feature : {feature}").style(
+                    "font-weight:600; font-size:18px; margin-bottom:8px; color:#01335A;"
+                )
+
+                with ui.row().classes("items-center justify-center gap-4"):
+                    before_plot = ui.image(
+                        generate_hist(global_state["cleaned_train"][feature], "Avant traitement")
+                    ).style("width:400px; height:250px; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.1);")
+                    after_plot = ui.image(
+                        generate_hist(global_state["cleaned_train"][feature], "Après traitement (aucun)")
+                    ).style("width:400px; height:250px; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.1);")
+
+                info_label = ui.label("").style("margin-top:10px; color:#555; font-size:14px;")
+
+                # --- Méthodes de traitement ---
+                def remove_outliers():
+                    df = global_state["cleaned_train"]
+                    q1, q3 = df[feature].quantile([0.25, 0.75])
+                    iqr = q3 - q1
+                    mask = ~((df[feature] < (q1 - 1.5 * iqr)) |
+                             (df[feature] > (q3 + 1.5 * iqr)))
+                    nb_outliers = len(df) - mask.sum()
+                    df.loc[~mask, feature] = np.nan  # optionnel: remplacer par NaN
+                    after_plot.set_source(generate_hist(df[feature].dropna(), "Après suppression"))
+                    info_label.text = f"🧹 {nb_outliers} outliers supprimés ({nb_outliers/len(df)*100:.1f} %)."
+
+                def winsorise():
+                    df = global_state["cleaned_train"]
+                    lower, upper = np.percentile(df[feature].dropna(), [1, 99])
+                    total = ((df[feature] < lower) | (df[feature] > upper)).sum()
+                    df[feature] = df[feature].clip(lower, upper)
+                    after_plot.set_source(generate_hist(df[feature], "Après Winsorisation (1%-99%)"))
+                    info_label.text = f"📉 {total} valeurs winsorisées (1%-99 %)."
+
+                def log_transform():
+                    df = global_state["cleaned_train"]
+                    positive = df[feature].clip(lower=0)
+                    df[feature] = np.log1p(positive)
+                    after_plot.set_source(generate_hist(df[feature], "Après Log Transform"))
+                    info_label.text = "🔁 Transformation logarithmique appliquée."
+
+                with ui.row().style("justify-content:center; margin-top:12px; gap:10px;"):
+                    ui.button("Supprimer Outliers", on_click=remove_outliers).style(
+                        "background:#e74c3c; color:white; font-weight:600; border-radius:6px; padding:8px 18px;"
+                    )
+                    ui.button("Winsorisation", on_click=winsorise).style(
+                        "background:#f39c12; color:white; font-weight:600; border-radius:6px; padding:8px 18px;"
+                    )
+                    ui.button("Log Transform", on_click=log_transform).style(
+                        "background:#2980b9; color:white; font-weight:600; border-radius:6px; padding:8px 18px;"
+                    )
+
+        # === Bouton suivant ===
+        ui.button("➡ Étape suivante", on_click=lambda: ui.run_javascript(
+            "window.location.href='/supervised/next_step'"
+        )).style(
+            "background:linear-gradient(135deg, #01335A, #09538C); color:white; font-weight:600; "
+            "border-radius:8px; height:46px; width:280px; margin-top:20px;"
+        )
+
+
+
+
+
+
 
 
 
