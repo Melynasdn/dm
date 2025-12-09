@@ -914,9 +914,10 @@ def user_decisions_page():
 
 
 
-import pandas as pd
+
+
+from nicegui import ui
 from sklearn.model_selection import train_test_split
-from collections import Counter
 
 @ui.page('/supervised/preprocessing2')
 def preprocessing2_page():
@@ -934,11 +935,9 @@ def preprocessing2_page():
             )
         return
 
-    # Colonnes utilisées pour l'analyse
     active_cols = [c for c in df.columns if not columns_exclude.get(c, False) and c != target_col]
     df_active = df[active_cols + [target_col]].copy()
 
-    # ----------- STYLES GÉNÉRAUX -----------
     with ui.column().classes("w-full h-auto items-center p-10").style(
         "background-color:#f5f6fa; font-family:'Inter', sans-serif;"
     ):
@@ -946,36 +945,7 @@ def preprocessing2_page():
             "font-weight:700; font-size:32px; color:#01335A; margin-bottom:32px; text-align:center;"
         )
 
-        # ---------- 1️⃣ Vérification du déséquilibre ----------
-        with ui.card().classes("w-full max-w-4xl p-6 mb-6").style(
-            "background:white; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.08);"
-        ):
-            ui.label(f"🎯 Distribution de la target '{target_col}'").style(
-                "font-weight:700; font-size:20px; color:#01335A; margin-bottom:12px;"
-            )
-
-            counts = df_active[target_col].value_counts()
-            total = len(df_active)
-            imbalance_detected = False
-            for cls, cnt in counts.items():
-                pct = round(cnt / total * 100, 1)
-                bar = "█" * int(pct // 2)
-                ui.label(f"Classe {cls}: {cnt} ({pct}%) {bar}").style("font-family:monospace;")
-
-            if len(counts) > 1:
-                min_pct = counts.min() / total * 100
-                if min_pct < 30:
-                    imbalance_detected = True
-                    ui.label("⚠️ Déséquilibre détecté !").style("color:#e67e22; font-weight:600; margin-top:6px;")
-                    ui.label("Recommandation : Stratified split + métriques adaptées (F1-score, recall)").style(
-                        "font-size:14px; margin-top:4px;"
-                    )
-
-            smote_cb = ui.checkbox("Appliquer un rééquilibrage (SMOTE/undersampling)").disable()
-            if imbalance_detected:
-                smote_cb.enable()
-
-        # ---------- 2️⃣ Configuration du Split ----------
+        # ---------- Configuration du Split ----------
         with ui.card().classes("w-full max-w-4xl p-6 mb-6").style(
             "background:white; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.08);"
         ):
@@ -983,66 +953,79 @@ def preprocessing2_page():
                 "font-weight:700; font-size:20px; color:#01335A; margin-bottom:12px;"
             )
 
-            # Défault ratios
             n_samples = len(df_active)
             if n_samples < 1000:
-                train_ratio, val_ratio, test_ratio = 0.6, 0.2, 0.2
+                train_ratio, val_ratio, test_ratio = 60, 20, 20
             elif n_samples > 10000:
-                train_ratio, val_ratio, test_ratio = 0.8, 0.1, 0.1
+                train_ratio, val_ratio, test_ratio = 80, 10, 10
             else:
-                train_ratio, val_ratio, test_ratio = 0.7, 0.15, 0.15
+                train_ratio, val_ratio, test_ratio = 70, 15, 15
 
-            with ui.row().classes("items-center gap-6 mb-4"):
-                ui.label(f"Train: {int(train_ratio*100)}%").style("width:80px;")
-                train_slider = ui.slider(value=int(train_ratio*100), min=50, max=90, step=1).props("show-value")
-                ui.label(f"Val: {int(val_ratio*100)}%").style("width:60px;")
-                val_slider = ui.slider(value=int(val_ratio*100), min=5, max=30, step=1).props("show-value")
-                ui.label(f"Test: {int(test_ratio*100)}%").style("width:60px;")
-                test_slider = ui.slider(value=int(test_ratio*100), min=5, max=30, step=1).props("show-value")
+            train_input = ui.number(label="Train (%)", value=train_ratio, min=50, max=90)
+            val_input = ui.number(label="Validation (%)", value=val_ratio, min=5, max=30)
+            test_input = ui.number(label="Test (%)", value=test_ratio, min=5, max=30)
+            total_label = ui.label(f"Total: 100%").style("font-weight:600; margin-top:4px; color:green;")
 
-            # Stratified / Random / Time-based
+            def adjust_total(changed):
+                # valeurs actuelles
+                tr, vr, te = train_input.value, val_input.value, test_input.value
+                total = tr + vr + te
+
+                if total == 100:
+                    total_label.text = "Total: 100%"
+                    total_label.style("color:green;")
+                    return
+
+                # ajuster proportionnellement les deux autres
+                if changed == "train":
+                    remaining = 100 - tr
+                    factor = remaining / (vr + te)
+                    val_input.value = round(vr * factor)
+                    test_input.value = 100 - tr - val_input.value
+                elif changed == "val":
+                    remaining = 100 - vr
+                    factor = remaining / (tr + te)
+                    train_input.value = round(tr * factor)
+                    test_input.value = 100 - vr - train_input.value
+                elif changed == "test":
+                    remaining = 100 - te
+                    factor = remaining / (tr + vr)
+                    train_input.value = round(tr * factor)
+                    val_input.value = 100 - te - train_input.value
+
+                total_label.text = "Total: 100%"
+                total_label.style("color:green;")
+
+            # binder les événements
+            train_input.on('update:modelValue', lambda e: adjust_total('train'))
+            val_input.on('update:modelValue', lambda e: adjust_total('val'))
+            test_input.on('update:modelValue', lambda e: adjust_total('test'))
+
             strategy_radio = ui.radio(
                 options=["Stratified (recommandé)", "Random", "Time-based (si date)"],
                 value="Stratified (recommandé)"
             ).style("margin-top:12px;")
 
-            seed_input = ui.input(label="Random Seed", value=42).style("margin-top:12px; width:150px;")
+            seed_input = ui.number(label="Random Seed", value=42, min=0).style("margin-top:12px; width:150px;")
 
-        # ---------- 3️⃣ Bouton Split ----------
         def do_split():
-            # Ajuster ratios pour total=100
-            tr = train_slider.value
-            vr = val_slider.value
-            te = test_slider.value
-            total = tr + vr + te
-            tr /= total
-            vr /= total
-            te /= total
-
+            tr, vr, te = train_input.value / 100, val_input.value / 100, test_input.value / 100
             stratify_col = df_active[target_col] if "Stratified" in strategy_radio.value else None
-
-            # Split train
             X = df_active.drop(columns=[target_col])
             y = df_active[target_col]
             X_train, X_temp, y_train, y_temp = train_test_split(
                 X, y, train_size=tr, random_state=seed_input.value, stratify=stratify_col
             )
-
-            # Split val/test
             strat_temp = y_temp if stratify_col is not None else None
             val_size = vr / (vr + te)
             X_val, X_test, y_val, y_test = train_test_split(
                 X_temp, y_temp, train_size=val_size, random_state=seed_input.value, stratify=strat_temp
             )
 
-            # Stocker dans state
-            state["split"] = {
-                "X_train": X_train, "y_train": y_train,
-                "X_val": X_val, "y_val": y_val,
-                "X_test": X_test, "y_test": y_test
-            }
+            state["split"] = {"X_train": X_train, "y_train": y_train,
+                              "X_val": X_val, "y_val": y_val,
+                              "X_test": X_test, "y_test": y_test}
 
-            # Affichage post-split
             ui.notify("✅ Split effectué avec succès !", color="positive")
 
             def format_dist(y_set, name):
