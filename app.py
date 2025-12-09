@@ -1234,117 +1234,547 @@ import matplotlib.pyplot as plt
 
 global_state = state
 
+# ----------------- PAGE 3.4 : GESTION DES OUTLIERS (VERSION COMPLÈTE) -----------------
+# ----------------- PAGE 3.4 : GESTION DES OUTLIERS (VERSION COMPLÈTE) -----------------
+from nicegui import ui
+import plotly.graph_objs as go
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import io
+import base64
+
 @ui.page('/supervised/outliers_analysis')
 def outliers_analysis_page():
-    split = global_state.get("split")
+    """
+    Page complète pour gestion des outliers avec :
+    - Visualisation avant/après détaillée
+    - Tableaux des valeurs extrêmes
+    - Statistiques comparatives
+    - Preview et Apply séparés
+    - Propagation sur tous les splits
+    """
+    
+    # ---------- CONTEXTE ----------
+    split = state.get("split")
     if not split or "X_train" not in split:
         with ui.column().classes("items-center justify-center w-full h-screen"):
             ui.label("❌ Données d'entraînement introuvables. Veuillez d'abord effectuer le split.").style(
                 "font-size:18px; color:#c0392b; font-weight:600;"
             )
             ui.button("⬅ Retour au Split",
-                      on_click=lambda: ui.run_javascript("window.location.href='/supervised/split'"),
+                      on_click=lambda: ui.run_javascript("window.location.href='/supervised/split'")
             ).style("margin-top:20px; background:#01335A; color:white; font-weight:600;")
         return
 
     df_train = split["X_train"].copy()
-    global_state["cleaned_train"] = df_train.copy()
+    
+    # ✅ Sauvegarde de l'état original si pas déjà fait
+    if "outliers_original_train" not in state:
+        state["outliers_original_train"] = df_train.copy()
+    
+    # État temporaire pour les previews
+    state.setdefault("outliers_preview", {})
+    state.setdefault("outliers_strategy", {})
 
-    with ui.column().classes("w-full p-6").style("background-color:#f5f6fa; font-family:'Inter', sans-serif;"):
-        ui.label("🔍 Étape 3.4 : Gestion des Outliers (Train)").style(
-            "font-weight:700; font-size:32px; color:#01335A; margin-bottom:24px; text-align:center;"
+    numeric_features = df_train.select_dtypes(include=np.number).columns.tolist()
+    if not numeric_features:
+        ui.label("Aucune variable numérique détectée.").style("color:#e74c3c; font-weight:600;")
+        return
+
+    # ---------- HELPERS ----------
+    def detect_outliers_iqr(series):
+        """Détecte les outliers avec la méthode IQR"""
+        q1, q3 = series.quantile([0.25, 0.75])
+        iqr = q3 - q1
+        lower_bound = q1 - 1.5 * iqr
+        upper_bound = q3 + 1.5 * iqr
+        outliers_mask = (series < lower_bound) | (series > upper_bound)
+        return outliers_mask, lower_bound, upper_bound
+
+    def get_outlier_stats(series):
+        """Calcule les statistiques d'outliers"""
+        outliers_mask, lower, upper = detect_outliers_iqr(series)
+        n_outliers = outliers_mask.sum()
+        pct_outliers = (n_outliers / len(series) * 100) if len(series) > 0 else 0
+        
+        return {
+            "n_outliers": int(n_outliers),
+            "pct_outliers": round(pct_outliers, 2),
+            "lower_bound": round(lower, 2),
+            "upper_bound": round(upper, 2),
+            "outliers_mask": outliers_mask
+        }
+
+    def get_extreme_values(series, n=10):
+        """Récupère les n valeurs les plus extrêmes"""
+        outliers_mask, lower, upper = detect_outliers_iqr(series)
+        outliers = series[outliers_mask].sort_values()
+        
+        if len(outliers) == 0:
+            return pd.DataFrame()
+        
+        # Prendre les n plus petits et n plus grands
+        n_show = min(n, len(outliers))
+        extreme_low = outliers.head(n_show)
+        extreme_high = outliers.tail(n_show)
+        
+        result = pd.concat([extreme_low, extreme_high]).drop_duplicates()
+        return result
+
+    def apply_outlier_method(series, method, params=None):
+        """Applique une méthode de traitement des outliers"""
+        params = params or {}
+        result = series.copy()
+        
+        if method == "remove":
+            outliers_mask, _, _ = detect_outliers_iqr(series)
+            result[outliers_mask] = np.nan
+            
+        elif method == "winsorize":
+            lower_pct = params.get("lower", 1)
+            upper_pct = params.get("upper", 99)
+            lower_val, upper_val = np.percentile(series.dropna(), [lower_pct, upper_pct])
+            result = series.clip(lower_val, upper_val)
+            
+        elif method == "log":
+            # Log transform (log1p pour gérer les 0)
+            result = np.log1p(series.clip(lower=0))
+            
+        elif method == "cap":
+            # Cap aux bornes IQR
+            outliers_mask, lower, upper = detect_outliers_iqr(series)
+            result = series.clip(lower, upper)
+            
+        return result
+
+    def create_comparison_plots(feature, original_data, treated_data, method_name):
+        """Crée des plots comparatifs avec Plotly"""
+        fig = go.Figure()
+        
+        # Histogramme AVANT
+        fig.add_trace(go.Histogram(
+            x=original_data.dropna(),
+            name="Avant",
+            marker_color="#e74c3c",
+            opacity=0.6,
+            nbinsx=30
+        ))
+        
+        # Histogramme APRÈS
+        fig.add_trace(go.Histogram(
+            x=treated_data.dropna(),
+            name=f"Après ({method_name})",
+            marker_color="#27ae60",
+            opacity=0.6,
+            nbinsx=30
+        ))
+        
+        fig.update_layout(
+            title=f"{feature} - Distribution Avant/Après",
+            xaxis_title="Valeur",
+            yaxis_title="Fréquence",
+            barmode='overlay',
+            height=350,
+            showlegend=True,
+            hovermode='x unified'
         )
+        
+        return fig
 
-        numeric_features = df_train.select_dtypes(include=np.number).columns.tolist()
-        if not numeric_features:
-            ui.label("Aucune variable numérique détectée.").style("color:#e74c3c; font-weight:600;")
-            return
+    def create_boxplot_comparison(feature, original_data, treated_data, method_name):
+        """Crée des boxplots comparatifs"""
+        fig = go.Figure()
+        
+        fig.add_trace(go.Box(
+            y=original_data.dropna(),
+            name="Avant",
+            marker_color="#e74c3c",
+            boxmean='sd'
+        ))
+        
+        fig.add_trace(go.Box(
+            y=treated_data.dropna(),
+            name=f"Après ({method_name})",
+            marker_color="#27ae60",
+            boxmean='sd'
+        ))
+        
+        fig.update_layout(
+            title=f"{feature} - Boxplot Avant/Après",
+            yaxis_title="Valeur",
+            height=350,
+            showlegend=True
+        )
+        
+        return fig
 
-        def generate_hist(data, title):
-            fig, ax = plt.subplots(figsize=(4, 2.5))
-            ax.hist(data.dropna(), bins=20, alpha=0.7)
-            ax.set_title(title, fontsize=10)
-            ax.grid(alpha=0.3)
-            buffer = io.BytesIO()
-            plt.tight_layout()
-            fig.savefig(buffer, format='png')
-            plt.close(fig)
-            buffer.seek(0)
-            return "data:image/png;base64," + base64.b64encode(buffer.read()).decode()
+    def preview_treatment(feature, method, params=None):
+        """Preview le traitement sur une feature"""
+        original = df_train[feature].copy()
+        treated = apply_outlier_method(original, method, params)
+        
+        # Sauvegarder dans l'état de preview
+        state["outliers_preview"][feature] = {
+            "method": method,
+            "params": params,
+            "treated_data": treated
+        }
+        
+        return original, treated
 
-        # fabrique de handlers qui lie feature, after_plot et info_label
-        def make_handlers(feature, after_plot, info_label):
-            def remove_outliers():
-                df = global_state["cleaned_train"]
-                q1, q3 = df[feature].quantile([0.25, 0.75])
-                iqr = q3 - q1
-                mask = ~((df[feature] < (q1 - 1.5 * iqr)) |
-                         (df[feature] > (q3 + 1.5 * iqr)))
-                nb_outliers = len(df) - mask.sum()
-                df.loc[~mask, feature] = np.nan
-                after_plot.set_source(generate_hist(df[feature].dropna(), "Après suppression"))
-                info_label.text = f"🧹 {nb_outliers} outliers supprimés ({nb_outliers/len(df)*100:.1f} %)."
+    def apply_and_propagate(navigate_after=False):
+        """✅ Applique les traitements sur train/val/test"""
+        try:
+            strategies = state.get("outliers_strategy", {})
+            if not strategies:
+                ui.notify("⚠️ Aucune stratégie configurée", color="warning")
+                return False
+            
+            split = state.get("split", {})
+            
+            # Application sur X_train
+            if "X_train" in split:
+                df_train_new = split["X_train"].copy()
+                for feature, strat in strategies.items():
+                    if feature in df_train_new.columns:
+                        method = strat.get("method")
+                        params = strat.get("params", {})
+                        df_train_new[feature] = apply_outlier_method(df_train_new[feature], method, params)
+                split["X_train"] = df_train_new
+            
+            # Application sur X_val
+            if "X_val" in split and isinstance(split["X_val"], pd.DataFrame):
+                df_val_new = split["X_val"].copy()
+                for feature, strat in strategies.items():
+                    if feature in df_val_new.columns:
+                        method = strat.get("method")
+                        params = strat.get("params", {})
+                        df_val_new[feature] = apply_outlier_method(df_val_new[feature], method, params)
+                split["X_val"] = df_val_new
+            
+            # Application sur X_test
+            if "X_test" in split and isinstance(split["X_test"], pd.DataFrame):
+                df_test_new = split["X_test"].copy()
+                for feature, strat in strategies.items():
+                    if feature in df_test_new.columns:
+                        method = strat.get("method")
+                        params = strat.get("params", {})
+                        df_test_new[feature] = apply_outlier_method(df_test_new[feature], method, params)
+                split["X_test"] = df_test_new
+            
+            state["split"] = split
+            
+            ui.notify("✅ Traitement des outliers appliqué sur train/val/test!", color="positive")
+            
+            if navigate_after:
+                ui.run_javascript("setTimeout(() => window.location.href='/supervised/missing_values', 1000);")
+            else:
+                ui.run_javascript("setTimeout(() => window.location.reload(), 1000);")
+            
+            return True
+            
+        except Exception as e:
+            ui.notify(f"❌ Erreur : {str(e)}", color="negative")
+            return False
 
-            def winsorise():
-                df = global_state["cleaned_train"]
-                lower, upper = np.percentile(df[feature].dropna(), [1, 99])
-                total = ((df[feature] < lower) | (df[feature] > upper)).sum()
-                df[feature] = df[feature].clip(lower, upper)
-                after_plot.set_source(generate_hist(df[feature], "Après Winsorisation (1%-99%)"))
-                info_label.text = f"📉 {total} valeurs winsorisées (1%-99 %)."
-
-            def log_transform():
-                df = global_state["cleaned_train"]
-                positive = df[feature].clip(lower=0)
-                df[feature] = np.log1p(positive)
-                after_plot.set_source(generate_hist(df[feature], "Après Log Transform"))
-                info_label.text = "🔁 Transformation logarithmique appliquée."
-
-            return remove_outliers, winsorise, log_transform
-
-        for feature in numeric_features:
-            with ui.card().style(
-                "background:white; padding:16px; border-radius:10px; "
-                "box-shadow:0 3px 10px rgba(0,0,0,0.08); margin-bottom:24px;"
-            ):
-                ui.label(f"📊 Feature : {feature}").style(
-                    "font-weight:600; font-size:18px; margin-bottom:8px; color:#01335A;"
+    def open_feature_config_modal(feature):
+        """Ouvre modal de configuration pour une feature"""
+        current_strategy = state.get("outliers_strategy", {}).get(feature, {})
+        current_method = current_strategy.get("method", "none")
+        
+        with ui.dialog() as dialog, ui.card().classes("w-full max-w-4xl p-6"):
+            ui.label(f"⚙️ Configuration : {feature}").style("font-weight:700; font-size:20px; color:#01335A;")
+            
+            # Stats actuelles
+            stats = get_outlier_stats(df_train[feature])
+            with ui.row().classes("gap-4 mt-4"):
+                ui.label(f"🔴 Outliers détectés : {stats['n_outliers']} ({stats['pct_outliers']}%)").style(
+                    "font-size:14px; color:#e74c3c; font-weight:600;"
                 )
+                ui.label(f"📊 Bornes IQR : [{stats['lower_bound']}, {stats['upper_bound']}]").style(
+                    "font-size:14px; color:#636e72;"
+                )
+            
+            # Sélection de la méthode
+            method_select = ui.select(
+                options=["none", "remove", "winsorize", "log", "cap"],
+                value=current_method,
+                label="Méthode de traitement"
+            ).classes("w-full mt-4")
+            
+            # Conteneur pour paramètres
+            params_container = ui.column().classes("w-full mt-2")
+            
+            winsor_lower = None
+            winsor_upper = None
+            
+            def update_method_params():
+                nonlocal winsor_lower, winsor_upper
+                params_container.clear()
+                
+                with params_container:
+                    if method_select.value == "none":
+                        ui.label("Aucun traitement appliqué").style("color:#636e72; font-size:13px;")
+                    elif method_select.value == "remove":
+                        ui.label("🗑️ Suppression : Remplace les outliers par NaN").style("color:#636e72; font-size:13px;")
+                    elif method_select.value == "winsorize":
+                        ui.label("📉 Winsorisation : Cap aux percentiles").style("color:#636e72; font-size:13px; margin-bottom:8px;")
+                        with ui.row().classes("gap-2"):
+                            winsor_lower = ui.number(
+                                label="Percentile bas (%)",
+                                value=current_strategy.get("params", {}).get("lower", 1),
+                                min=0,
+                                max=50
+                            ).props("outlined dense")
+                            winsor_upper = ui.number(
+                                label="Percentile haut (%)",
+                                value=current_strategy.get("params", {}).get("upper", 99),
+                                min=50,
+                                max=100
+                            ).props("outlined dense")
+                    elif method_select.value == "log":
+                        ui.label("🔁 Log Transform : Transformation logarithmique (log1p)").style("color:#636e72; font-size:13px;")
+                    elif method_select.value == "cap":
+                        ui.label("✂️ Capping : Cap aux bornes IQR (Q1-1.5*IQR, Q3+1.5*IQR)").style("color:#636e72; font-size:13px;")
+            
+            method_select.on_value_change(lambda: update_method_params())
+            update_method_params()
+            
+            # Preview container
+            preview_container = ui.column().classes("w-full mt-4")
+            
+            def show_preview():
+                if method_select.value == "none":
+                    ui.notify("Sélectionnez une méthode", color="warning")
+                    return
+                
+                params = {}
+                if method_select.value == "winsorize" and winsor_lower and winsor_upper:
+                    params = {"lower": winsor_lower.value, "upper": winsor_upper.value}
+                
+                original, treated = preview_treatment(feature, method_select.value, params)
+                
+                preview_container.clear()
+                with preview_container:
+                    ui.label("📊 Aperçu du traitement").style("font-weight:600; font-size:16px; margin-top:12px;")
+                    
+                    # Stats comparatives
+                    with ui.row().classes("gap-6 mt-2"):
+                        with ui.column():
+                            ui.label("AVANT").style("font-weight:600; color:#e74c3c;")
+                            ui.label(f"Outliers : {stats['n_outliers']}").style("font-size:13px;")
+                            ui.label(f"Mean : {original.mean():.2f}").style("font-size:13px;")
+                            ui.label(f"Std : {original.std():.2f}").style("font-size:13px;")
+                        
+                        with ui.column():
+                            ui.label("APRÈS").style("font-weight:600; color:#27ae60;")
+                            treated_stats = get_outlier_stats(treated)
+                            ui.label(f"Outliers : {treated_stats['n_outliers']}").style("font-size:13px;")
+                            ui.label(f"Mean : {treated.mean():.2f}").style("font-size:13px;")
+                            ui.label(f"Std : {treated.std():.2f}").style("font-size:13px;")
+                    
+                    # Plots comparatifs
+                    with ui.row().classes("gap-2 mt-4 w-full"):
+                        ui.plotly(create_comparison_plots(feature, original, treated, method_select.value)).classes("flex-1")
+                        ui.plotly(create_boxplot_comparison(feature, original, treated, method_select.value)).classes("flex-1")
+                    
+                    # Tableau des valeurs extrêmes
+                    extreme_before = get_extreme_values(original, n=5)
+                    extreme_after = get_extreme_values(treated, n=5)
+                    
+                    if len(extreme_before) > 0:
+                        ui.label("🔍 Valeurs Extrêmes (sample)").style("font-weight:600; margin-top:12px;")
+                        with ui.row().classes("gap-4 w-full"):
+                            with ui.column().classes("flex-1"):
+                                ui.label("Avant").style("font-weight:600; color:#e74c3c; font-size:13px;")
+                                rows_before = [{"Index": idx, "Valeur": f"{val:.2f}"} for idx, val in extreme_before.items()]
+                                ui.table(
+                                    columns=[
+                                        {"name": "Index", "label": "Index", "field": "Index"},
+                                        {"name": "Valeur", "label": "Valeur", "field": "Valeur"}
+                                    ],
+                                    rows=rows_before
+                                ).props("dense").style("font-size:12px;")
+                            
+                            with ui.column().classes("flex-1"):
+                                ui.label("Après").style("font-weight:600; color:#27ae60; font-size:13px;")
+                                rows_after = [{"Index": idx, "Valeur": f"{val:.2f}"} for idx, val in extreme_after.items()]
+                                ui.table(
+                                    columns=[
+                                        {"name": "Index", "label": "Index", "field": "Index"},
+                                        {"name": "Valeur", "label": "Valeur", "field": "Valeur"}
+                                    ],
+                                    rows=rows_after
+                                ).props("dense").style("font-size:12px;")
+            
+            # Boutons
+            with ui.row().classes("w-full justify-between mt-4"):
+                ui.button("🔍 Preview", on_click=show_preview).style("background:#2d9cdb; color:white;")
+                
+                with ui.row().classes("gap-2"):
+                    ui.button("Annuler", on_click=dialog.close).props("flat")
+                    
+                    def save_strategy():
+                        params = {}
+                        if method_select.value == "winsorize" and winsor_lower and winsor_upper:
+                            params = {"lower": winsor_lower.value, "upper": winsor_upper.value}
+                        
+                        state.setdefault("outliers_strategy", {})[feature] = {
+                            "method": method_select.value,
+                            "params": params
+                        }
+                        
+                        ui.notify(f"✅ Stratégie sauvegardée pour {feature}", color="positive")
+                        dialog.close()
+                    
+                    ui.button("Sauvegarder", on_click=save_strategy).style("background:#27ae60; color:white;")
+        
+        dialog.open()
 
-                with ui.row().classes("items-center justify-center gap-4"):
-                    before_plot = ui.image(
-                        generate_hist(global_state["cleaned_train"][feature], "Avant traitement")
-                    ).style("width:400px; height:250px; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.1);")
-                    after_plot = ui.image(
-                        generate_hist(global_state["cleaned_train"][feature], "Après traitement (aucun)")
-                    ).style("width:400px; height:250px; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.1);")
+    def confirm_and_apply():
+        """Confirme et applique le traitement"""
+        strategies = state.get("outliers_strategy", {})
+        
+        if not strategies:
+            ui.notify("⚠️ Aucune stratégie configurée", color="warning")
+            return
+        
+        with ui.dialog() as dialog, ui.card().classes("p-6"):
+            ui.label("⚠️ Confirmation").style("font-weight:700; font-size:18px;")
+            ui.label(f"Appliquer le traitement des outliers sur {len(strategies)} features ?").style(
+                "margin-top:8px; color:#2c3e50;"
+            )
+            ui.label("⚠️ Cette action modifiera train/val/test").style(
+                "margin-top:4px; color:#e74c3c; font-size:13px;"
+            )
+            
+            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                ui.button("Annuler", on_click=dialog.close).props("flat")
+                
+                def confirm():
+                    dialog.close()
+                    apply_and_propagate(navigate_after=True)
+                
+                ui.button("Confirmer", on_click=confirm).style("background:#27ae60; color:white;")
+        
+        dialog.open()
 
-                info_label = ui.label("").style("margin-top:10px; color:#555; font-size:14px;")
-
-                # obtenir handlers bindés à la feature courante
-                remove_cb, winsor_cb, log_cb = make_handlers(feature, after_plot, info_label)
-
-                with ui.row().style("justify-content:center; margin-top:12px; gap:10px;"):
-                    ui.button("Supprimer Outliers", on_click=remove_cb).style(
-                        "background:#e74c3c; color:white; font-weight:600; border-radius:6px; padding:8px 18px;"
-                    )
-                    ui.button("Winsorisation", on_click=winsor_cb).style(
-                        "background:#f39c12; color:white; font-weight:600; border-radius:6px; padding:8px 18px;"
-                    )
-                    ui.button("Log Transform", on_click=log_cb).style(
-                        "background:#2980b9; color:white; font-weight:600; border-radius:6px; padding:8px 18px;"
-                    )
-
-        ui.button("➡ Étape suivante", on_click=lambda: ui.run_javascript(
-            "window.location.href='/supervised/multivariate_analysis'"
-        )).style(
-            "background:linear-gradient(135deg, #01335A, #09538C); color:white; font-weight:600; "
-            "border-radius:8px; height:46px; width:280px; margin-top:20px;"
+    # ---------- UI ----------
+    with ui.column().classes("w-full items-center p-8").style("background-color:#f5f6fa;"):
+        ui.label("🔍 ÉTAPE 3.4 : GESTION DES OUTLIERS").style(
+            "font-weight:700; font-size:28px; color:#01335A; margin-bottom:10px;"
+        )
+        
+        ui.label(f"Détection et traitement sur {len(numeric_features)} variables numériques").style(
+            "font-size:15px; color:#636e72; margin-bottom:24px;"
         )
 
+        # --- A - Vue d'ensemble ---
+        with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
+            ui.label("📊 Vue d'ensemble").style("font-weight:700; font-size:18px; color:#2c3e50;")
+            
+            # Calculer stats globales
+            total_outliers = 0
+            total_values = 0
+            features_affected = 0
+            
+            for feat in numeric_features:
+                stats = get_outlier_stats(df_train[feat])
+                if stats['n_outliers'] > 0:
+                    features_affected += 1
+                total_outliers += stats['n_outliers']
+                total_values += len(df_train[feat])
+            
+            pct_global = round((total_outliers / total_values * 100), 2) if total_values > 0 else 0
+            
+            with ui.row().classes("gap-6 mt-4"):
+                def metric(label, value, sub=""):
+                    with ui.column().classes("items-start"):
+                        ui.label(label).style("font-size:13px; color:#636e72;")
+                        ui.label(value).style("font-weight:700; font-size:20px; color:#01335A;")
+                        if sub:
+                            ui.label(sub).style("font-size:12px; color:#2c3e50;")
+                
+                metric("Total outliers", f"{total_outliers}", f"{pct_global}% des valeurs")
+                metric("Features affectées", f"{features_affected}/{len(numeric_features)}", "")
+                metric("Stratégies configurées", f"{len(state.get('outliers_strategy', {}))}", "")
 
+        # --- B - Tableau des features avec boutons d'action ---
+        with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
+            ui.label("📋 Détail par feature").style("font-weight:700; font-size:18px; color:#2c3e50;")
+            
+            ui.label("💡 Cliquez sur le bouton ⚙️ pour configurer le traitement de chaque feature").style(
+                "font-size:12px; color:#636e72; margin-top:4px; margin-bottom:12px;"
+            )
+            
+            # Créer une grille pour chaque feature
+            for feat in numeric_features:
+                stats = get_outlier_stats(df_train[feat])
+                strategy = state.get("outliers_strategy", {}).get(feat, {})
+                method = strategy.get("method", "none")
+                
+                tag = "🔴" if stats['pct_outliers'] > 5 else ("🟡" if stats['pct_outliers'] > 1 else "🟢")
+                
+                with ui.card().classes("w-full p-4 mb-2").style("background:#fafafa; border-left:4px solid #09538C;"):
+                    with ui.row().classes("w-full items-center justify-between"):
+                        # Colonne gauche : infos
+                        with ui.column().classes("flex-1"):
+                            with ui.row().classes("items-center gap-2"):
+                                ui.label(feat).style("font-weight:700; font-size:16px; color:#01335A;")
+                                ui.label(tag).style("font-size:18px;")
+                            
+                            with ui.row().classes("gap-4 mt-1"):
+                                ui.label(f"Outliers: {stats['n_outliers']} ({stats['pct_outliers']}%)").style(
+                                    "font-size:13px; color:#636e72;"
+                                )
+                                ui.label(f"Bornes IQR: [{stats['lower_bound']:.2f}, {stats['upper_bound']:.2f}]").style(
+                                    "font-size:13px; color:#636e72;"
+                                )
+                                
+                                # Badge stratégie
+                                if method != "none":
+                                    ui.badge(method.upper(), color="green").style("font-size:11px;")
+                                else:
+                                    ui.badge("NON CONFIGURÉ", color="grey").style("font-size:11px;")
+                        
+                        # Colonne droite : bouton action
+                        ui.button(
+                            "⚙️ Configurer",
+                            on_click=lambda f=feat: open_feature_config_modal(f)
+                        ).style("background:#09538C; color:white; font-weight:600;")
 
+        # --- C - Actions ---
+        with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
+            ui.label("⚡ Actions").style("font-weight:700; font-size:18px; color:#2c3e50;")
+            
+            with ui.row().classes("gap-2 mt-4"):
+                ui.button(
+                    "✅ Appliquer et continuer",
+                    on_click=confirm_and_apply
+                ).style("background:#27ae60; color:white; font-weight:600;")
+                
+                def reset_strategies():
+                    state["outliers_strategy"] = {}
+                    ui.notify("🔄 Stratégies réinitialisées", color="info")
+                    ui.run_javascript("setTimeout(() => window.location.reload(), 500);")
+                
+                ui.button(
+                    "🔄 Réinitialiser",
+                    on_click=reset_strategies
+                ).style("background:#95a5a6; color:white;")
 
+        # --- Navigation ---
+        with ui.row().classes("w-full max-w-6xl justify-between mt-6"):
+            ui.button(
+                "⬅ Étape précédente",
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/split'")
+            ).style("background:#95a5a6; color:white;")
+            
+            ui.button(
+                "➡ Passer (sans traiter)",
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/missing_values'")
+            ).style("background:#09538C; color:white;")
 
 
 
