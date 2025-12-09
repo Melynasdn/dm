@@ -918,6 +918,7 @@ def user_decisions_page():
 
 from nicegui import ui
 from sklearn.model_selection import train_test_split
+import pandas as pd
 
 @ui.page('/supervised/preprocessing2')
 def preprocessing2_page():
@@ -930,14 +931,16 @@ def preprocessing2_page():
             ui.label("❌ Dataset ou target manquants.").style(
                 "font-size:18px; color:#c0392b; font-weight:600;"
             )
-            ui.button("⬅ Retour", on_click=lambda: ui.run_javascript("window.location.href='/supervised/user_decisions'")).style(
-                "margin-top:20px; background:#01335A; color:white; font-weight:600;"
-            )
+            ui.button("⬅ Retour", on_click=lambda: ui.run_javascript(
+                "window.location.href='/supervised/user_decisions'"
+            )).style("margin-top:20px; background:#01335A; color:white; font-weight:600;")
         return
 
+    # Colonnes utilisées pour l'analyse
     active_cols = [c for c in df.columns if not columns_exclude.get(c, False) and c != target_col]
     df_active = df[active_cols + [target_col]].copy()
 
+    # ----------- STYLES GÉNÉRAUX -----------
     with ui.column().classes("w-full h-auto items-center p-10").style(
         "background-color:#f5f6fa; font-family:'Inter', sans-serif;"
     ):
@@ -945,7 +948,38 @@ def preprocessing2_page():
             "font-weight:700; font-size:32px; color:#01335A; margin-bottom:32px; text-align:center;"
         )
 
-        # ---------- Configuration du Split ----------
+        # ---------- 1️⃣ Vérification du déséquilibre ----------
+        with ui.card().classes("w-full max-w-4xl p-6 mb-6").style(
+            "background:white; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.08);"
+        ):
+            ui.label(f"🎯 Distribution de la target '{target_col}'").style(
+                "font-weight:700; font-size:20px; color:#01335A; margin-bottom:12px;"
+            )
+
+            counts = df_active[target_col].value_counts()
+            total = len(df_active)
+            imbalance_detected = False
+
+            for cls, cnt in counts.items():
+                pct = round(cnt / total * 100, 1)
+                with ui.row().classes("items-center gap-2 mb-1"):
+                    ui.label(f"{cls}: {cnt} ({pct}%)").style("width:120px; font-family:monospace;")
+                    ui.linear_progress(value=pct/100, color="blue").classes("w-full h-3 rounded-lg")
+
+            if len(counts) > 1 and counts.min() / total * 100 < 30:
+                imbalance_detected = True
+                ui.label("⚠️ Déséquilibre détecté !").style(
+                    "color:#e67e22; font-weight:600; margin-top:6px;"
+                )
+                ui.label("Recommandation : Stratified split + métriques adaptées (F1-score, recall)").style(
+                    "font-size:14px; margin-top:4px;"
+                )
+
+            smote_cb = ui.checkbox("Appliquer un rééquilibrage (SMOTE/undersampling)").disable()
+            if imbalance_detected:
+                smote_cb.enable()
+
+        # ---------- 2️⃣ Configuration du Split ----------
         with ui.card().classes("w-full max-w-4xl p-6 mb-6").style(
             "background:white; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.08);"
         ):
@@ -953,98 +987,89 @@ def preprocessing2_page():
                 "font-weight:700; font-size:20px; color:#01335A; margin-bottom:12px;"
             )
 
+            # Default ratios
             n_samples = len(df_active)
             if n_samples < 1000:
-                train_ratio, val_ratio, test_ratio = 60, 20, 20
+                train_ratio, val_ratio, test_ratio = 0.6, 0.2, 0.2
             elif n_samples > 10000:
-                train_ratio, val_ratio, test_ratio = 80, 10, 10
+                train_ratio, val_ratio, test_ratio = 0.8, 0.1, 0.1
             else:
-                train_ratio, val_ratio, test_ratio = 70, 15, 15
+                train_ratio, val_ratio, test_ratio = 0.7, 0.15, 0.15
 
-            train_input = ui.number(label="Train (%)", value=train_ratio, min=50, max=90)
-            val_input = ui.number(label="Validation (%)", value=val_ratio, min=5, max=30)
-            test_input = ui.number(label="Test (%)", value=test_ratio, min=5, max=30)
-            total_label = ui.label(f"Total: 100%").style("font-weight:600; margin-top:4px; color:green;")
+            train_slider = ui.slider(value=int(train_ratio*100), min=50, max=90, step=1).props("show-value")
+            val_slider = ui.slider(value=int(val_ratio*100), min=5, max=30, step=1).props("show-value")
+            test_slider = ui.slider(value=int(test_ratio*100), min=5, max=30, step=1).props("show-value")
 
-            def adjust_total(changed):
-                # valeurs actuelles
-                tr, vr, te = train_input.value, val_input.value, test_input.value
-                total = tr + vr + te
+            # Affichage dynamique des ratios
+            train_label = ui.label(f"Train: {train_slider.value}%").style("width:100px;")
+            val_label = ui.label(f"Validation: {val_slider.value}%").style("width:120px;")
+            test_label = ui.label(f"Test: {test_slider.value}%").style("width:100px;")
 
-                if total == 100:
-                    total_label.text = "Total: 100%"
-                    total_label.style("color:green;")
-                    return
+            def update_ratios():
+                total = train_slider.value + val_slider.value + test_slider.value
+                if total != 100:
+                    # Ajuste proportionnellement les autres
+                    rem = 100 - train_slider.value
+                    val_slider.value = int(val_slider.value / (val_slider.value + test_slider.value) * rem)
+                    test_slider.value = rem - val_slider.value
+                train_label.text = f"Train: {train_slider.value}%"
+                val_label.text = f"Validation: {val_slider.value}%"
+                test_label.text = f"Test: {test_slider.value}%"
 
-                # ajuster proportionnellement les deux autres
-                if changed == "train":
-                    remaining = 100 - tr
-                    factor = remaining / (vr + te)
-                    val_input.value = round(vr * factor)
-                    test_input.value = 100 - tr - val_input.value
-                elif changed == "val":
-                    remaining = 100 - vr
-                    factor = remaining / (tr + te)
-                    train_input.value = round(tr * factor)
-                    test_input.value = 100 - vr - train_input.value
-                elif changed == "test":
-                    remaining = 100 - te
-                    factor = remaining / (tr + vr)
-                    train_input.value = round(tr * factor)
-                    val_input.value = 100 - te - train_input.value
+            train_slider.on("update:model-value", lambda e: update_ratios())
+            val_slider.on("update:model-value", lambda e: update_ratios())
+            test_slider.on("update:model-value", lambda e: update_ratios())
 
-                total_label.text = "Total: 100%"
-                total_label.style("color:green;")
-
-            # binder les événements
-            train_input.on('update:modelValue', lambda e: adjust_total('train'))
-            val_input.on('update:modelValue', lambda e: adjust_total('val'))
-            test_input.on('update:modelValue', lambda e: adjust_total('test'))
-
+            # Stratified / Random / Time-based
             strategy_radio = ui.radio(
                 options=["Stratified (recommandé)", "Random", "Time-based (si date)"],
                 value="Stratified (recommandé)"
             ).style("margin-top:12px;")
 
-            seed_input = ui.number(label="Random Seed", value=42, min=0).style("margin-top:12px; width:150px;")
+            seed_input = ui.input(label="Random Seed", value=42).style("margin-top:12px; width:150px;")
+
+        # ---------- 3️⃣ Bouton Split ----------
+        # Container résultat
+        result_container = ui.column().classes("w-full max-w-4xl mt-4")
 
         def do_split():
-            tr, vr, te = train_input.value / 100, val_input.value / 100, test_input.value / 100
+            tr = train_slider.value / 100
+            vr = val_slider.value / 100
+            te = test_slider.value / 100
+
             stratify_col = df_active[target_col] if "Stratified" in strategy_radio.value else None
+
             X = df_active.drop(columns=[target_col])
             y = df_active[target_col]
             X_train, X_temp, y_train, y_temp = train_test_split(
-                X, y, train_size=tr, random_state=seed_input.value, stratify=stratify_col
+                X, y, train_size=tr, random_state=int(seed_input.value), stratify=stratify_col
             )
             strat_temp = y_temp if stratify_col is not None else None
             val_size = vr / (vr + te)
             X_val, X_test, y_val, y_test = train_test_split(
-                X_temp, y_temp, train_size=val_size, random_state=seed_input.value, stratify=strat_temp
+                X_temp, y_temp, train_size=val_size, random_state=int(seed_input.value), stratify=strat_temp
             )
 
-            state["split"] = {"X_train": X_train, "y_train": y_train,
-                              "X_val": X_val, "y_val": y_val,
-                              "X_test": X_test, "y_test": y_test}
+            state["split"] = {
+                "X_train": X_train, "y_train": y_train,
+                "X_val": X_val, "y_val": y_val,
+                "X_test": X_test, "y_test": y_test
+            }
 
-            ui.notify("✅ Split effectué avec succès !", color="positive")
-
-            def format_dist(y_set, name):
+            result_container.clear()
+            for name, y_set in [("Train", y_train), ("Validation", y_val), ("Test", y_test)]:
                 counts = y_set.value_counts()
                 total = len(y_set)
-                lines = [f"{name} set : {total} samples"]
+                ui.label(f"{name} set : {total} samples").style("font-weight:600; color:#01335A; margin-top:8px;")
                 for cls, cnt in counts.items():
                     pct = round(cnt / total * 100, 1)
-                    lines.append(f"  - Classe {cls}: {cnt} ({pct}%)")
-                return "\n".join(lines)
+                    ui.label(f"  - {cls}: {cnt} ({pct}%)").style("font-family:monospace; margin-left:10px;")
 
-            ui.label(format_dist(y_train, "Train")).style("font-family:monospace; margin-top:8px;")
-            ui.label(format_dist(y_val, "Validation")).style("font-family:monospace; margin-top:4px;")
-            ui.label(format_dist(y_test, "Test")).style("font-family:monospace; margin-top:4px;")
+            ui.notify("✅ Split effectué avec succès !", color="positive")
 
         ui.button("✅ Effectuer le split", on_click=do_split).style(
             "background:linear-gradient(135deg, #01335A, #09538C); color:white; font-weight:600; border-radius:8px; height:46px; width:250px; margin-top:20px;"
         )
-
 
 
 
