@@ -1681,11 +1681,13 @@ def multivariate_analysis_page():
 
 
 
-# ----------------- PAGE 3.6 : GESTION DES VALEURS MANQUANTES -----------------
-from nicegui import ui
-import plotly.graph_objs as go
 
-# ----------------- PAGE 3.6 : GESTION DES VALEURS MANQUANTES (REFONTE) -----------------
+
+
+
+
+
+# ----------------- PAGE 3.6 : GESTION DES VALEURS MANQUANTES (VERSION FINALE) -----------------
 from nicegui import ui
 import plotly.graph_objs as go
 import numpy as np
@@ -1696,18 +1698,27 @@ from sklearn.impute import IterativeImputer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import OrdinalEncoder
 from sklearn.preprocessing import LabelEncoder
+import copy
 
 @ui.page('/supervised/missing_values')
 def missing_values_page():
     """
-    Page refondue pour gestion fiable des valeurs manquantes.
-    - Fit des imputers sur df_train si disponible (state['split'])
-    - Preview applique les imputers sur une copie (ne modifie pas state)
-    - Apply fit & transforme train/val/test (ou raw_df si split manquant)
+    Page finale pour gestion des valeurs manquantes :
+    - Preview : fit sur df_train, appliquer sur copie et afficher before/after + histogrammes
+    - Apply : fit sur df_train, appliquer sur X_train/X_val/X_test (si présents) et raw_df
+    - Confirmation avant suppression de lignes/colonnes
+    - Sauvegarde d'un résumé d'imputers dans state['fitted_imputers']
     """
-    # --- Lecture des données et context ---
+    import pandas as pd
+    import numpy as np
+    import plotly.graph_objects as go
+    from sklearn.impute import SimpleImputer, KNNImputer, IterativeImputer
+    from sklearn.preprocessing import OrdinalEncoder
+    from sklearn.ensemble import RandomForestClassifier
+
+    # ---------- CONTEXTE ----------
     df = state.get("raw_df", None)
-    split = state.get("split", None)  # dict avec X_train, y_train, X_val, y_val, X_test, y_test
+    split = state.get("split", None)
     columns_exclude = state.get("columns_exclude", {}) or {}
     target_col = state.get("target_column", None)
 
@@ -1717,7 +1728,6 @@ def missing_values_page():
             ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/upload'"))
         return
 
-    # Reconstituer df_train (X+y) si possible, sinon utiliser whole df as fallback
     df_train = None
     if split:
         Xtr = split.get("X_train")
@@ -1725,80 +1735,395 @@ def missing_values_page():
         if isinstance(Xtr, pd.DataFrame) and ytr is not None:
             try:
                 df_train = Xtr.copy()
-                # ytr may be Series or DataFrame single column
-                df_train[target_col] = ytr
+                if target_col is not None:
+                    df_train[target_col] = ytr
             except Exception:
                 df_train = None
     if df_train is None:
         df_train = df.copy()
 
-    # Colonnes actives (exclure celles marquées)
     active_cols = [c for c in df.columns if not columns_exclude.get(c, False)]
-    # quick missing stats
     miss_counts = df[active_cols].isna().sum()
     miss_pct = (miss_counts / len(df) * 100).round(2)
     affected = (miss_counts > 0).sum()
     total_missing = int(miss_counts.sum())
     total_pct = round(total_missing / (df.shape[0] * df.shape[1]) * 100, 2)
 
-    # Ensure storage places
-    state.setdefault("missing_strategy", {})        # per-feature configs
-    state.setdefault("fitted_imputers", {})         # where fitted imputers will be stored after apply
+    state.setdefault("missing_strategy", {})
+    state.setdefault("fitted_imputers", {})
     state.setdefault("engineered_features", state.get("engineered_features", []))
+
+    # ---------- HELPERS ----------
+    def fit_imputers(strategies: dict, df_train_local: pd.DataFrame):
+        """Fit les imputers sur df_train"""
+        fitted = {}
+        
+        for col, strat in strategies.items():
+            method = strat.get("method", "none")
+            params = strat.get("params", {})
+            
+            if method == "none" or method == "drop":
+                continue
+            
+            if col not in df_train_local.columns:
+                continue
+            
+            try:
+                if method in ["mean", "median", "mode", "constant"]:
+                    if method == "mode":
+                        strategy = "most_frequent"
+                    else:
+                        strategy = method
+                    
+                    imputer = SimpleImputer(strategy=strategy, **params)
+                    imputer.fit(df_train_local[[col]])
+                    fitted[col] = {"imputer": imputer, "method": method, "params": params}
+                
+                elif method == "knn":
+                    num_cols = df_train_local.select_dtypes(include=[np.number]).columns.tolist()
+                    if col in num_cols:
+                        imputer = KNNImputer(n_neighbors=params.get("n_neighbors", 5))
+                        imputer.fit(df_train_local[num_cols])
+                        fitted[col] = {"imputer": imputer, "method": method, "params": params, "num_cols": num_cols}
+                
+                elif method == "iterative":
+                    num_cols = df_train_local.select_dtypes(include=[np.number]).columns.tolist()
+                    if col in num_cols:
+                        imputer = IterativeImputer(max_iter=params.get("max_iter", 10), random_state=42)
+                        imputer.fit(df_train_local[num_cols])
+                        fitted[col] = {"imputer": imputer, "method": method, "params": params, "num_cols": num_cols}
+                
+                elif method == "forward_fill":
+                    fitted[col] = {"method": "forward_fill", "params": params}
+                
+                elif method == "backward_fill":
+                    fitted[col] = {"method": "backward_fill", "params": params}
+            
+            except Exception as e:
+                print(f"Erreur fit imputer pour {col}: {e}")
+        
+        return fitted
+
+    def apply_fitted_imputers(df_target: pd.DataFrame, fitted: dict, cols_filter: list = None):
+        """Applique les imputers fitted sur un dataframe"""
+        df_result = df_target.copy()
+        
+        for col, info in fitted.items():
+            if cols_filter and col not in cols_filter:
+                continue
+            
+            if col not in df_result.columns:
+                continue
+            
+            method = info.get("method")
+            imputer = info.get("imputer")
+            
+            try:
+                if method in ["mean", "median", "mode", "constant"]:
+                    df_result[[col]] = imputer.transform(df_result[[col]])
+                
+                elif method in ["knn", "iterative"]:
+                    num_cols = info.get("num_cols", [])
+                    available_cols = [c for c in num_cols if c in df_result.columns]
+                    if available_cols:
+                        df_result[available_cols] = imputer.transform(df_result[available_cols])
+                
+                elif method == "forward_fill":
+                    df_result[col] = df_result[col].fillna(method='ffill')
+                
+                elif method == "backward_fill":
+                    df_result[col] = df_result[col].fillna(method='bfill')
+            
+            except Exception as e:
+                print(f"Erreur apply imputer pour {col}: {e}")
+        
+        return df_result
+
+    def serialize_fitted_imputers(fitted: dict):
+        """Sérialise les imputers pour sauvegarde"""
+        return {
+            col: {
+                "method": info.get("method"),
+                "params": info.get("params", {}),
+                "create_indicator": info.get("create_indicator", False)
+            } 
+            for col, info in fitted.items()
+        }
+
+    def apply_and_propagate():
+        """Applique l'imputation sur raw_df et tous les splits"""
+        try:
+            strategies = state.get("missing_strategy", {})
+            
+            # Fit sur df_train
+            fitted = fit_imputers(strategies, df_train)
+            state["fitted_imputers"] = serialize_fitted_imputers(fitted)
+            
+            # Application sur raw_df
+            state["raw_df"] = apply_fitted_imputers(df, fitted, active_cols)
+            
+            # Application sur splits si présents
+            if split:
+                for key in ["X_train", "X_val", "X_test"]:
+                    if key in split and isinstance(split[key], pd.DataFrame):
+                        split[key] = apply_fitted_imputers(split[key], fitted, active_cols)
+            
+            ui.notify("✅ Imputation appliquée avec succès sur tous les datasets!", color="positive")
+            ui.run_javascript("setTimeout(() => window.location.reload(), 1000);")
+        
+        except Exception as e:
+            ui.notify(f"Erreur lors de l'application : {str(e)}", color="negative")
+
+    def open_feature_modal(col_name):
+        """Ouvre un dialog pour configurer la stratégie d'imputation d'une colonne"""
+        current_strategy = state.get("missing_strategy", {}).get(col_name, {})
+        current_method = current_strategy.get("method", "none")
+        
+        with ui.dialog() as dialog, ui.card().classes("w-full max-w-2xl p-6"):
+            ui.label(f"Configuration : {col_name}").style("font-weight:700; font-size:18px;")
+            
+            dtype = df[col_name].dtype
+            n_missing = int(df[col_name].isna().sum())
+            pct = round(n_missing / len(df) * 100, 2)
+            
+            ui.label(f"Type: {dtype} | Missing: {n_missing} ({pct}%)").style("color:#636e72; margin-top:8px;")
+            
+            # Options d'imputation
+            if pd.api.types.is_numeric_dtype(df[col_name]):
+                options = ["none", "drop", "mean", "median", "mode", "constant", "knn", "iterative"]
+            else:
+                options = ["none", "drop", "mode", "constant", "forward_fill", "backward_fill"]
+            
+            method_select = ui.select(options=options, value=current_method, label="Méthode").classes("w-full")
+            
+            # Paramètres additionnels
+            params_container = ui.column().classes("w-full")
+            
+            constant_input = None
+            knn_input = None
+            iter_input = None
+            
+            def update_params():
+                nonlocal constant_input, knn_input, iter_input
+                params_container.clear()
+                with params_container:
+                    if method_select.value == "constant":
+                        constant_input = ui.input(
+                            label="Valeur constante", 
+                            value=str(current_strategy.get("params", {}).get("fill_value", "0"))
+                        ).props("outlined")
+                    elif method_select.value == "knn":
+                        knn_input = ui.number(
+                            label="Nombre de voisins", 
+                            value=current_strategy.get("params", {}).get("n_neighbors", 5), 
+                            min=1, 
+                            max=20
+                        ).props("outlined")
+                    elif method_select.value == "iterative":
+                        iter_input = ui.number(
+                            label="Max iterations", 
+                            value=current_strategy.get("params", {}).get("max_iter", 10), 
+                            min=1, 
+                            max=100
+                        ).props("outlined")
+            
+            method_select.on_value_change(lambda: update_params())
+            update_params()
+            
+            # Boutons d'action
+            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                ui.button("Annuler", on_click=dialog.close).props("flat")
+                
+                def save_strategy():
+                    method = method_select.value
+                    params = {}
+                    
+                    if method == "constant" and constant_input:
+                        params["fill_value"] = constant_input.value
+                    elif method == "knn" and knn_input:
+                        params["n_neighbors"] = int(knn_input.value)
+                    elif method == "iterative" and iter_input:
+                        params["max_iter"] = int(iter_input.value)
+                    
+                    state.setdefault("missing_strategy", {})[col_name] = {
+                        "method": method,
+                        "params": params
+                    }
+                    
+                    ui.notify(f"Stratégie sauvegardée pour {col_name}", color="positive")
+                    dialog.close()
+                
+                ui.button("Sauvegarder", on_click=save_strategy).style("background:#27ae60; color:white;")
+        
+        dialog.open()
+
+    def preview_imputation():
+        """Prévisualise l'imputation sur une copie de df_train"""
+        strategies = state.get("missing_strategy", {})
+        
+        if not strategies:
+            ui.notify("Aucune stratégie configurée. Utilisez la stratégie globale ou configurez les colonnes.", color="warning")
+            return
+        
+        try:
+            # Fit sur df_train
+            fitted = fit_imputers(strategies, df_train)
+            
+            # Application sur copie
+            df_preview = df_train.copy()
+            df_preview = apply_fitted_imputers(df_preview, fitted, active_cols)
+            
+            # Affichage before/after
+            before_missing = df_train[active_cols].isna().sum().sum()
+            after_missing = df_preview[active_cols].isna().sum().sum()
+            
+            preview_info.set_text(
+                f"✅ Preview généré : {before_missing} valeurs manquantes → {after_missing} après imputation"
+            )
+            
+            # Histogrammes comparatifs (première colonne numérique avec missing)
+            num_cols_with_missing = [c for c in active_cols if pd.api.types.is_numeric_dtype(df[c]) and df[c].isna().sum() > 0]
+            
+            if num_cols_with_missing:
+                sample_col = num_cols_with_missing[0]
+                
+                fig_before = go.Figure()
+                fig_before.add_trace(go.Histogram(x=df_train[sample_col].dropna(), name="Before", marker_color="#e74c3c"))
+                fig_before.update_layout(title=f"{sample_col} - Before Imputation", height=300)
+                
+                fig_after = go.Figure()
+                fig_after.add_trace(go.Histogram(x=df_preview[sample_col].dropna(), name="After", marker_color="#27ae60"))
+                fig_after.update_layout(title=f"{sample_col} - After Imputation", height=300)
+                
+                chart_before.update_figure(fig_before)
+                chart_before.style("display:block;")
+                chart_after.update_figure(fig_after)
+                chart_after.style("display:block;")
+            
+        except Exception as e:
+            ui.notify(f"Erreur lors du preview : {str(e)}", color="negative")
+
+    def confirm_and_apply():
+        """Confirme et applique l'imputation sur tous les datasets"""
+        strategies = state.get("missing_strategy", {})
+        
+        if not strategies:
+            ui.notify("Aucune stratégie configurée.", color="warning")
+            return
+        
+        with ui.dialog() as dialog, ui.card():
+            ui.label("⚠️ Confirmation").style("font-weight:700; font-size:18px;")
+            ui.label("Voulez-vous appliquer l'imputation sur tous les datasets (train/val/test) ?").style("margin-top:8px;")
+            
+            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                ui.button("Annuler", on_click=dialog.close).props("flat")
+                
+                def confirm_and_next():
+                    apply_and_propagate()
+                    dialog.close()
+                    ui.run_javascript("setTimeout(() => window.location.href='/supervised/encoding', 1500);")
+                
+                ui.button("Confirmer", on_click=confirm_and_next).style("background:#27ae60; color:white;")
+        
+        dialog.open()
+
+    # ---------- GLOBAL STRATEGY FUNCTION ----------
+    def apply_global_strategy():
+        """
+        Applique une stratégie globale de gestion des valeurs manquantes
+        pour toutes les colonnes actives selon le choix de strategy_radio.
+        """
+        val = strategy_radio.value
+        state["missing_strategy_global"] = val
+
+        if val.startswith("Conservative"):
+            for col in active_cols:
+                if miss_pct.get(col, 0.0) > 20:
+                    state.setdefault("columns_exclude", {})[col] = True
+            ui.notify("Conservative : colonnes >20% marquées pour exclusion.", color="positive")
+
+        elif val.startswith("Balanced"):
+            for col in active_cols:
+                if df[col].isna().sum() == 0:
+                    continue
+                method = "median" if pd.api.types.is_numeric_dtype(df[col]) else "mode"
+                state.setdefault("missing_strategy", {})[col] = {"method": method, "params": {}}
+            ui.notify("Balanced : Median pour numeric, Mode pour catégoriel.", color="positive")
+
+        elif val.startswith("Aggressive"):
+            for col in active_cols:
+                if pd.api.types.is_numeric_dtype(df[col]) and df[col].isna().sum() > 0:
+                    state.setdefault("missing_strategy", {})[col] = {"method": "knn", "params": {"n_neighbors": 5}}
+            ui.notify("Aggressive : KNN appliqué aux colonnes numériques.", color="positive")
+
+        elif val.startswith("Custom"):
+            ui.notify("Choix Custom : configure colonne par colonne.", color="info")
 
     # ---------- UI ----------
     with ui.column().classes("w-full items-center p-8").style("background-color:#f5f6fa;"):
-        ui.label("### ÉTAPE 3.6 : GESTION DES VALEURS MANQUANTES").style(
+        ui.label("ÉTAPE 3.6 : GESTION DES VALEURS MANQUANTES").style(
             "font-weight:700; font-size:28px; color:#01335A; margin-bottom:10px;"
         )
 
-        # A - OVERVIEW
-        with ui.card().classes("w-full max-w-6xl p-6 mb-6").style("background:white; border-radius:12px;"):
-            ui.label("Vue d'ensemble des valeurs manquantes (dataset complet)").style("font-weight:700;")
-            with ui.row().classes("gap-6").style("margin-top:6px;"):
+        # --- A - Overview ---
+        with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
+            ui.label("Vue d'ensemble des valeurs manquantes").style("font-weight:700; font-size:18px; color:#2c3e50;")
+            with ui.row().classes("gap-6").style("margin-top:12px;"):
                 def metric(label, value, sub=""):
                     with ui.column().classes("items-start"):
                         ui.label(label).style("font-size:13px; color:#636e72;")
-                        ui.label(value).style("font-weight:700; font-size:18px; color:#01335A;")
-                        if sub:
+                        ui.label(value).style("font-weight:700; font-size:20px; color:#01335A;")
+                        if sub: 
                             ui.label(sub).style("font-size:12px; color:#2c3e50;")
+                
                 metric("Total missing", f"{total_missing}", f"{total_pct}% du dataset")
-                metric("Features affectées", f"{affected} / {len(active_cols)}", "")
+                metric("Features affectées", f"{affected}/{len(active_cols)}", "")
                 metric("Lignes", f"{len(df):,}", "")
 
-        # B - TABLE DETAIL
-        with ui.card().classes("w-full max-w-6xl p-6 mb-6").style("background:white; border-radius:12px;"):
-            ui.label("Détail par colonne").style("font-weight:700;")
+        # --- B - Table of columns ---
+        with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
+            ui.label("Détail par colonne").style("font-weight:700; font-size:18px; color:#2c3e50;")
             rows = []
             for col in active_cols:
                 n_missing = int(miss_counts.get(col, 0))
                 pct = float(miss_pct.get(col, 0.0))
                 dtype = "Numérique" if pd.api.types.is_numeric_dtype(df[col]) else "Catégoriel/Autre"
                 tag = "🔴" if pct > 20 else ("🟡" if pct >= 5 else ("🟢" if pct > 0 else ""))
-                rows.append({"Feature": col, "Type": dtype, "Missing": n_missing, "% Missing": f"{pct}%", "Niveau": tag})
+                rows.append({
+                    "Feature": col,
+                    "Type": dtype,
+                    "Missing": n_missing,
+                    "% Missing": f"{pct}%",
+                    "Niveau": tag
+                })
+            
             table = ui.table(
                 columns=[
-                    {"name":"Feature","label":"Feature","field":"Feature"},
-                    {"name":"Type","label":"Type","field":"Type"},
-                    {"name":"Missing","label":"Missing","field":"Missing"},
-                    {"name":"% Missing","label":"% Missing","field":"% Missing"},
-                    {"name":"Niveau","label":"Niveau","field":"Niveau"},
+                    {"name": "Feature", "label": "Feature", "field": "Feature"},
+                    {"name": "Type", "label": "Type", "field": "Type"},
+                    {"name": "Missing", "label": "Missing", "field": "Missing"},
+                    {"name": "% Missing", "label": "% Missing", "field": "% Missing"},
+                    {"name": "Niveau", "label": "Niveau", "field": "Niveau"}
                 ],
-                rows=rows, row_key="Feature"
-            ).style("width:100%")
-            ui.label("Clique sur une ligne pour éditer la stratégie d'imputation pour cette feature.").style("font-size:12px; color:#636e72; margin-top:8px;")
+                rows=rows,
+                row_key="Feature"
+            ).style("width:100%;")
+            
+            ui.label("Clique sur une ligne pour éditer la stratégie d'imputation.").style(
+                "font-size:12px; color:#636e72; margin-top:8px;"
+            )
+            
+            def handle_row_click(e):
+                if e and "row" in e and "Feature" in e["row"]:
+                    open_feature_modal(e["row"]["Feature"])
+                else:
+                    ui.notify("Erreur ouverture colonne.", color="negative")
+            
+            table.on("row:click", handle_row_click)
 
-            def on_row_click(e):
-                try:
-                    feature = e["row"]["Feature"]
-                    open_feature_modal(feature)
-                except Exception:
-                    ui.notify("Erreur ouverture détail colonne.", color="negative")
-            table.on("row:click", on_row_click)
-
-        # C - GLOBAL STRATEGY PRESETS
-        with ui.card().classes("w-full max-w-6xl p-6 mb-6").style("background:white; border-radius:12px;"):
-            ui.label("Stratégie Globale (rapide)").style("font-weight:700;")
+        # --- C - Global strategy ---
+        with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
+            ui.label("Stratégie Globale (rapide)").style("font-weight:700; font-size:18px; color:#2c3e50;")
             strategy_radio = ui.radio(
                 options=[
                     "Conservative (drop cols>20% or rows>50%)",
@@ -1807,330 +2132,1486 @@ def missing_values_page():
                     "Custom (configure per feature)"
                 ],
                 value=state.get("missing_strategy_global", "Balanced (median numeric, mode cat)")
-            )
-            def apply_global_strategy():
-                val = strategy_radio.value
-                state["missing_strategy_global"] = val
-                if val.startswith("Conservative"):
-                    for col in active_cols:
-                        if (miss_pct.get(col, 0.0) > 20):
-                            state.setdefault("columns_exclude", {})[col] = True
-                    ui.notify("Conservative: colonnes >20% marquées pour exclusion.", color="positive")
-                elif val.startswith("Balanced"):
-                    for col in active_cols:
-                        if df[col].isna().sum() == 0:
-                            continue
-                        method = "median" if pd.api.types.is_numeric_dtype(df[col]) else "mode"
-                        state.setdefault("missing_strategy", {})[col] = {"method": method, "params": {}}
-                    ui.notify("Balanced: stratégies définies (median/mode).", color="positive")
-                elif val.startswith("Aggressive"):
-                    for col in active_cols:
-                        if df[col].isna().sum() == 0: continue
-                        if pd.api.types.is_numeric_dtype(df[col]):
-                            state.setdefault("missing_strategy", {})[col] = {"method": "knn", "params": {"n_neighbors": 5}}
-                    ui.notify("Aggressive: KNN configuré pour colonnes numériques.", color="positive")
-                else:
-                    ui.notify("Mode Custom : configure par colonne.", color="info")
-            ui.button("Appliquer stratégie globale", on_click=lambda e: apply_global_strategy()).style("background:#09538C;color:white;")
+            ).classes("mt-2")
+            
+            ui.button(
+                "Appliquer stratégie globale",
+                on_click=lambda e: apply_global_strategy()
+            ).style("background:#09538C; color:white; margin-top:12px;")
 
-        # D - PREVIEW & APPLY
-        with ui.card().classes("w-full max-w-6xl p-6 mb-6").style("background:white; border-radius:12px;"):
-            ui.label("Preview & Application").style("font-weight:700;")
-            preview_info = ui.label("").style("font-size:14px; color:#2c3e50;")
-            def preview_imputation():
-                strategies = state.get("missing_strategy", {})
-                if not strategies:
-                    preview_info.text = "Aucune stratégie définie. Utilise Balanced ou configure des colonnes."
-                    return
-                # Fit imputers on df_train and apply them to a copy of df_train to preview results
-                try:
-                    fitted = fit_imputers(strategies, df_train)
-                    df_preview = df_train.copy()
-                    apply_fitted_imputers(df_preview, fitted)
-                    before = int(df_train.isna().sum().sum())
-                    after = int(df_preview.isna().sum().sum())
-                    preview_info.text = f"Avant : {before} missing  → Après (train preview) : {after} missing"
-                except Exception as ex:
-                    preview_info.text = "Erreur preview : " + str(ex)
-            ui.button("Preview (train)", on_click=lambda e: preview_imputation()).style("background:#2d9cdb;color:white;")
+        # --- D - Preview & Apply ---
+        with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
+            ui.label("Preview & Application").style("font-weight:700; font-size:18px; color:#2c3e50;")
+            preview_info = ui.label("").style("font-size:14px; color:#2c3e50; margin-top:8px;")
+            
+            with ui.row().classes("gap-4 w-full").style("margin-top:12px;"):
+                with ui.column().classes("flex-1"):
+                    chart_before = ui.plotly({}).style("width:100%; display:none;")
+                with ui.column().classes("flex-1"):
+                    chart_after = ui.plotly({}).style("width:100%; display:none;")
+            
+            with ui.row().classes("gap-2").style("margin-top:12px;"):
+                ui.button(
+                    "Preview (train)",
+                    on_click=lambda e: preview_imputation()
+                ).style("background:#2d9cdb; color:white;")
+                
+                ui.button(
+                    "Appliquer maintenant ✅",
+                    on_click=lambda e: confirm_and_apply()
+                ).style("background:#27ae60; color:white;")
 
-            def apply_and_propagate():
-                strategies = state.get("missing_strategy", {})
-                if not strategies:
-                    ui.notify("Aucune stratégie définie. Configure d'abord les features.", color="warning")
-                    return
-                try:
-                    # 1) fit imputers on df_train
-                    fitted = fit_imputers(strategies, df_train)
+        # --- Navigation ---
+        with ui.row().classes("w-full max-w-6xl justify-between").style("margin-top:20px;"):
+            ui.button(
+                "⬅ Étape précédente",
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/multivariate_analysis'")
+            ).style("background:#95a5a6; color:white;")
+            
+            ui.button(
+                "➡ Étape suivante",
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/encoding'")
+            ).style("background:#09538C; color:white;")
 
-                    # 2) apply to X_train/y_train -> update state['split']
-                    if split and isinstance(split.get("X_train"), pd.DataFrame):
-                        Xtr = split["X_train"].copy()
-                        # If target is part of df_train originally, careful: imputers operate on features; we'll apply to Xtr
-                        apply_fitted_imputers(Xtr, fitted)
-                        state.setdefault("split", {})["X_train"] = Xtr
-                        # y_train preserved
-                    # 3) apply to val/test if present
-                    if split and isinstance(split.get("X_val"), pd.DataFrame):
-                        Xval = split["X_val"].copy()
-                        apply_fitted_imputers(Xval, fitted)
-                        state.setdefault("split", {})["X_val"] = Xval
-                    if split and isinstance(split.get("X_test"), pd.DataFrame):
-                        Xte = split["X_test"].copy()
-                        apply_fitted_imputers(Xte, fitted)
-                        state.setdefault("split", {})["X_test"] = Xte
 
-                    # 4) apply to whole raw_df as well (useful)
-                    df_all = state.get("raw_df", df).copy()
-                    apply_fitted_imputers(df_all, fitted)
-                    state["raw_df"] = df_all
 
-                    # 5) save fitted imputers for future use
-                    state["fitted_imputers"] = serialize_fitted_imputers(fitted)
-                    ui.notify("✅ Imputation appliquée et sauvegardée dans state (train/val/test/raw_df).", color="positive")
-                except Exception as ex:
-                    ui.notify("Erreur lors de l'application: " + str(ex), color="negative")
+# ----------------- PAGE 3.7 : ENCODAGE DES FEATURES CATÉGORIELLES -----------------
+# ----------------- PAGE 3.7 : ENCODAGE DES FEATURES CATÉGORIELLES -----------------
+from nicegui import ui
+import plotly.graph_objs as go
+import numpy as np
+import pandas as pd
+from sklearn.preprocessing import LabelEncoder, OrdinalEncoder, OneHotEncoder
+import copy
 
-            ui.button("Appliquer maintenant (train → val/test/raw_df)", on_click=lambda e: apply_and_propagate()).style("background:#27ae60;color:white; margin-left:8px;")
-
-        # NAV
-        with ui.row().classes("w-full max-w-6xl justify-between").style("margin-top:12px;"):
-            ui.button("⬅ Étape précédente", on_click=lambda: ui.run_javascript("window.location.href='/supervised/multivariate_analysis'"))
-            ui.button("➡ Étape suivante", on_click=lambda: ui.run_javascript("window.location.href='/supervised/feature_selection'"))
-
-    # ---------- HELPERS (fitting & applying imputers) ----------
-
-    def fit_imputers(strategies: dict, df_train_local: pd.DataFrame):
+@ui.page('/supervised/encoding')
+def encoding_page():
+    """
+    Page complète pour l'encodage des features catégorielles
+    """
+    
+    # ---------- CONTEXTE ----------
+    df = state.get("raw_df", None)
+    split = state.get("split", None)
+    columns_exclude = state.get("columns_exclude", {}) or {}
+    target_col = state.get("target_column", None)
+    
+    if df is None:
+        with ui.column().classes("items-center justify-center w-full h-screen"):
+            ui.label("❌ Aucun dataset chargé.").style("font-size:18px; color:#c0392b; font-weight:600;")
+            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/upload'"))
+        return
+    
+    # Préparer df_train
+    df_train = None
+    if split:
+        Xtr = split.get("X_train")
+        ytr = split.get("y_train")
+        if isinstance(Xtr, pd.DataFrame) and ytr is not None:
+            try:
+                df_train = Xtr.copy()
+                if target_col is not None:
+                    df_train[target_col] = ytr
+            except Exception:
+                df_train = None
+    if df_train is None:
+        df_train = df.copy()
+    
+    active_cols = [c for c in df.columns if not columns_exclude.get(c, False) and c != target_col]
+    
+    # Identifier les colonnes catégorielles
+    cat_cols = [c for c in active_cols if df[c].dtype == 'object' or pd.api.types.is_categorical_dtype(df[c])]
+    
+    state.setdefault("encoding_strategy", {})
+    state.setdefault("encoding_params", {})
+    
+    # ---------- HELPERS ----------
+    def get_cardinality_level(n):
+        """Retourne le niveau de cardinalité"""
+        if n <= 10:
+            return "🟢", "Low", "green"
+        elif n <= 50:
+            return "🟡", "Medium", "orange"
+        else:
+            return "🔴", "High", "red"
+    
+    def get_recommended_encoding(col):
+        """Recommande une méthode d'encodage"""
+        n_unique = df[col].nunique()
+        
+        if n_unique == 2:
+            return "Label Encoding", "Binaire - simple et efficace"
+        elif n_unique <= 10:
+            return "One-Hot Encoding", "Faible cardinalité - safe"
+        elif n_unique <= 50:
+            return "Frequency Encoding", "Cardinalité moyenne"
+        else:
+            return "Target Encoding", "Haute cardinalité - évite explosion"
+    
+    def detect_ordinal(col):
+        """Détecte si une colonne semble ordinale"""
+        common_orders = {
+            'education': ['High School', 'Bachelor', 'Master', 'PhD'],
+            'level': ['Low', 'Medium', 'High'],
+            'grade': ['A', 'B', 'C', 'D', 'F'],
+            'size': ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
+            'priority': ['Low', 'Medium', 'High', 'Critical']
+        }
+        
+        col_lower = col.lower()
+        for key, order in common_orders.items():
+            if key in col_lower:
+                values = df[col].unique()
+                if set(values).issubset(set(order)):
+                    return True, order
+        
+        return False, []
+    
+    def apply_encoding(df_target, strategies, params, fit_on_train=True, fitted_encoders=None):
         """
-        Fit per-column imputers according to strategies on df_train_local.
-        Returns a dict keyed by column with fitted imputer/info objects.
+        Applique les encodages selon les stratégies définies
+        
+        Args:
+            df_target: DataFrame à encoder
+            strategies: Dict {col: method}
+            params: Dict {col: params}
+            fit_on_train: Si True, fit les encoders. Si False, utilise fitted_encoders
+            fitted_encoders: Dict des encoders déjà fitted (obligatoire si fit_on_train=False)
         """
-        fitted = {}
-        # Precompute numeric columns of train
-        numeric_cols_train = df_train_local.select_dtypes(include=[np.number]).columns.tolist()
-
-        for col, cfg in strategies.items():
-            if col not in df_train_local.columns:
+        df_result = df_target.copy()
+        encoders = {} if fit_on_train else fitted_encoders
+        
+        for col, method in strategies.items():
+            if col not in df_result.columns:
                 continue
-            method = cfg.get("method")
-            params = cfg.get("params", {})
-            create_indicator = params.get("create_indicator", False)
-            entry = {"method": method, "create_indicator": create_indicator, "params": params}
-
-            if method in ("mean", "median", "mode"):
-                strat = "mean" if method == "mean" else ("median" if method == "median" else "most_frequent")
-                if strat == "most_frequent":
-                    imp = SimpleImputer(strategy="most_frequent")
-                else:
-                    imp = SimpleImputer(strategy=strat)
-                # SimpleImputer expects 2D
-                imp.fit(df_train_local[[col]])
-                entry["imputer"] = imp
-
-            elif method == "knn":
-                # KNNImputer works on numeric matrix; we will fit on numeric columns
-                n = int(params.get("n_neighbors", 5))
-                if col not in numeric_cols_train:
-                    # can't fit knn on non-numeric
-                    entry["imputer"] = None
-                    entry["warning"] = "non-numeric; knn skipped"
-                else:
-                    imp = KNNImputer(n_neighbors=n)
-                    imp.fit(df_train_local[numeric_cols_train])
-                    entry["imputer"] = imp
-                    entry["numeric_cols_used"] = numeric_cols_train
-
-            elif method == "iterative":
-                numeric_cols = numeric_cols_train
-                if len(numeric_cols) == 0:
-                    entry["imputer"] = None
-                else:
-                    imp = IterativeImputer(max_iter=10, random_state=0)
-                    imp.fit(df_train_local[numeric_cols])
-                    entry["imputer"] = imp
-                    entry["numeric_cols_used"] = numeric_cols
-
-            elif method == "group_median":
-                grp = params.get("group_by")
-                if grp is None or grp not in df_train_local.columns:
-                    entry["group_medians"] = {}
-                else:
-                    # median by group computed on df_train_local
-                    med = df_train_local.groupby(grp)[col].median()
-                    entry["group_medians"] = med.to_dict()
-                    entry["global_median"] = float(df_train_local[col].median(skipna=True)) if col in df_train_local.columns else None
-                    entry["group_by"] = grp
-
-            elif method == "add_unknown":
-                entry["imputer"] = "add_unknown"  # marker
-
-            elif method == "predictive_cat":
-                # Train a predictive classifier to predict col from other columns (use numeric + ordinal-encoded small-cardinality categoricals)
-                notnull_idx = df_train_local[col].notna()
-                if not notnull_idx.any():
-                    entry["predictive"] = None
-                else:
-                    Xp = df_train_local.loc[notnull_idx].drop(columns=[col]).copy()
-                    # Build X_enc with numeric columns + low-card categorical encoded
-                    X_enc = pd.DataFrame(index=Xp.index)
-                    encoders = {}
-                    for c in Xp.columns:
-                        if pd.api.types.is_numeric_dtype(Xp[c]):
-                            X_enc[c] = Xp[c].fillna(Xp[c].median())
-                        else:
-                            vals = Xp[c].astype(str).fillna("NA")
-                            top = vals.value_counts().index[:50]
-                            if len(top) > 0:
-                                oe = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
-                                try:
-                                    oe.fit(vals.values.reshape(-1,1))
-                                    X_enc[c] = oe.transform(vals.values.reshape(-1,1)).ravel()
-                                    encoders[c] = oe
-                                except Exception:
-                                    # fallback skip
-                                    continue
-                    if X_enc.shape[1] == 0:
-                        entry["predictive"] = None
+            
+            try:
+                if method == "Label Encoding":
+                    if fit_on_train:
+                        # FIT sur train
+                        le = LabelEncoder()
+                        le.fit(df_train[col].dropna())
+                        df_result[col] = le.transform(df_result[col])
+                        encoders[col] = {"encoder": le, "method": method}
                     else:
-                        y_enc = df_train_local.loc[notnull_idx, col].astype(str)
-                        clf = RandomForestClassifier(n_estimators=100, random_state=0)
-                        clf.fit(X_enc.fillna(0), y_enc)
-                        entry["predictive"] = {"clf": clf, "encoders": encoders, "features": list(X_enc.columns)}
+                        # TRANSFORM avec encoder fitted
+                        if fitted_encoders and col in fitted_encoders:
+                            le = fitted_encoders[col]["encoder"]
+                            # Gérer les valeurs inconnues
+                            known_classes = set(le.classes_)
+                            df_result[col] = df_result[col].apply(
+                                lambda x: le.transform([x])[0] if x in known_classes else -1
+                            )
+                
+                elif method == "One-Hot Encoding":
+                    drop_first = params.get(col, {}).get("drop_first", True)
+                    
+                    if fit_on_train:
+                        # FIT sur train
+                        dummies = pd.get_dummies(df_result[col], prefix=col, drop_first=drop_first)
+                        df_result = pd.concat([df_result.drop(columns=[col]), dummies], axis=1)
+                        encoders[col] = {
+                            "method": method, 
+                            "columns": dummies.columns.tolist(), 
+                            "drop_first": drop_first
+                        }
+                    else:
+                        # TRANSFORM avec colonnes fitted
+                        if fitted_encoders and col in fitted_encoders:
+                            expected_cols = fitted_encoders[col]["columns"]
+                            drop_first = fitted_encoders[col].get("drop_first", True)
+                            dummies = pd.get_dummies(df_result[col], prefix=col, drop_first=drop_first)
+                            
+                            # Aligner les colonnes
+                            for exp_col in expected_cols:
+                                if exp_col not in dummies.columns:
+                                    dummies[exp_col] = 0
+                            
+                            # Garder seulement les colonnes attendues dans le bon ordre
+                            dummies = dummies[[c for c in expected_cols if c in dummies.columns]]
+                            df_result = pd.concat([df_result.drop(columns=[col]), dummies], axis=1)
+                
+                elif method == "Ordinal Encoding":
+                    order = params.get(col, {}).get("order", [])
+                    if order:
+                        mapping = {val: idx for idx, val in enumerate(order)}
+                        df_result[col] = df_result[col].map(mapping).fillna(-1)  # Valeurs inconnues = -1
+                        if fit_on_train:
+                            encoders[col] = {"method": method, "order": order, "mapping": mapping}
+                
+                elif method == "Frequency Encoding":
+                    if fit_on_train:
+                        # FIT sur train
+                        freq = df_train[col].value_counts(normalize=True).to_dict()
+                        df_result[col] = df_result[col].map(freq).fillna(0)  # Inconnus = 0
+                        encoders[col] = {"method": method, "frequencies": freq}
+                    else:
+                        # TRANSFORM avec fréquences fitted
+                        if fitted_encoders and col in fitted_encoders:
+                            freq = fitted_encoders[col]["frequencies"]
+                            df_result[col] = df_result[col].map(freq).fillna(0)
+                
+                elif method == "Target Encoding":
+                    if target_col and target_col in df_train.columns:
+                        if fit_on_train:
+                            # FIT sur train
+                            target_means = df_train.groupby(col)[target_col].mean().to_dict()
+                            global_mean = df_train[target_col].mean()
+                            
+                            smoothing = params.get(col, {}).get("smoothing", 10)
+                            counts = df_train[col].value_counts().to_dict()
+                            
+                            smoothed_means = {}
+                            for cat, mean in target_means.items():
+                                count = counts.get(cat, 0)
+                                smoothed_means[cat] = (count * mean + smoothing * global_mean) / (count + smoothing)
+                            
+                            df_result[col] = df_result[col].map(smoothed_means).fillna(global_mean)
+                            encoders[col] = {
+                                "method": method, 
+                                "target_means": smoothed_means, 
+                                "global_mean": global_mean
+                            }
+                        else:
+                            # TRANSFORM avec means fitted
+                            if fitted_encoders and col in fitted_encoders:
+                                smoothed_means = fitted_encoders[col]["target_means"]
+                                global_mean = fitted_encoders[col]["global_mean"]
+                                df_result[col] = df_result[col].map(smoothed_means).fillna(global_mean)
+            
+            except Exception as e:
+                print(f"Erreur encodage {col}: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        return df_result, encoders
+    
+    def open_encoding_modal(col_name):
+        """Ouvre un modal pour configurer l'encodage d'une colonne"""
+        current_method = state.get("encoding_strategy", {}).get(col_name, "")
+        current_params = state.get("encoding_params", {}).get(col_name, {})
+        
+        n_unique = df[col_name].nunique()
+        top_values = df[col_name].value_counts().head(5)
+        is_ordinal, suggested_order = detect_ordinal(col_name)
+        recommended, reason = get_recommended_encoding(col_name)
+        
+        with ui.dialog() as dialog, ui.card().classes("w-full max-w-4xl p-6"):
+            ui.label(f"Encodage : {col_name}").style("font-weight:700; font-size:20px; color:#01335A;")
+            
+            # Infos colonne
+            with ui.card().classes("w-full p-4 mb-4").style("background:#f8f9fa;"):
+                with ui.row().classes("gap-4"):
+                    ui.label(f"Cardinalité : {n_unique}").style("font-weight:600;")
+                    icon, level, color = get_cardinality_level(n_unique)
+                    ui.label(f"{icon} {level}").style(f"color:{color}; font-weight:600;")
+                
+                ui.label("Top valeurs :").style("font-size:13px; color:#636e72; margin-top:8px;")
+                for val, count in top_values.items():
+                    pct = round(count / len(df) * 100, 1)
+                    ui.label(f"  • {val}: {count} ({pct}%)").style("font-size:12px; color:#2c3e50;")
+            
+            # Recommandation
+            with ui.card().classes("w-full p-4 mb-4").style("background:#e8f5e9;"):
+                ui.label(f"💡 Recommandation : {recommended}").style("font-weight:600; color:#27ae60;")
+                ui.label(reason).style("font-size:13px; color:#2c3e50;")
+            
+            # Sélection méthode
+            method_select = ui.select(
+                options=[
+                    "Label Encoding",
+                    "One-Hot Encoding",
+                    "Ordinal Encoding",
+                    "Frequency Encoding",
+                    "Target Encoding"
+                ],
+                value=current_method or recommended,
+                label="Méthode d'encodage"
+            ).classes("w-full")
+            
+            # Zone paramètres
+            params_container = ui.column().classes("w-full mt-4")
+            
+            # Variables pour stocker les widgets
+            drop_first_checkbox = None
+            smoothing_input = None
+            order_inputs = []
+            
+            def update_params_ui():
+                nonlocal drop_first_checkbox, smoothing_input, order_inputs
+                params_container.clear()
+                order_inputs = []
+                
+                with params_container:
+                    method = method_select.value
+                    
+                    if method == "Label Encoding":
+                        ui.markdown("""
+**📌 Label Encoding**
 
-            else:
-                entry["imputer"] = None
+Principe : Assigne un entier à chaque modalité (0, 1, 2...)
 
-            fitted[col] = entry
-        return fitted
+✅ Adapté pour : Variables binaires  
+⚠️ Attention : Impose un ordre arbitraire
+                        """).classes("p-4").style("background:#f8f9fa; border-radius:8px;")
+                    
+                    elif method == "One-Hot Encoding":
+                        ui.markdown("""
+**📌 One-Hot Encoding**
 
-    def apply_fitted_imputers(df_target: pd.DataFrame, fitted: dict):
-        """
-        Applies fitted imputers in-place to df_target.
-        """
-        if not isinstance(df_target, pd.DataFrame):
+Principe : Crée une colonne binaire par modalité
+
+✅ Avantages : Pas d'ordre imposé, interprétable  
+❌ Inconvénients : Explosion dimensionnelle si haute cardinalité
+                        """).classes("p-4").style("background:#f8f9fa; border-radius:8px;")
+                        
+                        drop_first_checkbox = ui.checkbox(
+                            "Drop first (éviter multicolinéarité)",
+                            value=current_params.get("drop_first", True)
+                        )
+                    
+                    elif method == "Ordinal Encoding":
+                        ui.markdown("""
+**📌 Ordinal Encoding**
+
+Principe : Assigne des entiers selon un ordre défini
+
+✅ Applicable uniquement si ordre naturel existe
+                        """).classes("p-4").style("background:#f8f9fa; border-radius:8px;")
+                        
+                        ui.label("Définir l'ordre (du plus bas au plus haut) :").style("font-weight:600; margin-top:12px;")
+                        
+                        current_order = current_params.get("order", suggested_order if is_ordinal else list(df[col_name].unique()))
+                        
+                        for idx, val in enumerate(current_order):
+                            with ui.row().classes("items-center gap-2"):
+                                ui.label(f"{idx}:").style("font-weight:600; width:30px;")
+                                inp = ui.input(value=str(val)).classes("flex-1")
+                                order_inputs.append(inp)
+                    
+                    elif method == "Frequency Encoding":
+                        ui.markdown("""
+**📌 Frequency Encoding**
+
+Principe : Remplace par la fréquence d'apparition
+
+✅ Avantages : Simple, pas de leakage, 1 colonne  
+❌ Limites : Perd l'info sémantique
+                        """).classes("p-4").style("background:#f8f9fa; border-radius:8px;")
+                    
+                    elif method == "Target Encoding":
+                        ui.markdown("""
+**📌 Target Encoding**
+
+Principe : Remplace par la moyenne de la target
+
+✅ Avantages : Capture relation avec target, 1 colonne  
+⚠️ Risques : Overfitting / Data leakage
+                        """).classes("p-4").style("background:#f8f9fa; border-radius:8px;")
+                        
+                        smoothing_input = ui.number(
+                            label="Smoothing (régularisation)",
+                            value=current_params.get("smoothing", 10),
+                            min=0,
+                            max=100
+                        ).classes("w-full")
+            
+            method_select.on_value_change(lambda: update_params_ui())
+            update_params_ui()
+            
+            # Boutons
+            with ui.row().classes("w-full justify-end gap-2 mt-6"):
+                ui.button("Annuler", on_click=dialog.close).props("flat")
+                
+                def save_encoding():
+                    method = method_select.value
+                    params = {}
+                    
+                    if method == "One-Hot Encoding" and drop_first_checkbox:
+                        params["drop_first"] = drop_first_checkbox.value
+                    elif method == "Target Encoding" and smoothing_input:
+                        params["smoothing"] = int(smoothing_input.value)
+                    elif method == "Ordinal Encoding" and order_inputs:
+                        order = [inp.value for inp in order_inputs]
+                        params["order"] = order
+                    
+                    state.setdefault("encoding_strategy", {})[col_name] = method
+                    state.setdefault("encoding_params", {})[col_name] = params
+                    
+                    ui.notify(f"✅ Encodage configuré pour {col_name}", color="positive")
+                    dialog.close()
+                    table.update()
+                
+                ui.button("Sauvegarder", on_click=save_encoding).style("background:#27ae60; color:white;")
+        
+        dialog.open()
+    
+    def apply_all_encodings():
+        """Applique tous les encodages et passe à l'étape suivante"""
+        strategies = state.get("encoding_strategy", {})
+        
+        if not strategies:
+            ui.notify("⚠️ Aucun encodage configuré", color="warning")
             return
-        for col, info in fitted.items():
-            if col not in df_target.columns:
-                continue
-            method = info.get("method")
-            create_indicator = info.get("create_indicator", False)
-            if create_indicator:
-                df_target[f"{col}_was_missing"] = df_target[col].isna().astype(int)
-
-            if method in ("mean", "median", "mode"):
-                imp = info.get("imputer")
-                if imp is None:
-                    continue
-                try:
-                    df_target[col] = imp.transform(df_target[[col]])
-                except Exception:
-                    # fallback: fill with simple statistic
-                    if method == "mean":
-                        df_target[col] = df_target[col].fillna(df_target[col].mean())
-                    elif method == "median":
-                        df_target[col] = df_target[col].fillna(df_target[col].median())
-                    else:
-                        df_target[col] = df_target[col].fillna(df_target[col].mode().iloc[0] if not df_target[col].mode().empty else df_target[col])
-
-            elif method == "knn":
-                imp = info.get("imputer")
-                numeric_cols_used = info.get("numeric_cols_used", [])
-                if imp is None or not numeric_cols_used:
-                    continue
-                # Apply transform to numeric subset and reassign
-                try:
-                    out = imp.transform(df_target[numeric_cols_used])
-                    df_target[numeric_cols_used] = pd.DataFrame(out, columns=numeric_cols_used, index=df_target.index)
-                except Exception:
-                    continue
-
-            elif method == "iterative":
-                imp = info.get("imputer")
-                numeric_cols_used = info.get("numeric_cols_used", [])
-                if imp is None or not numeric_cols_used:
-                    continue
-                try:
-                    out = imp.transform(df_target[numeric_cols_used])
-                    df_target[numeric_cols_used] = pd.DataFrame(out, columns=numeric_cols_used, index=df_target.index)
-                except Exception:
-                    continue
-
-            elif method == "group_median":
-                medians = info.get("group_medians", {})
-                global_med = info.get("global_median", None)
-                grp = info.get("group_by")
-                if not grp:
-                    continue
-                def fill_row(r):
-                    if pd.isna(r[col]):
-                        g = r.get(grp)
-                        if g in medians and not pd.isna(medians[g]):
-                            return medians[g]
-                        else:
-                            return global_med
-                    else:
-                        return r[col]
-                try:
-                    df_target[col] = df_target.apply(fill_row, axis=1)
-                except Exception:
-                    # fallback global median
-                    if global_med is not None:
-                        df_target[col] = df_target[col].fillna(global_med)
-
-            elif method == "add_unknown":
-                df_target[col] = df_target[col].fillna("Unknown")
-
-            elif method == "predictive_cat":
-                pred_info = info.get("predictive")
-                if not pred_info:
-                    continue
-                clf = pred_info.get("clf")
-                encs = pred_info.get("encoders", {})
-                feats = pred_info.get("features", [])
-                if clf is None or not feats:
-                    continue
-                # prepare X_apply
-                X_apply = pd.DataFrame(index=df_target.index)
-                for c in feats:
-                    if c not in df_target.columns:
-                        # missing feature -> fill 0
-                        X_apply[c] = 0
-                        continue
-                    if pd.api.types.is_numeric_dtype(df_target[c]):
-                        X_apply[c] = df_target[c].fillna(df_target[c].median())
-                    else:
-                        enc = encs.get(c)
-                        if enc is not None:
-                            vals = df_target[c].astype(str).fillna("NA").values.reshape(-1,1)
-                            try:
-                                X_apply[c] = enc.transform(vals).ravel()
-                            except Exception:
-                                # unseen categories -> unknown code (-1)
-                                X_apply[c] = np.full(len(df_target), -1)
-                        else:
-                            X_apply[c] = np.full(len(df_target), -1)
-                try:
-                    preds = clf.predict(X_apply.fillna(0))
-                    # only fill where missing
-                    missing_mask = df_target[col].isna()
-                    df_target.loc[missing_mask, col] = preds[missing_mask.values]
-                except Exception:
-                    pass
+        
+        with ui.dialog() as dialog, ui.card().classes("p-6"):
+            ui.label("⚠️ Confirmation").style("font-weight:700; font-size:18px;")
+            ui.label("Appliquer les encodages sur tous les datasets ?").style("margin-top:8px;")
+            
+            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                ui.button("Annuler", on_click=dialog.close).props("flat")
+                
+                def confirm_and_next():
+                    try:
+                        params = state.get("encoding_params", {})
+                        
+                        # 1. FIT sur raw_df (train data)
+                        df_encoded, encoders = apply_encoding(
+                            df, 
+                            strategies, 
+                            params, 
+                            fit_on_train=True
+                        )
+                        state["raw_df"] = df_encoded
+                        state["fitted_encoders"] = encoders
+                        
+                        # 2. TRANSFORM sur splits avec encoders fitted
+                        if split:
+                            for key in ["X_train", "X_val", "X_test"]:
+                                if key in split and isinstance(split[key], pd.DataFrame):
+                                    split[key], _ = apply_encoding(
+                                        split[key], 
+                                        strategies, 
+                                        params, 
+                                        fit_on_train=False,
+                                        fitted_encoders=encoders
+                                    )
+                        
+                        ui.notify("✅ Encodages appliqués avec succès!", color="positive")
+                        dialog.close()
+                        ui.run_javascript("setTimeout(() => window.location.href='/supervised/distribution_transform', 1500);")
+                    
+                    except Exception as e:
+                        ui.notify(f"❌ Erreur : {str(e)}", color="negative")
+                        print(f"Erreur détaillée : {e}")
+                        import traceback
+                        traceback.print_exc()
+                
+                ui.button("Confirmer", on_click=confirm_and_next).style("background:#27ae60; color:white;")
+        
+        dialog.open()
+    
+    def apply_recommended():
+        """Applique automatiquement les recommandations"""
+        for col in cat_cols:
+            recommended, _ = get_recommended_encoding(col)
+            state.setdefault("encoding_strategy", {})[col] = recommended
+            
+            # Paramètres par défaut
+            params = {}
+            if recommended == "One-Hot Encoding":
+                params["drop_first"] = True
+            elif recommended == "Target Encoding":
+                params["smoothing"] = 10
+            elif recommended == "Ordinal Encoding":
+                is_ordinal, order = detect_ordinal(col)
+                if is_ordinal:
+                    params["order"] = order
+                else:
+                    params["order"] = list(df[col].unique())
+            
+            state.setdefault("encoding_params", {})[col] = params
+        
+        ui.notify("✅ Recommandations appliquées", color="positive")
+        table.update()
+    
+    # ---------- UI ----------
+    with ui.column().classes("w-full items-center p-8").style("background-color:#f5f6fa;"):
+        ui.label("ÉTAPE 3.7 : ENCODAGE DES FEATURES CATÉGORIELLES").style(
+            "font-weight:700; font-size:28px; color:#01335A; margin-bottom:10px;"
+        )
+        
+        ui.label("Convertir les features catégorielles en format numérique").style(
+            "font-size:16px; color:#636e72; margin-bottom:20px;"
+        )
+        
+        # Section A : Synthèse
+        with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
+            ui.label(f"🔤 Features Catégorielles : {len(cat_cols)}").style(
+                "font-weight:700; font-size:18px; color:#2c3e50;"
+            )
+            
+            if len(cat_cols) == 0:
+                ui.label("✅ Aucune feature catégorielle détectée - vous pouvez passer à l'étape suivante").style(
+                    "color:#27ae60; margin-top:12px;"
+                )
             else:
+                # Légende
+                with ui.row().classes("gap-4 mt-4").style("font-size:13px;"):
+                    ui.label("🔴 High cardinality (>50) : Éviter One-Hot").style("color:#e74c3c;")
+                    ui.label("🟡 Medium (10-50) : One-Hot ou alternatives").style("color:#f39c12;")
+                    ui.label("🟢 Low (<10) : One-Hot safe").style("color:#27ae60;")
+        
+        # Section B : Table des features
+        if len(cat_cols) > 0:
+            with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
+                ui.label("Configuration des encodages").style("font-weight:700; font-size:18px; color:#2c3e50;")
+                
+                rows = []
+                for col in cat_cols:
+                    n_unique = df[col].nunique()
+                    icon, level, _ = get_cardinality_level(n_unique)
+                    recommended, _ = get_recommended_encoding(col)
+                    current = state.get("encoding_strategy", {}).get(col, "")
+                    
+                    rows.append({
+                        "Feature": col,
+                        "Cardinalité": f"{n_unique} {icon}",
+                        "Niveau": level,
+                        "Recommandé": recommended,
+                        "Configuré": current or "-"
+                    })
+                
+                table = ui.table(
+                    columns=[
+                        {"name": "Feature", "label": "Feature", "field": "Feature"},
+                        {"name": "Cardinalité", "label": "Cardinalité", "field": "Cardinalité"},
+                        {"name": "Niveau", "label": "Niveau", "field": "Niveau"},
+                        {"name": "Recommandé", "label": "Recommandé", "field": "Recommandé"},
+                        {"name": "Configuré", "label": "Configuré", "field": "Configuré"}
+                    ],
+                    rows=rows,
+                    row_key="Feature"
+                ).style("width:100%;")
+                
+                ui.label("💡 Cliquez sur une ligne pour configurer l'encodage").style(
+                    "font-size:13px; color:#636e72; margin-top:8px;"
+                )
+                
+                def handle_row_click(e):
+                    if e and "row" in e and "Feature" in e["row"]:
+                        open_encoding_modal(e["row"]["Feature"])
+                
+                table.on("row:click", handle_row_click)
+                
+                # Boutons actions
+                with ui.row().classes("gap-2 mt-4"):
+                    ui.button(
+                        "✨ Appliquer recommandations",
+                        on_click=apply_recommended
+                    ).style("background:#3498db; color:white;")
+                    
+                    ui.button(
+                        "✅ Appliquer les encodages",
+                        on_click=apply_all_encodings
+                    ).style("background:#27ae60; color:white;")
+        
+        # Navigation
+        with ui.row().classes("w-full max-w-6xl justify-between mt-6"):
+            ui.button(
+                "⬅ Étape précédente",
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/missing_values'")
+            ).style("background:#95a5a6; color:white;")
+            
+            ui.button(
+                "➡ Étape suivante",
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/distribution_transform'")
+            ).style("background:#09538C; color:white;")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ----------------- PAGE 3.8 : TRANSFORMATIONS DE DISTRIBUTIONS -----------------
+from nicegui import ui
+import plotly.graph_objs as go
+from plotly.subplots import make_subplots
+import numpy as np
+import pandas as pd
+from scipy import stats
+from scipy.stats import boxcox, yeojohnson
+from sklearn.preprocessing import PowerTransformer
+import copy
+
+@ui.page('/supervised/distribution_transform')
+def distribution_transform_page():
+    """
+    Page complète pour les transformations de distributions
+    """
+    
+    # ---------- CONTEXTE ----------
+    df = state.get("raw_df", None)
+    split = state.get("split", None)
+    columns_exclude = state.get("columns_exclude", {}) or {}
+    target_col = state.get("target_column", None)
+    selected_algos = state.get("selected_algos", [])
+    
+    if df is None:
+        with ui.column().classes("items-center justify-center w-full h-screen"):
+            ui.label("❌ Aucun dataset chargé.").style("font-size:18px; color:#c0392b; font-weight:600;")
+            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/upload'"))
+        return
+    
+    # Préparer df_train
+    df_train = None
+    if split:
+        Xtr = split.get("X_train")
+        ytr = split.get("y_train")
+        if isinstance(Xtr, pd.DataFrame) and ytr is not None:
+            try:
+                df_train = Xtr.copy()
+                if target_col is not None:
+                    df_train[target_col] = ytr
+            except Exception:
+                df_train = None
+    if df_train is None:
+        df_train = df.copy()
+    
+    active_cols = [c for c in df.columns if not columns_exclude.get(c, False) and c != target_col]
+    
+    # Identifier les colonnes numériques
+    num_cols = [c for c in active_cols if pd.api.types.is_numeric_dtype(df[c])]
+    
+    state.setdefault("transform_strategy", {})
+    state.setdefault("transform_params", {})
+    state.setdefault("fitted_transformers", {})
+    
+    # ---------- HELPERS ----------
+    def calculate_skewness_kurtosis(col):
+        """Calcule skewness et kurtosis"""
+        data = df_train[col].dropna()
+        if len(data) < 3:
+            return 0, 0
+        skew = stats.skew(data)
+        kurt = stats.kurtosis(data)
+        return skew, kurt
+    
+    def get_skewness_level(skew):
+        """Retourne le niveau de skewness"""
+        abs_skew = abs(skew)
+        if abs_skew < 0.5:
+            return "🟢", "Normal", "green"
+        elif abs_skew < 1.5:
+            return "🟡", "Modéré", "orange"
+        else:
+            return "🔴", "Fort", "red"
+    
+    def get_recommended_transform(col):
+        """Recommande une transformation"""
+        skew, _ = calculate_skewness_kurtosis(col)
+        abs_skew = abs(skew)
+        
+        data = df_train[col].dropna()
+        has_zero = (data == 0).any()
+        has_negative = (data < 0).any()
+        
+        if abs_skew < 0.5:
+            return "Aucune", "Distribution acceptable"
+        elif abs_skew < 1.5:
+            if has_negative:
+                return "Yeo-Johnson", "Skew modéré + valeurs négatives"
+            else:
+                return "Square Root", "Skew modéré"
+        else:
+            if has_negative:
+                return "Yeo-Johnson", "Skew fort + valeurs négatives"
+            elif has_zero:
+                return "Log Transform", "Skew fort (+ constante pour zéros)"
+            else:
+                return "Box-Cox", "Skew fort"
+    
+    def apply_transform(data, method, params=None):
+        """Applique une transformation sur les données"""
+        if params is None:
+            params = {}
+        
+        data = data.copy()
+        data_clean = data[~np.isnan(data) & ~np.isinf(data)]
+        
+        if len(data_clean) == 0:
+            return data, None
+        
+        try:
+            if method == "Log Transform":
+                c = params.get("constant", 1)
+                transformed = np.log(data_clean + c)
+                return transformed, {"constant": c}
+            
+            elif method == "Square Root":
+                min_val = data_clean.min()
+                if min_val < 0:
+                    shift = abs(min_val) + 1
+                    transformed = np.sqrt(data_clean + shift)
+                    return transformed, {"shift": shift}
+                else:
+                    transformed = np.sqrt(data_clean)
+                    return transformed, {}
+            
+            elif method == "Box-Cox":
+                if (data_clean <= 0).any():
+                    return data_clean, None
+                transformed, lambda_param = boxcox(data_clean)
+                return transformed, {"lambda": lambda_param}
+            
+            elif method == "Yeo-Johnson":
+                transformed, lambda_param = yeojohnson(data_clean)
+                return transformed, {"lambda": lambda_param}
+            
+            else:  # Aucune
+                return data_clean, {}
+        
+        except Exception as e:
+            print(f"Erreur transformation: {e}")
+            return data_clean, None
+    
+    def calculate_algo_impact(col, skew):
+        """Calcule l'impact sur chaque algorithme"""
+        abs_skew = abs(skew)
+        impacts = {}
+        
+        # Gaussian Naive Bayes
+        if abs_skew < 0.5:
+            impacts["Gaussian NB"] = ("✅", "Distribution normale", "green")
+        elif abs_skew < 1.5:
+            impacts["Gaussian NB"] = ("🟡", "Assume normalité (légèrement violée)", "orange")
+        else:
+            impacts["Gaussian NB"] = ("🔴", "Assume normalité (fortement violée)", "red")
+        
+        # KNN
+        if abs_skew < 0.5:
+            impacts["KNN"] = ("✅", "Distances équilibrées", "green")
+        elif abs_skew < 1.5:
+            impacts["KNN"] = ("🟡", "Distances légèrement biaisées", "orange")
+        else:
+            impacts["KNN"] = ("🟡", "Distances biaisées vers extrêmes", "orange")
+        
+        # C4.5
+        impacts["C4.5"] = ("✅", "Robuste aux distributions", "green")
+        
+        return impacts
+    
+    def create_distribution_plot(col, transform_method="Aucune", params=None):
+        """Crée un plot avant/après transformation"""
+        data_original = df_train[col].dropna()
+        
+        if transform_method == "Aucune":
+            data_transformed = data_original
+            transform_params = {}
+        else:
+            data_transformed, transform_params = apply_transform(data_original.values, transform_method, params)
+            if data_transformed is None or transform_params is None:
+                data_transformed = data_original
+        
+        # Créer subplots
+        fig = make_subplots(
+            rows=2, cols=2,
+            subplot_titles=(
+                'Distribution Originale', 
+                f'Distribution Après {transform_method}',
+                'Q-Q Plot Original',
+                'Q-Q Plot Transformé'
+            ),
+            vertical_spacing=0.12,
+            horizontal_spacing=0.1
+        )
+        
+        # Histogram original
+        fig.add_trace(
+            go.Histogram(x=data_original, nbinsx=30, name="Original", marker_color='#3498db'),
+            row=1, col=1
+        )
+        
+        # Histogram transformé
+        fig.add_trace(
+            go.Histogram(x=data_transformed, nbinsx=30, name="Transformé", marker_color='#27ae60'),
+            row=1, col=2
+        )
+        
+        # Q-Q Plot original
+        qq_original = stats.probplot(data_original, dist="norm")
+        fig.add_trace(
+            go.Scatter(x=qq_original[0][0], y=qq_original[0][1], mode='markers', 
+                      name="Original", marker=dict(color='#3498db', size=4)),
+            row=2, col=1
+        )
+        fig.add_trace(
+            go.Scatter(x=qq_original[0][0], y=qq_original[0][0], mode='lines',
+                      name="Théorique", line=dict(color='red', dash='dash')),
+            row=2, col=1
+        )
+        
+        # Q-Q Plot transformé
+        qq_transformed = stats.probplot(data_transformed, dist="norm")
+        fig.add_trace(
+            go.Scatter(x=qq_transformed[0][0], y=qq_transformed[0][1], mode='markers',
+                      name="Transformé", marker=dict(color='#27ae60', size=4)),
+            row=2, col=2
+        )
+        fig.add_trace(
+            go.Scatter(x=qq_transformed[0][0], y=qq_transformed[0][0], mode='lines',
+                      name="Théorique", line=dict(color='red', dash='dash')),
+            row=2, col=2
+        )
+        
+        # Calculs skewness
+        skew_original = stats.skew(data_original)
+        skew_transformed = stats.skew(data_transformed)
+        
+        fig.update_layout(
+            height=600,
+            showlegend=False,
+            title_text=f"<b>{col}</b> - Skew Original: {skew_original:.2f} → Transformé: {skew_transformed:.2f}"
+        )
+        
+        fig.update_xaxes(title_text="Valeur", row=1, col=1)
+        fig.update_xaxes(title_text="Valeur", row=1, col=2)
+        fig.update_xaxes(title_text="Quantiles théoriques", row=2, col=1)
+        fig.update_xaxes(title_text="Quantiles théoriques", row=2, col=2)
+        
+        fig.update_yaxes(title_text="Fréquence", row=1, col=1)
+        fig.update_yaxes(title_text="Fréquence", row=1, col=2)
+        fig.update_yaxes(title_text="Quantiles observés", row=2, col=1)
+        fig.update_yaxes(title_text="Quantiles observés", row=2, col=2)
+        
+        return fig, skew_transformed, transform_params
+    
+    def open_transform_modal(col_name):
+        """Ouvre un modal pour configurer la transformation d'une colonne"""
+        current_method = state.get("transform_strategy", {}).get(col_name, "")
+        current_params = state.get("transform_params", {}).get(col_name, {})
+        
+        skew, kurt = calculate_skewness_kurtosis(col_name)
+        recommended, reason = get_recommended_transform(col_name)
+        impacts = calculate_algo_impact(col_name, skew)
+        
+        data = df_train[col_name].dropna()
+        has_zero = (data == 0).any()
+        has_negative = (data < 0).any()
+        
+        with ui.dialog() as dialog, ui.card().classes("w-full max-w-6xl p-6").style("max-height:90vh; overflow-y:auto;"):
+            ui.label(f"Transformation : {col_name}").style("font-weight:700; font-size:20px; color:#01335A;")
+            
+            # Infos distribution
+            with ui.card().classes("w-full p-4 mb-4").style("background:#f8f9fa;"):
+                with ui.row().classes("gap-6"):
+                    with ui.column():
+                        ui.label(f"Skewness : {skew:.2f}").style("font-weight:600;")
+                        icon, level, color = get_skewness_level(skew)
+                        ui.label(f"{icon} {level}").style(f"color:{color}; font-weight:600;")
+                    
+                    with ui.column():
+                        ui.label(f"Kurtosis : {kurt:.2f}").style("font-weight:600;")
+                    
+                    with ui.column():
+                        if has_negative:
+                            ui.label("⚠️ Contient valeurs négatives").style("color:#e74c3c; font-weight:600;")
+                        elif has_zero:
+                            ui.label("⚠️ Contient zéros").style("color:#f39c12; font-weight:600;")
+                        else:
+                            ui.label("✅ Toutes valeurs > 0").style("color:#27ae60; font-weight:600;")
+            
+            # Impact algorithmes
+            if selected_algos:
+                with ui.card().classes("w-full p-4 mb-4").style("background:#fff3cd;"):
+                    ui.label("Impact sur vos algorithmes :").style("font-weight:700; margin-bottom:8px;")
+                    for algo in selected_algos:
+                        if algo in impacts:
+                            icon, msg, color = impacts[algo]
+                            ui.label(f"{icon} {algo} : {msg}").style(f"color:{color}; font-size:14px;")
+            
+            # Recommandation
+            with ui.card().classes("w-full p-4 mb-4").style("background:#e8f5e9;"):
+                ui.label(f"💡 Recommandation : {recommended}").style("font-weight:600; color:#27ae60;")
+                ui.label(reason).style("font-size:13px; color:#2c3e50;")
+            
+            # Sélection transformation
+            transform_select = ui.select(
+                options=[
+                    "Log Transform",
+                    "Square Root",
+                    "Box-Cox",
+                    "Yeo-Johnson",
+                    "Aucune"
+                ],
+                value=current_method or recommended,
+                label="Transformation"
+            ).classes("w-full mb-4")
+            
+            # Zone paramètres
+            params_container = ui.column().classes("w-full mb-4")
+            
+            # Zone preview
+            preview_container = ui.column().classes("w-full")
+            
+            constant_input = None
+            
+            def update_params_and_preview():
+                nonlocal constant_input
+                params_container.clear()
+                preview_container.clear()
+                
+                method = transform_select.value
+                
+                with params_container:
+                    if method == "Log Transform":
+                        ui.markdown("""
+**📌 Log Transform : log(x + c)**
+
+✅ Avantages :
+- Réduit skewness fort
+- Compresse valeurs extrêmes
+
+❌ Limites :
+- Nécessite valeurs > 0 (ajout +1 si zéros)
+- Interprétabilité réduite
+                        """).classes("p-4").style("background:#f8f9fa; border-radius:8px;")
+                        
+                        constant_input = ui.number(
+                            label="Constante c (pour gérer zéros)",
+                            value=current_params.get("constant", 1),
+                            min=0,
+                            max=10,
+                            step=0.1
+                        ).classes("w-full")
+                    
+                    elif method == "Square Root":
+                        ui.markdown("""
+**📌 Square Root : sqrt(x)**
+
+✅ Pour skewness modéré (0.5-1.5)
+- Plus douce que log
+- Préserve mieux les relations
+                        """).classes("p-4").style("background:#f8f9fa; border-radius:8px;")
+                    
+                    elif method == "Box-Cox":
+                        ui.markdown("""
+**📌 Box-Cox Transform (automatique)**
+
+Trouve meilleur λ pour normaliser
+
+⚠️ Nécessite valeurs strictement > 0
+
+λ optimal sera calculé automatiquement
+                        """).classes("p-4").style("background:#f8f9fa; border-radius:8px;")
+                        
+                        if has_zero or has_negative:
+                            ui.label("❌ Box-Cox impossible (zéros ou valeurs négatives)").style(
+                                "color:#e74c3c; font-weight:600; margin-top:8px;"
+                            )
+                    
+                    elif method == "Yeo-Johnson":
+                        ui.markdown("""
+**📌 Yeo-Johnson (Box-Cox généralisé)**
+
+✅ Gère valeurs négatives et zéros
+
+λ optimal sera calculé automatiquement
+                        """).classes("p-4").style("background:#f8f9fa; border-radius:8px;")
+                    
+                    elif method == "Aucune":
+                        ui.markdown("""
+**📌 Aucune transformation**
+
+Garder distribution originale
+
+Recommandé si : C4.5 uniquement ou distribution déjà normale
+                        """).classes("p-4").style("background:#f8f9fa; border-radius:8px;")
+                
+                # Preview
+                with preview_container:
+                    ui.label("Aperçu Avant/Après").style("font-weight:700; font-size:16px; margin-bottom:12px;")
+                    
+                    params = {}
+                    if method == "Log Transform" and constant_input:
+                        params["constant"] = constant_input.value
+                    
+                    fig, skew_after, _ = create_distribution_plot(col_name, method, params)
+                    ui.plotly(fig).classes("w-full")
+                    
+                    icon_after, level_after, color_after = get_skewness_level(skew_after)
+                    ui.label(f"Skewness après transformation : {skew_after:.2f} {icon_after} {level_after}").style(
+                        f"color:{color_after}; font-weight:600; font-size:14px; margin-top:8px;"
+                    )
+            
+            transform_select.on_value_change(lambda: update_params_and_preview())
+            if constant_input:
+                constant_input.on_value_change(lambda: update_params_and_preview())
+            
+            update_params_and_preview()
+            
+            # Boutons
+            with ui.row().classes("w-full justify-end gap-2 mt-6"):
+                ui.button("Annuler", on_click=dialog.close).props("flat")
+                
+                def save_transform():
+                    method = transform_select.value
+                    params = {}
+                    
+                    if method == "Log Transform" and constant_input:
+                        params["constant"] = constant_input.value
+                    
+                    state.setdefault("transform_strategy", {})[col_name] = method
+                    state.setdefault("transform_params", {})[col_name] = params
+                    
+                    ui.notify(f"✅ Transformation configurée pour {col_name}", color="positive")
+                    dialog.close()
+                    table.update()
+                
+                ui.button("Sauvegarder", on_click=save_transform).style("background:#27ae60; color:white;")
+        
+        dialog.open()
+    
+    def apply_all_transforms():
+        """Applique toutes les transformations"""
+        strategies = state.get("transform_strategy", {})
+        
+        if not strategies:
+            ui.notify("⚠️ Aucune transformation configurée", color="warning")
+            return
+        
+        with ui.dialog() as dialog, ui.card().classes("p-6"):
+            ui.label("⚠️ Confirmation").style("font-weight:700; font-size:18px;")
+            ui.label("Appliquer les transformations sur tous les datasets ?").style("margin-top:8px;")
+            
+            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                ui.button("Annuler", on_click=dialog.close).props("flat")
+                
+                def confirm_and_next():
+                    try:
+                        params = state.get("transform_params", {})
+                        transformers = {}
+                        
+                        # Application sur raw_df
+                        df_transformed = df.copy()
+                        for col, method in strategies.items():
+                            if method != "Aucune" and col in df_transformed.columns:
+                                col_params = params.get(col, {})
+                                transformed_data, transform_info = apply_transform(
+                                    df_transformed[col].values, 
+                                    method, 
+                                    col_params
+                                )
+                                if transformed_data is not None and transform_info is not None:
+                                    df_transformed[col] = transformed_data
+                                    transformers[col] = {"method": method, "params": transform_info}
+                        
+                        state["raw_df"] = df_transformed
+                        state["fitted_transformers"] = transformers
+                        
+                        # Application sur splits
+                        if split:
+                            for key in ["X_train", "X_val", "X_test"]:
+                                if key in split and isinstance(split[key], pd.DataFrame):
+                                    df_split = split[key].copy()
+                                    for col, method in strategies.items():
+                                        if method != "Aucune" and col in df_split.columns:
+                                            col_params = transformers.get(col, {}).get("params", {})
+                                            transformed_data, _ = apply_transform(
+                                                df_split[col].values,
+                                                method,
+                                                col_params
+                                            )
+                                            if transformed_data is not None:
+                                                df_split[col] = transformed_data
+                                    split[key] = df_split
+                        
+                        ui.notify("✅ Transformations appliquées avec succès!", color="positive")
+                        dialog.close()
+                        ui.run_javascript("setTimeout(() => window.location.href='/supervised/scaling', 1500);")
+                    
+                    except Exception as e:
+                        ui.notify(f"❌ Erreur : {str(e)}", color="negative")
+                        print(f"Erreur détaillée : {e}")
+                        import traceback
+                        traceback.print_exc()
+                
+                ui.button("Confirmer", on_click=confirm_and_next).style("background:#27ae60; color:white;")
+        
+        dialog.open()
+    
+    def apply_recommended():
+        """Applique automatiquement les recommandations"""
+        for col in num_cols:
+            skew, _ = calculate_skewness_kurtosis(col)
+            if abs(skew) >= 0.5:  # Seulement si nécessaire
+                recommended, _ = get_recommended_transform(col)
+                state.setdefault("transform_strategy", {})[col] = recommended
+                
+                params = {}
+                if recommended == "Log Transform":
+                    data = df_train[col].dropna()
+                    if (data == 0).any():
+                        params["constant"] = 1
+                
+                state.setdefault("transform_params", {})[col] = params
+        
+        ui.notify("✅ Recommandations appliquées", color="positive")
+        table.update()
+    
+    # ---------- UI ----------
+    with ui.column().classes("w-full items-center p-8").style("background-color:#f5f6fa;"):
+        ui.label("ÉTAPE 3.8 : TRANSFORMATIONS DE DISTRIBUTIONS").style(
+            "font-weight:700; font-size:28px; color:#01335A; margin-bottom:10px;"
+        )
+        
+        ui.label("Normaliser les distributions asymétriques (Log, Box-Cox...)").style(
+            "font-size:16px; color:#636e72; margin-bottom:20px;"
+        )
+        
+        # Section : Synthèse
+        with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
+            ui.label("📊 Features avec Distributions Asymétriques").style(
+                "font-weight:700; font-size:18px; color:#2c3e50;"
+            )
+            
+            skewed_cols = []
+            for col in num_cols:
+                skew, _ = calculate_skewness_kurtosis(col)
+                if abs(skew) >= 0.5:
+                    skewed_cols.append(col)
+            
+            if len(skewed_cols) == 0:
+                ui.label("✅ Aucune feature nécessitant transformation - vous pouvez passer à l'étape suivante").style(
+                    "color:#27ae60; margin-top:12px;"
+                )
+            else:
+                # Légende
+                with ui.row().classes("gap-4 mt-4").style("font-size:13px;"):
+                    ui.label("🔴 Skew > 1.5 : Transformation fortement recommandée").style("color:#e74c3c;")
+                    ui.label("🟡 Skew 0.5-1.5 : Transformation optionnelle").style("color:#f39c12;")
+                    ui.label("🟢 Skew < 0.5 : Distribution acceptable").style("color:#27ae60;")
+        
+        # Section : Table des features
+        if len(num_cols) > 0:
+            with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
+                ui.label("Configuration des transformations").style("font-weight:700; font-size:18px; color:#2c3e50;")
+                
+                rows = []
+                for col in num_cols:
+                    skew, kurt = calculate_skewness_kurtosis(col)
+                    icon, level, _ = get_skewness_level(skew)
+                    recommended, _ = get_recommended_transform(col)
+                    current = state.get("transform_strategy", {}).get(col, "")
+                    
+                    rows.append({
+                        "Feature": col,
+                        "Skewness": f"{skew:.2f} {icon}",
+                        "Kurtosis": f"{kurt:.2f}",
+                        "Niveau": level,
+                        "Recommandé": recommended,
+                        "Configuré": current or "-"
+                    })
+                
+                table = ui.table(
+                    columns=[
+                        {"name": "Feature", "label": "Feature", "field": "Feature"},
+                        {"name": "Skewness", "label": "Skewness", "field": "Skewness"},
+                        {"name": "Kurtosis", "label": "Kurtosis", "field": "Kurtosis"},
+                        {"name": "Niveau", "label": "Niveau", "field": "Niveau"},
+                        {"name": "Recommandé", "label": "Recommandé", "field": "Recommandé"},
+                        {"name": "Configuré", "label": "Configuré", "field": "Configuré"}
+                    ],
+                    rows=rows,
+                    row_key="Feature"
+                ).style("width:100%;")
+                
+                ui.label("💡 Cliquez sur une ligne pour configurer la transformation").style(
+                    "font-size:13px; color:#636e72; margin-top:8px;"
+                )
+                
+                def handle_row_click(e):
+                    if e and "row" in e and "Feature" in e["row"]:
+                        open_transform_modal(e["row"]["Feature"])
+                
+                table.on("row:click", handle_row_click)
+                
+                # Recommandations par algo
+                if selected_algos:
+                    with ui.card().classes("w-full p-4 mt-4").style("background:#e8f5e9;"):
+                        ui.label("💡 Pour vos algorithmes :").style("font-weight:700; margin-bottom:8px;")
+                        
+                        if "Gaussian Naive Bayes" in selected_algos:
+                            ui.label("Gaussian Naive Bayes : Transformation CRITIQUE pour features avec skew > 1").style(
+                                "font-size:13px; color:#2c3e50;"
+                            )
+                        
+                        if "KNN" in selected_algos:
+                            ui.label("KNN : Transformation utile (stabilise distances) - Moins critique que pour NB").style(
+                                "font-size:13px; color:#2c3e50;"
+                            )
+                        
+                        if "C4.5" in selected_algos:
+                            ui.label("C4.5 : Transformation optionnelle (robuste aux skew)").style(
+                                "font-size:13px; color:#2c3e50;"
+                            )
+                
+                # Boutons actions
+                with ui.row().classes("gap-2 mt-4"):
+                    ui.button(
+                        "✨ Appliquer recommandations",
+                        on_click=apply_recommended
+                    ).style("background:#3498db; color:white;")
+                    
+                    ui.button(
+                        "✅ Appliquer les transformations",
+                        on_click=apply_all_transforms
+                    ).style("background:#27ae60; color:white;")
+        
+        # Navigation
+        with ui.row().classes("w-full max-w-6xl justify-between mt-6"):
+            ui.button(
+                "⬅ Étape précédente",
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/distribution_transform'")
+            ).style("background:#95a5a6; color:white;")
+            
+            ui.button(
+                "➡ Étape suivante",
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/scaling'")
+            ).style("background:#09538C; color:white;")
+
+
+
+
+
+# ----------------- PAGE 3.9 : FEATURE SCALING -----------------
+from nicegui import ui
+import plotly.graph_objs as go
+from plotly.subplots import make_subplots
+import numpy as np
+import pandas as pd
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler, MaxAbsScaler
+import copy
+
+@ui.page('/supervised/scaling')
+def feature_scaling_page():
+    """
+    Page complète pour le Feature Scaling - VERSION FINALE CORRIGÉE
+    """
+    import pandas as pd
+    import numpy as np
+    from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler, MaxAbsScaler
+    
+    # ---------- CONTEXTE ----------
+    df = state.get("raw_df", None)
+    if df is None:
+        with ui.column().classes("items-center justify-center w-full h-screen"):
+            ui.label("❌ Aucun dataset chargé.").style("font-size:18px; color:#c0392b; font-weight:600;")
+            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/upload'"))
+        return
+    
+    df_train = df.copy()
+    target_col = state.get("target_column", None)
+    columns_exclude = state.get("columns_exclude", {}) or {}
+    selected_algos = state.get("selected_algos", [])
+    
+    active_cols = [c for c in df.columns if not columns_exclude.get(c, False) and c != target_col]
+    num_cols = [c for c in active_cols if pd.api.types.is_numeric_dtype(df[c])]
+    
+    # ---------- FONCTIONS ----------
+    def detect_outliers(col):
+        try:
+            data = df_train[col].dropna()
+            if len(data) < 4:
+                return False
+            Q1, Q3 = data.quantile([0.25, 0.75])
+            IQR = Q3 - Q1
+            outliers = ((data < (Q1 - 1.5*IQR)) | (data > (Q3 + 1.5*IQR))).sum()
+            return outliers > len(data) * 0.05
+        except:
+            return False
+    
+    def analyze_features():
+        features = []
+        for col in num_cols[:8]:
+            try:
+                data = df_train[col].dropna()
+                if len(data) == 0:
+                    continue
+                features.append({
+                    "name": str(col)[:8],
+                    "range": float(data.max() - data.min()),
+                    "outliers": detect_outliers(col)
+                })
+            except:
                 continue
-
-    def serialize_fitted_imputers(fitted: dict):
-        """
-        Serialize fitted imputers to a light-weight dict for storage in state.
-        We cannot serialize sklearn objects reliably across sessions, but we record
-        the methods and params so the UI indicates what was fitted.
-        """
-        serial = {}
-        for col, info in fitted.items():
-            serial[col] = {"method": info.get("method"), "create_indicator": info.get("create_indicator"), "params": info.get("params", {})}
-        return serial
-
-# ----------------- END PAGE -----------------
+        return features
+    
+    def get_recommendation():
+        features = analyze_features()
+        has_hetero = any(f["range"] > 1000 for f in features)
+        has_outliers = any(f["outliers"] for f in features)
+        if not has_hetero:
+            return "none"
+        if has_outliers:
+            return "robust"
+        return "standard"
+    
+    def apply_scaling(method):
+        scalers = {
+            "standard": StandardScaler(),
+            "minmax": MinMaxScaler(),
+            "robust": RobustScaler(),
+            "maxabs": MaxAbsScaler()
+        }
+        
+        if method not in scalers:
+            ui.notify("⚠️ Méthode invalide", color="warning")
+            return
+        
+        with ui.dialog() as dialog, ui.card().classes("p-6"):
+            ui.label("⚠️ Confirmer l'application").style("font-weight:700; font-size:18px;")
+            ui.label(f"Appliquer **{method.upper()}** sur toutes les features numériques ?").style("margin-top:8px;")
+            
+            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                ui.button("❌ Annuler", on_click=dialog.close).props("flat")
+                
+                def do_apply():
+                    try:
+                        scaler = scalers[method]
+                        df_new = df.copy()
+                        for col in num_cols:
+                            df_new[col] = scaler.fit_transform(df_new[[col]]).flatten()
+                        state["raw_df"] = df_new
+                        state["scaling_method"] = method
+                        ui.notify("✅ Scaling appliqué avec succès !", color="positive")
+                        dialog.close()
+                        ui.run_javascript("setTimeout(() => window.location.href='/supervised/next_step', 1000);")
+                    except Exception as e:
+                        ui.notify(f"❌ Erreur: {str(e)}", color="negative")
+                        print(f"Erreur scaling: {e}")
+                
+                ui.button("✅ Confirmer", on_click=do_apply).style("background:#27ae60; color:white; font-weight:600;")
+        dialog.open()
+    
+    # ---------- ANALYSE ----------
+    features_info = analyze_features()
+    recommended = get_recommendation()
+    
+    # ---------- INTERFACE ----------
+    with ui.column().classes("w-full items-center p-8").style("background-color:#f8f9fa; min-height:100vh;"):
+        # Header
+        ui.label("🚀 ÉTAPE 3.9 : FEATURE SCALING").style(
+            "font-weight:700; font-size:32px; color:#2c3e50; margin-bottom:8px; text-align:center;"
+        )
+        ui.label("Normalisation/Standardisation des features").style(
+            "font-size:18px; color:#7f8c8d; margin-bottom:32px; text-align:center;"
+        )
+        
+        # Objectif
+        with ui.card().classes("w-full max-w-5xl p-6 mb-8").style("background:#e3f2fd; border-left:5px solid #2196f3;"):
+            ui.label("🎯 Objectif principal").style("font-weight:700; font-size:18px; color:#1976d2; margin-bottom:12px;")
+            with ui.column().classes("gap-2"):
+                ui.label("🔴 **CRITIQUE** pour KNN - distances biaisées par les échelles").style("font-size:14px;")
+                ui.label("✅ **Inutile** pour C4.5 - arbres de décision insensibles").style("font-size:14px;")
+                ui.label("🟡 **Optionnel** pour Gaussian Naive Bayes").style("font-size:14px;")
+        
+        # Analyse des features
+        with ui.card().classes("w-full max-w-6xl p-6 mb-8"):
+            ui.label("📊 Analyse automatique des features").style(
+                "font-weight:700; font-size:20px; color:#2c3e50; margin-bottom:16px;"
+            )
+            
+            if features_info:
+                table_html = """<pre style="background:#1a1a1a; color:#00ff88; font-family:monospace; font-size:13px; padding:20px; border-radius:12px; margin:0; line-height:1.4; text-align:left;">"""
+                table_html += "┌──────────────────────────────┐\n"
+                table_html += "│ Feature      │ Range       │ Outliers │\n"
+                table_html += "├──────────────┼─────────────┼──────────┤"
+                for f in features_info:
+                    out = "🔴" if f["outliers"] else "🟢"
+                    table_html += f"\n│ {f['name']:<12} │ {f['range']:<11.0f} │ {out:<8} │"
+                table_html += "\n└──────────────┴─────────────┴──────────┘</pre>"
+                ui.html(table_html, sanitize=False)
+            else:
+                with ui.column().classes("items-center p-8"):
+                    ui.label("❌ Aucune feature numérique détectée").style("color:#e74c3c; font-size:16px; font-weight:600;")
+                    ui.label("Vérifiez vos données ou colonnes exclues").style("color:#7f8c8d; font-size:14px;")
+        
+        # Sélecteur de méthode
+        with ui.card().classes("w-full max-w-4xl p-8 mb-8").style("border:3px solid #e0e0e0; border-radius:16px; box-shadow:0 4px 12px rgba(0,0,0,0.1);"):
+            ui.label("⚙️ Choisir la méthode de scaling").style(
+                "font-weight:700; font-size:22px; color:#2c3e50; margin-bottom:24px; text-align:center;"
+            )
+            
+            # ✅ ui.select() - AUCUNE ERREUR POSSIBLE
+# Configuration du select sans valeur par défaut initiale
+            method_select = ui.select(
+                label="Sélectionnez une méthode",
+                options={
+                    "standard": "📊 StandardScaler (Z-score, mean=0, std=1)",
+                    "minmax": "📏 MinMaxScaler (normalise [0,1])",
+                    "robust": "🛡️ RobustScaler (robuste aux outliers)",
+                    "maxabs": "📐 MaxAbsScaler (sparse data, [-1,1])",
+                    "none": "⏭️ Aucun scaling (raw data)"
+                }
+            ).props("dense outlined").classes("w-full").style("max-width:500px; margin:0 auto 20px;")
+            
+            # Définir la valeur après création
+            method_select.value = "standard"        
+        # Recommandation intelligente
+        with ui.card().classes("w-full max-w-5xl p-8 mb-12").style(
+            "background:linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%); "
+            "border:4px solid #4caf50; border-radius:20px; box-shadow:0 8px 24px rgba(76,175,80,0.3);"
+        ):
+            method_names = {
+                "standard": "StandardScaler",
+                "minmax": "MinMaxScaler", 
+                "robust": "RobustScaler",
+                "maxabs": "MaxAbsScaler",
+                "none": "Aucun scaling"
+            }
+            
+            ui.label("🤖 RECOMMANDATION INTELLIGENTE").style(
+                "font-weight:800; font-size:24px; color:#1b5e20; text-align:center; margin-bottom:20px;"
+            )
+            
+            ui.label(f"**{method_names[recommended]}**").style(
+                "font-weight:700; font-size:28px; color:#2e7d32; text-align:center; margin-bottom:16px;"
+            )
+            
+            with ui.row().classes("w-full justify-center gap-6"):
+                ui.button(
+                    "🚀 Appliquer la recommandation",
+                    on_click=lambda: (
+                        method_select.set_value(recommended),
+                        apply_scaling(recommended)
+                    )
+                ).style(
+                    "background:linear-gradient(135deg, #4caf50 0%, #45a049 100%); "
+                    "color:white; font-weight:700; height:56px; padding:0 40px; border-radius:12px;"
+                )
+        
+        # Navigation
+        with ui.row().classes("w-full max-w-5xl justify-between mt-16"):
+            ui.button(
+                "⬅ Étape précédente",
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/distribution_transform'")
+            ).style(
+                "background:#95a5a6; color:white; font-weight:600; "
+                "height:60px; width:260px; border-radius:16px; font-size:16px;"
+            )
+            
+            ui.button(
+                "✅ Appliquer & Continuer",
+                on_click=lambda: apply_scaling(method_select.value)
+            ).style(
+                "background:linear-gradient(135deg, #2c3e50 0%, #34495e 100%); "
+                "color:white; font-weight:700; height:60px; width:320px; "
+                "border-radius:16px; font-size:16px;"
+            )
 
 
 
