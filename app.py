@@ -3399,11 +3399,13 @@ import copy
 @ui.page('/supervised/scaling')
 def feature_scaling_page():
     """
-    Page complète pour le Feature Scaling - VERSION FINALE CORRIGÉE
+    Page complète pour le Feature Scaling avec détection intelligente des variables continues
     """
     import pandas as pd
     import numpy as np
     from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler, MaxAbsScaler
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
     
     # ---------- CONTEXTE ----------
     df = state.get("raw_df", None)
@@ -3419,7 +3421,40 @@ def feature_scaling_page():
     selected_algos = state.get("selected_algos", [])
     
     active_cols = [c for c in df.columns if not columns_exclude.get(c, False) and c != target_col]
-    num_cols = [c for c in active_cols if pd.api.types.is_numeric_dtype(df[c])]
+    
+    # ---------- DÉTECTION INTELLIGENTE DES VARIABLES CONTINUES ----------
+    def detect_continuous_features(df, columns):
+        """
+        Détecte les vraies variables continues (exclut les catégorielles encodées)
+        """
+        continuous = []
+        categorical_encoded = []
+        
+        for col in columns:
+            if not pd.api.types.is_numeric_dtype(df[col]):
+                continue
+            
+            unique_values = df[col].nunique()
+            data = df[col].dropna()
+            
+            if len(data) == 0:
+                continue
+            
+            # Critères pour identifier une variable catégorielle encodée
+            is_binary = unique_values == 2
+            is_small_discrete = unique_values <= 10
+            all_integers = all(data == data.astype(int))
+            small_range = (data.max() - data.min()) < 10
+            
+            # Si c'est binaire (0/1) ou petit nombre de valeurs discrètes → catégorielle
+            if is_binary or (is_small_discrete and all_integers and small_range):
+                categorical_encoded.append(col)
+            else:
+                continuous.append(col)
+        
+        return continuous, categorical_encoded
+    
+    num_cols, cat_encoded = detect_continuous_features(df_train, active_cols)
     
     # ---------- FONCTIONS ----------
     def detect_outliers(col):
@@ -3436,14 +3471,18 @@ def feature_scaling_page():
     
     def analyze_features():
         features = []
-        for col in num_cols[:8]:
+        for col in num_cols[:10]:
             try:
                 data = df_train[col].dropna()
                 if len(data) == 0:
                     continue
                 features.append({
-                    "name": str(col)[:8],
+                    "name": str(col),
                     "range": float(data.max() - data.min()),
+                    "mean": float(data.mean()),
+                    "std": float(data.std()),
+                    "min": float(data.min()),
+                    "max": float(data.max()),
                     "outliers": detect_outliers(col)
                 })
             except:
@@ -3452,13 +3491,106 @@ def feature_scaling_page():
     
     def get_recommendation():
         features = analyze_features()
+        if not features:
+            return "none"
+        
         has_hetero = any(f["range"] > 1000 for f in features)
         has_outliers = any(f["outliers"] for f in features)
+        
         if not has_hetero:
             return "none"
         if has_outliers:
             return "robust"
         return "standard"
+    
+    def create_comparison_plot(method):
+        """Crée un graphique comparatif AVANT/APRÈS scaling"""
+        if method == "none" or not num_cols:
+            return None
+        
+        scalers = {
+            "standard": StandardScaler(),
+            "minmax": MinMaxScaler(),
+            "robust": RobustScaler(),
+            "maxabs": MaxAbsScaler()
+        }
+        
+        if method not in scalers:
+            return None
+        
+        # Sélectionner jusqu'à 4 features continues pour visualisation
+        cols_to_show = num_cols[:4]
+        
+        if not cols_to_show:
+            return None
+        
+        # Créer subplots
+        fig = make_subplots(
+            rows=2, cols=len(cols_to_show),
+            subplot_titles=[f"{col}" for col in cols_to_show] + [f"{col} (Scaled)" for col in cols_to_show],
+            vertical_spacing=0.12,
+            horizontal_spacing=0.08
+        )
+        
+        scaler = scalers[method]
+        
+        for idx, col in enumerate(cols_to_show):
+            try:
+                # Données originales
+                original_data = df_train[col].dropna()
+                
+                # Données scalées
+                scaled_data = scaler.fit_transform(df_train[[col]]).flatten()
+                
+                # AVANT (ligne 1)
+                fig.add_trace(
+                    go.Box(
+                        y=original_data,
+                        name="Original",
+                        marker_color='#e74c3c',
+                        showlegend=(idx == 0)
+                    ),
+                    row=1, col=idx+1
+                )
+                
+                # APRÈS (ligne 2)
+                fig.add_trace(
+                    go.Box(
+                        y=scaled_data,
+                        name="Scaled",
+                        marker_color='#27ae60',
+                        showlegend=(idx == 0)
+                    ),
+                    row=2, col=idx+1
+                )
+                
+            except Exception as e:
+                print(f"Erreur visualisation {col}: {e}")
+                continue
+        
+        fig.update_layout(
+            height=600,
+            showlegend=True,
+            title_text=f"📊 Comparaison AVANT/APRÈS - {method.upper()}",
+            title_font_size=20,
+            title_x=0.5,
+            paper_bgcolor='#f8f9fa',
+            plot_bgcolor='white'
+        )
+        
+        return fig
+    
+    def preview_scaling(method):
+        """Prévisualise le scaling sans l'appliquer"""
+        fig = create_comparison_plot(method)
+        if fig:
+            plot_container.clear()
+            with plot_container:
+                ui.plotly(fig).classes("w-full")
+        else:
+            plot_container.clear()
+            with plot_container:
+                ui.label("⚠️ Aucune visualisation disponible").style("color:#e67e22; font-size:16px;")
     
     def apply_scaling(method):
         scalers = {
@@ -3468,13 +3600,24 @@ def feature_scaling_page():
             "maxabs": MaxAbsScaler()
         }
         
+        if method == "none":
+            state["scaling_method"] = "none"
+            ui.notify("✅ Aucun scaling appliqué", color="positive")
+            ui.run_javascript("setTimeout(() => window.location.href='/supervised/dimension_reduction', 1000);")
+            return
+        
         if method not in scalers:
             ui.notify("⚠️ Méthode invalide", color="warning")
             return
         
         with ui.dialog() as dialog, ui.card().classes("p-6"):
             ui.label("⚠️ Confirmer l'application").style("font-weight:700; font-size:18px;")
-            ui.label(f"Appliquer **{method.upper()}** sur toutes les features numériques ?").style("margin-top:8px;")
+            ui.label(f"Appliquer **{method.upper()}** sur {len(num_cols)} features continues ?").style("margin-top:8px;")
+            
+            if cat_encoded:
+                ui.label(f"⚠️ {len(cat_encoded)} variables catégorielles seront préservées").style(
+                    "margin-top:8px; color:#e67e22; font-size:13px;"
+                )
             
             with ui.row().classes("w-full justify-end gap-2 mt-4"):
                 ui.button("❌ Annuler", on_click=dialog.close).props("flat")
@@ -3483,13 +3626,19 @@ def feature_scaling_page():
                     try:
                         scaler = scalers[method]
                         df_new = df.copy()
+                        
+                        # Scaler UNIQUEMENT les variables continues
                         for col in num_cols:
                             df_new[col] = scaler.fit_transform(df_new[[col]]).flatten()
+                        
                         state["raw_df"] = df_new
                         state["scaling_method"] = method
-                        ui.notify("✅ Scaling appliqué avec succès !", color="positive")
+                        state["scaled_columns"] = num_cols
+                        state["categorical_encoded"] = cat_encoded
+                        
+                        ui.notify(f"✅ Scaling appliqué sur {len(num_cols)} features continues !", color="positive")
                         dialog.close()
-                        ui.run_javascript("setTimeout(() => window.location.href='/supervised/next_step', 1000);")
+                        ui.run_javascript("setTimeout(() => window.location.href='/supervised/dimension_reduction', 1000);")
                     except Exception as e:
                         ui.notify(f"❌ Erreur: {str(e)}", color="negative")
                         print(f"Erreur scaling: {e}")
@@ -3507,47 +3656,100 @@ def feature_scaling_page():
         ui.label("🚀 ÉTAPE 3.9 : FEATURE SCALING").style(
             "font-weight:700; font-size:32px; color:#2c3e50; margin-bottom:8px; text-align:center;"
         )
-        ui.label("Normalisation/Standardisation des features").style(
+        ui.label("Normalisation/Standardisation des features continues").style(
             "font-size:18px; color:#7f8c8d; margin-bottom:32px; text-align:center;"
         )
         
-        # Objectif
-        with ui.card().classes("w-full max-w-5xl p-6 mb-8").style("background:#e3f2fd; border-left:5px solid #2196f3;"):
-            ui.label("🎯 Objectif principal").style("font-weight:700; font-size:18px; color:#1976d2; margin-bottom:12px;")
-            with ui.column().classes("gap-2"):
-                ui.label("🔴 **CRITIQUE** pour KNN - distances biaisées par les échelles").style("font-size:14px;")
-                ui.label("✅ **Inutile** pour C4.5 - arbres de décision insensibles").style("font-size:14px;")
-                ui.label("🟡 **Optionnel** pour Gaussian Naive Bayes").style("font-size:14px;")
+        # Info détection intelligente
+        with ui.card().classes("w-full max-w-6xl p-6 mb-8").style("background:#fff3cd; border-left:5px solid #ffc107;"):
+            ui.label("🔍 Détection Intelligente").style("font-weight:700; font-size:18px; color:#856404; margin-bottom:12px;")
+            with ui.row().classes("w-full gap-8"):
+                with ui.column().classes("flex-1"):
+                    ui.label(f"✅ **{len(num_cols)} features continues** détectées").style("font-size:15px; margin-bottom:4px;")
+                    if num_cols:
+                        ui.label(f"→ {', '.join(num_cols[:5])}{'...' if len(num_cols) > 5 else ''}").style(
+                            "font-size:13px; color:#666;"
+                        )
+                
+                with ui.column().classes("flex-1"):
+                    ui.label(f"⚠️ **{len(cat_encoded)} variables catégorielles** encodées").style("font-size:15px; margin-bottom:4px;")
+                    if cat_encoded:
+                        ui.label(f"→ {', '.join(cat_encoded[:5])}{'...' if len(cat_encoded) > 5 else ''}").style(
+                            "font-size:13px; color:#666;"
+                        )
+                        ui.label("→ Seront préservées (pas de scaling)").style("font-size:12px; color:#856404; font-style:italic;")
         
-        # Analyse des features
+        # Objectif
+        with ui.card().classes("w-full max-w-6xl p-6 mb-8").style("background:#e3f2fd; border-left:5px solid #2196f3;"):
+            ui.label("🎯 Objectif principal").style("font-weight:700; font-size:18px; color:#1976d2; margin-bottom:12px;")
+            with ui.row().classes("w-full gap-8"):
+                with ui.column().classes("flex-1"):
+                    ui.label("🔴 **CRITIQUE** pour KNN").style("font-size:15px; font-weight:600; margin-bottom:4px;")
+                    ui.label("→ Les distances sont biaisées par les échelles différentes").style("font-size:13px; color:#666;")
+                
+                with ui.column().classes("flex-1"):
+                    ui.label("✅ **INUTILE** pour C4.5").style("font-size:15px; font-weight:600; margin-bottom:4px;")
+                    ui.label("→ Arbres de décision insensibles aux échelles").style("font-size:13px; color:#666;")
+                
+                with ui.column().classes("flex-1"):
+                    ui.label("🟡 **OPTIONNEL** pour Naive Bayes").style("font-size:15px; font-weight:600; margin-bottom:4px;")
+                    ui.label("→ Dépend de la distribution des données").style("font-size:13px; color:#666;")
+        
+        # Analyse des features continues
         with ui.card().classes("w-full max-w-6xl p-6 mb-8"):
-            ui.label("📊 Analyse automatique des features").style(
+            ui.label("📊 Analyse des features continues").style(
                 "font-weight:700; font-size:20px; color:#2c3e50; margin-bottom:16px;"
             )
             
             if features_info:
-                table_html = """<pre style="background:#1a1a1a; color:#00ff88; font-family:monospace; font-size:13px; padding:20px; border-radius:12px; margin:0; line-height:1.4; text-align:left;">"""
-                table_html += "┌──────────────────────────────┐\n"
-                table_html += "│ Feature      │ Range       │ Outliers │\n"
-                table_html += "├──────────────┼─────────────┼──────────┤"
+                # Tableau amélioré
+                table_html = """<div style="background:#1a1a1a; border-radius:12px; padding:20px; overflow-x:auto;">
+                <table style="width:100%; color:#00ff88; font-family:monospace; font-size:13px; border-collapse:collapse;">
+                    <thead>
+                        <tr style="border-bottom:2px solid #00ff88;">
+                            <th style="text-align:left; padding:12px; color:#00ffff;">Feature</th>
+                            <th style="text-align:right; padding:12px;">Min</th>
+                            <th style="text-align:right; padding:12px;">Max</th>
+                            <th style="text-align:right; padding:12px;">Range</th>
+                            <th style="text-align:right; padding:12px;">Mean</th>
+                            <th style="text-align:right; padding:12px;">Std</th>
+                            <th style="text-align:center; padding:12px;">Outliers</th>
+                        </tr>
+                    </thead>
+                    <tbody>"""
+                
                 for f in features_info:
                     out = "🔴" if f["outliers"] else "🟢"
-                    table_html += f"\n│ {f['name']:<12} │ {f['range']:<11.0f} │ {out:<8} │"
-                table_html += "\n└──────────────┴─────────────┴──────────┘</pre>"
+                    # Highlight pour range > 1000
+                    range_color = "#ffff00" if f["range"] > 1000 else "#00ff88"
+                    table_html += f"""
+                        <tr style="border-bottom:1px solid #333;">
+                            <td style="padding:10px; font-weight:600;">{f['name'][:20]}</td>
+                            <td style="text-align:right; padding:10px;">{f['min']:.2f}</td>
+                            <td style="text-align:right; padding:10px;">{f['max']:.2f}</td>
+                            <td style="text-align:right; padding:10px; color:{range_color}; font-weight:700;">{f['range']:.2f}</td>
+                            <td style="text-align:right; padding:10px;">{f['mean']:.2f}</td>
+                            <td style="text-align:right; padding:10px;">{f['std']:.2f}</td>
+                            <td style="text-align:center; padding:10px; font-size:16px;">{out}</td>
+                        </tr>"""
+                
+                table_html += """
+                    </tbody>
+                </table>
+                </div>"""
                 ui.html(table_html, sanitize=False)
             else:
                 with ui.column().classes("items-center p-8"):
-                    ui.label("❌ Aucune feature numérique détectée").style("color:#e74c3c; font-size:16px; font-weight:600;")
-                    ui.label("Vérifiez vos données ou colonnes exclues").style("color:#7f8c8d; font-size:14px;")
+                    ui.label("❌ Aucune feature continue détectée").style("color:#e74c3c; font-size:16px; font-weight:600;")
+                    ui.label("Toutes les features sont catégorielles ou binaires").style("color:#7f8c8d; font-size:14px;")
         
         # Sélecteur de méthode
-        with ui.card().classes("w-full max-w-4xl p-8 mb-8").style("border:3px solid #e0e0e0; border-radius:16px; box-shadow:0 4px 12px rgba(0,0,0,0.1);"):
+        with ui.card().classes("w-full max-w-5xl p-8 mb-8").style("border:3px solid #e0e0e0; border-radius:16px;"):
             ui.label("⚙️ Choisir la méthode de scaling").style(
                 "font-weight:700; font-size:22px; color:#2c3e50; margin-bottom:24px; text-align:center;"
             )
             
-            # ✅ ui.select() - AUCUNE ERREUR POSSIBLE
-# Configuration du select sans valeur par défaut initiale
+            # Select avec options
             method_select = ui.select(
                 label="Sélectionnez une méthode",
                 options={
@@ -3557,10 +3759,25 @@ def feature_scaling_page():
                     "maxabs": "📐 MaxAbsScaler (sparse data, [-1,1])",
                     "none": "⏭️ Aucun scaling (raw data)"
                 }
-            ).props("dense outlined").classes("w-full").style("max-width:500px; margin:0 auto 20px;")
+            ).props("dense outlined").classes("w-full").style("max-width:600px; margin:0 auto 20px;")
             
-            # Définir la valeur après création
-            method_select.value = "standard"        
+            # Définir valeur par défaut
+            method_select.value = recommended
+            
+            # Bouton prévisualisation
+            ui.button(
+                "👁️ Prévisualiser",
+                on_click=lambda: preview_scaling(method_select.value)
+            ).style(
+                "background:#3498db; color:white; font-weight:600; "
+                "height:48px; width:200px; border-radius:10px; margin:0 auto; display:block;"
+            )
+            
+            method_select.on_value_change(lambda e: state.update({"scaling_method": e.value}))
+        
+        # Zone de visualisation
+        plot_container = ui.column().classes("w-full max-w-6xl mb-8")
+        
         # Recommandation intelligente
         with ui.card().classes("w-full max-w-5xl p-8 mb-12").style(
             "background:linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%); "
@@ -3580,6 +3797,17 @@ def feature_scaling_page():
             
             ui.label(f"**{method_names[recommended]}**").style(
                 "font-weight:700; font-size:28px; color:#2e7d32; text-align:center; margin-bottom:16px;"
+            )
+            
+            # Explication de la recommandation
+            explanations = {
+                "standard": "✓ Pas d'outliers majeurs détectés\n✓ Données normalement distribuées\n✓ Optimal pour KNN et régression",
+                "robust": f"⚠️ Outliers détectés dans vos données\n✓ Résistant aux valeurs extrêmes\n✓ Préserve la structure centrale\n✓ Recommandé pour {len([f for f in features_info if f['outliers']])} features avec outliers",
+                "none": "✓ Toutes les features ont des échelles similaires\n✓ Pas de normalisation nécessaire"
+            }
+            
+            ui.label(explanations.get(recommended, "")).style(
+                "font-size:15px; color:#2e7d32; text-align:center; white-space:pre-line; margin-bottom:20px;"
             )
             
             with ui.row().classes("w-full justify-center gap-6"):
@@ -3612,6 +3840,508 @@ def feature_scaling_page():
                 "color:white; font-weight:700; height:60px; width:320px; "
                 "border-radius:16px; font-size:16px;"
             )
+
+
+
+
+@ui.page('/supervised/dimension_reduction')
+def dimension_reduction_page():
+    """
+    Page complète pour la Réduction de Dimension (PCA, Feature Selection)
+    """
+    import pandas as pd
+    import numpy as np
+    from sklearn.decomposition import PCA
+    from sklearn.feature_selection import SelectKBest, f_classif, chi2
+    from sklearn.tree import DecisionTreeClassifier
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    
+    # ---------- CONTEXTE ----------
+    df = state.get("raw_df", None)
+    if df is None:
+        with ui.column().classes("items-center justify-center w-full h-screen"):
+            ui.label("❌ Aucun dataset chargé.").style("font-size:18px; color:#c0392b; font-weight:600;")
+            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/upload'"))
+        return
+    
+    target_col = state.get("target_column", None)
+    columns_exclude = state.get("columns_exclude", {}) or {}
+    
+    if not target_col:
+        with ui.column().classes("items-center justify-center w-full h-screen"):
+            ui.label("❌ Aucune variable cible définie.").style("font-size:18px; color:#c0392b; font-weight:600;")
+        return
+    
+    # Préparer X et y
+    active_cols = [c for c in df.columns if not columns_exclude.get(c, False) and c != target_col]
+    X = df[active_cols].copy()
+    y = df[target_col].copy()
+    
+    n_samples = len(X)
+    n_features = len(active_cols)
+    ratio = n_samples / n_features if n_features > 0 else 0
+    
+    # État de la réduction
+    reduction_enabled = state.get("reduction_enabled", False)
+    reduction_method = state.get("reduction_method", "pca")
+    n_components = state.get("n_components", min(10, n_features))
+    
+    # ---------- FONCTIONS ----------
+    def calculate_pca_variance():
+        """Calcule variance expliquée par PCA"""
+        try:
+            pca = PCA()
+            pca.fit(X)
+            variance_ratio = pca.explained_variance_ratio_
+            cumulative_variance = np.cumsum(variance_ratio)
+            return variance_ratio, cumulative_variance
+        except Exception as e:
+            print(f"Erreur PCA: {e}")
+            return None, None
+    
+    def create_scree_plot():
+        """Crée le scree plot pour PCA"""
+        variance_ratio, cumulative_variance = calculate_pca_variance()
+        
+        if variance_ratio is None:
+            return None
+        
+        n_comp = min(len(variance_ratio), 20)
+        
+        fig = make_subplots(
+            rows=1, cols=2,
+            subplot_titles=("Variance expliquée par composante", "Variance cumulée"),
+            horizontal_spacing=0.12
+        )
+        
+        # Variance individuelle
+        fig.add_trace(
+            go.Bar(
+                x=list(range(1, n_comp + 1)),
+                y=variance_ratio[:n_comp] * 100,
+                marker_color='#3498db',
+                name='Variance individuelle'
+            ),
+            row=1, col=1
+        )
+        
+        # Variance cumulée
+        fig.add_trace(
+            go.Scatter(
+                x=list(range(1, n_comp + 1)),
+                y=cumulative_variance[:n_comp] * 100,
+                mode='lines+markers',
+                marker=dict(size=8, color='#e74c3c'),
+                line=dict(width=3, color='#e74c3c'),
+                name='Variance cumulée'
+            ),
+            row=1, col=2
+        )
+        
+        # Ligne 95%
+        fig.add_hline(y=95, line_dash="dash", line_color="green", 
+                     annotation_text="95%", row=1, col=2)
+        
+        fig.update_xaxes(title_text="Composante", row=1, col=1)
+        fig.update_xaxes(title_text="Nombre de composantes", row=1, col=2)
+        fig.update_yaxes(title_text="Variance (%)", row=1, col=1)
+        fig.update_yaxes(title_text="Variance cumulée (%)", row=1, col=2)
+        
+        fig.update_layout(
+            height=400,
+            showlegend=False,
+            paper_bgcolor='#f8f9fa',
+            plot_bgcolor='white'
+        )
+        
+        return fig
+    
+    def create_pca_2d_plot():
+        """Visualisation 2D des 2 premières composantes PCA"""
+        try:
+            pca = PCA(n_components=2)
+            X_pca = pca.fit_transform(X)
+            
+            fig = go.Figure()
+            
+            # Pour chaque classe
+            for class_val in y.unique():
+                mask = y == class_val
+                fig.add_trace(go.Scatter(
+                    x=X_pca[mask, 0],
+                    y=X_pca[mask, 1],
+                    mode='markers',
+                    name=f'Classe {class_val}',
+                    marker=dict(size=8, opacity=0.7)
+                ))
+            
+            fig.update_layout(
+                title="Visualisation PCA 2D (PC1 vs PC2)",
+                xaxis_title=f"PC1 ({pca.explained_variance_ratio_[0]*100:.1f}%)",
+                yaxis_title=f"PC2 ({pca.explained_variance_ratio_[1]*100:.1f}%)",
+                height=500,
+                paper_bgcolor='#f8f9fa',
+                plot_bgcolor='white'
+            )
+            
+            return fig
+        except Exception as e:
+            print(f"Erreur visualisation PCA: {e}")
+            return None
+    
+    def get_feature_importance():
+        """Calcule importance des features via Decision Tree"""
+        try:
+            clf = DecisionTreeClassifier(max_depth=5, random_state=42)
+            clf.fit(X, y)
+            importances = clf.feature_importances_
+            
+            feature_imp = pd.DataFrame({
+                'feature': X.columns,
+                'importance': importances
+            }).sort_values('importance', ascending=False)
+            
+            return feature_imp
+        except Exception as e:
+            print(f"Erreur feature importance: {e}")
+            return None
+    
+    def apply_reduction(method, n_comp):
+        """Applique la réduction de dimension"""
+        try:
+            if method == "pca":
+                pca = PCA(n_components=n_comp)
+                X_reduced = pca.fit_transform(X)
+                
+                # Créer DataFrame avec noms de colonnes
+                col_names = [f"PC{i+1}" for i in range(n_comp)]
+                df_reduced = pd.DataFrame(X_reduced, columns=col_names, index=X.index)
+                df_reduced[target_col] = y.values
+                
+                state["raw_df"] = df_reduced
+                state["pca_model"] = pca
+                state["original_features"] = X.columns.tolist()
+                state["reduction_applied"] = True
+                state["reduction_method"] = "pca"
+                
+                variance_explained = pca.explained_variance_ratio_.sum() * 100
+                
+                ui.notify(f"✅ PCA appliqué : {n_features} → {n_comp} composantes ({variance_explained:.1f}% variance)", 
+                         color="positive", timeout=3000)
+                
+            elif method == "feature_selection":
+                feature_imp = get_feature_importance()
+                if feature_imp is None:
+                    ui.notify("❌ Erreur lors du calcul d'importance", color="negative")
+                    return
+                
+                top_features = feature_imp.head(n_comp)['feature'].tolist()
+                
+                df_reduced = X[top_features].copy()
+                df_reduced[target_col] = y.values
+                
+                state["raw_df"] = df_reduced
+                state["selected_features"] = top_features
+                state["original_features"] = X.columns.tolist()
+                state["reduction_applied"] = True
+                state["reduction_method"] = "feature_selection"
+                
+                ui.notify(f"✅ Feature Selection : {n_features} → {n_comp} features", 
+                         color="positive", timeout=3000)
+            
+            # Mettre à jour colonnes exclues
+            state["columns_exclude"] = {}
+            
+            ui.run_javascript("setTimeout(() => window.location.href='/supervised/next_step', 1500);")
+            
+        except Exception as e:
+            ui.notify(f"❌ Erreur : {str(e)}", color="negative")
+            print(f"Erreur reduction: {e}")
+    
+    def skip_reduction():
+        """Passer l'étape sans réduction"""
+        state["reduction_applied"] = False
+        ui.notify("✅ Aucune réduction appliquée", color="info")
+        ui.run_javascript("setTimeout(() => window.location.href='/supervised/next_step', 1000);")
+    
+    # ---------- INTERFACE ----------
+    with ui.column().classes("w-full items-center p-8").style("background-color:#f8f9fa; min-height:100vh;"):
+        
+        # Header
+        ui.label("🎯 ÉTAPE 3.10 : RÉDUCTION DE DIMENSION").style(
+            "font-weight:700; font-size:32px; color:#2c3e50; margin-bottom:8px; text-align:center;"
+        )
+        ui.label("Optionnel - Réduire curse of dimensionality pour KNN").style(
+            "font-size:18px; color:#7f8c8d; margin-bottom:32px; text-align:center;"
+        )
+        
+        # Section A : Évaluation
+        with ui.card().classes("w-full max-w-6xl p-6 mb-8"):
+            ui.label("📊 État Actuel du Dataset").style(
+                "font-weight:700; font-size:20px; color:#2c3e50; margin-bottom:16px;"
+            )
+            
+            with ui.row().classes("w-full gap-8 mb-6"):
+                with ui.column().classes("flex-1"):
+                    ui.label(f"**Features après preprocessing** : {n_features}").style("font-size:15px; margin-bottom:8px;")
+                    ui.label(f"**Samples (train)** : {n_samples}").style("font-size:15px; margin-bottom:8px;")
+                    ui.label(f"**Ratio samples/features** : {ratio:.1f}").style(
+                        f"font-size:15px; font-weight:700; color:{'#27ae60' if ratio > 50 else '#e67e22'};"
+                    )
+            
+            # Recommandations
+            with ui.card().classes("w-full p-4").style("background:#fff3cd; border-left:4px solid #ffc107;"):
+                ui.label("⚠️ Recommandations par algorithme").style("font-weight:700; font-size:16px; margin-bottom:12px;")
+                ui.label(f"• **KNN** : Ratio idéal > 50 {'✅' if ratio > 50 else '⚠️ Curse of dimensionality'}").style("font-size:14px; margin-bottom:6px;")
+                ui.label("• **C4.5** : Pas de limite stricte ✅").style("font-size:14px; margin-bottom:6px;")
+                ui.label("• **Naive Bayes** : Assume indépendance (déjà traité) ✅").style("font-size:14px;")
+            
+            if ratio < 50:
+                ui.label("💡 Réduction recommandée pour améliorer KNN").style(
+                    "font-size:16px; color:#e67e22; font-weight:600; margin-top:12px; text-align:center;"
+                )
+        
+        # Section B : Options
+        with ui.card().classes("w-full max-w-6xl p-8 mb-8"):
+            ui.label("⚙️ Configuration de la Réduction").style(
+                "font-weight:700; font-size:20px; color:#2c3e50; margin-bottom:16px;"
+            )
+            
+            # Toggle activation
+            enable_switch = ui.switch("Activer Réduction de Dimension", value=reduction_enabled).style(
+                "font-size:16px; font-weight:600; margin-bottom:24px;"
+            )
+            
+            enable_switch.on_value_change(lambda e: state.update({"reduction_enabled": e.value}))
+            
+            # Container conditionnel
+            options_container = ui.column().classes("w-full")
+            
+            def update_options_visibility():
+                options_container.clear()
+                if enable_switch.value:
+                    with options_container:
+                        # Choix de méthode
+                        method_radio = ui.radio(
+                            ["PCA (Principal Component Analysis)", "Feature Selection (Tree Importance)"],
+                            value="PCA (Principal Component Analysis)"
+                        ).props("inline").classes("mb-6")
+                        
+                        method_map = {
+                            "PCA (Principal Component Analysis)": "pca",
+                            "Feature Selection (Tree Importance)": "feature_selection"
+                        }
+                        
+                        method_radio.on_value_change(lambda e: state.update({"reduction_method": method_map[e.value]}))
+                        
+                        # Container pour config spécifique
+                        config_container = ui.column().classes("w-full")
+                        
+                        def update_config():
+                            config_container.clear()
+                            current_method = method_map[method_radio.value]
+                            
+                            with config_container:
+                                if current_method == "pca":
+                                    # Configuration PCA
+                                    with ui.card().classes("w-full p-6 mb-6").style("background:#e3f2fd; border-left:4px solid #2196f3;"):
+                                        ui.label("📌 PCA - Analyse en Composantes Principales").style(
+                                            "font-weight:700; font-size:18px; color:#1976d2; margin-bottom:12px;"
+                                        )
+                                        
+                                        ui.label("**Principe** : Transformer features en composantes non-corrélées").style(
+                                            "font-size:14px; margin-bottom:8px;"
+                                        )
+                                        
+                                        with ui.row().classes("w-full gap-8 mb-4"):
+                                            with ui.column().classes("flex-1"):
+                                                ui.label("✅ **Avantages**").style("font-weight:600; color:#27ae60; margin-bottom:4px;")
+                                                ui.label("• Linéaire, rapide, déterministe").style("font-size:13px;")
+                                                ui.label("• Préserve variance maximale").style("font-size:13px;")
+                                                ui.label("• Transformable pour new data").style("font-size:13px;")
+                                            
+                                            with ui.column().classes("flex-1"):
+                                                ui.label("❌ **Inconvénients**").style("font-weight:600; color:#e74c3c; margin-bottom:4px;")
+                                                ui.label("• Perd interprétabilité").style("font-size:13px;")
+                                                ui.label("• Assume linéarité").style("font-size:13px;")
+                                                ui.label("• Sensible au scaling (déjà fait ✅)").style("font-size:13px;")
+                                        
+                                        # Slider nombre de composantes
+                                        ui.label("**Configuration**").style("font-weight:600; font-size:16px; margin:16px 0 12px 0;")
+                                        
+                                        max_comp = min(n_features, n_samples)
+                                        n_comp_slider = ui.slider(
+                                            min=1, max=max_comp, value=min(10, max_comp), step=1
+                                        ).props("label-always").classes("w-full mb-4")
+                                        n_comp_label = ui.label(f"Nombre de composantes : {n_comp_slider.value}").style(
+                                            "font-weight:600; margin-bottom:16px;"
+                                        )
+                                        
+                                        n_comp_slider.on_value_change(
+                                            lambda e: (
+                                                n_comp_label.set_text(f"Nombre de composantes : {int(e.value)}"),
+                                                state.update({"n_components": int(e.value)})
+                                            )
+                                        )
+                                    
+                                    # Scree Plot
+                                    ui.label("📊 Analyse de variance expliquée").style(
+                                        "font-weight:700; font-size:18px; color:#2c3e50; margin-bottom:12px;"
+                                    )
+                                    
+                                    scree_plot = create_scree_plot()
+                                    if scree_plot:
+                                        ui.plotly(scree_plot).classes("w-full mb-6")
+                                    
+                                    # Recommandation variance
+                                    variance_ratio, cumulative_variance = calculate_pca_variance()
+                                    if variance_ratio is not None:
+                                        # Trouver n pour 95% variance
+                                        n_for_95 = np.argmax(cumulative_variance >= 0.95) + 1
+                                        
+                                        with ui.card().classes("w-full p-4 mb-6").style("background:#e8f5e8; border-left:4px solid #4caf50;"):
+                                            ui.label(f"💡 **Recommandation** : {n_for_95} composantes (≥95% variance)").style(
+                                                "font-size:15px; font-weight:600; color:#2e7d32;"
+                                            )
+                                            ui.label(f"Impact : {n_features} → {n_for_95} features (réduction {(1-n_for_95/n_features)*100:.0f}%)").style(
+                                                "font-size:14px; color:#2e7d32; margin-top:4px;"
+                                            )
+                                    
+                                    # Visualisation 2D
+                                    ui.label("🎨 Prévisualisation PCA 2D").style(
+                                        "font-weight:700; font-size:18px; color:#2c3e50; margin:16px 0 12px 0;"
+                                    )
+                                    
+                                    pca_2d_plot = create_pca_2d_plot()
+                                    if pca_2d_plot:
+                                        ui.plotly(pca_2d_plot).classes("w-full")
+                                
+                                elif current_method == "feature_selection":
+                                    # Configuration Feature Selection
+                                    with ui.card().classes("w-full p-6 mb-6").style("background:#fff3cd; border-left:4px solid #ffc107;"):
+                                        ui.label("📌 Sélection de Features (sans transformation)").style(
+                                            "font-weight:700; font-size:18px; color:#856404; margin-bottom:12px;"
+                                        )
+                                        
+                                        ui.label("**Principe** : Garder uniquement les K features les plus importantes").style(
+                                            "font-size:14px; margin-bottom:8px;"
+                                        )
+                                        
+                                        with ui.row().classes("w-full gap-8 mb-4"):
+                                            with ui.column().classes("flex-1"):
+                                                ui.label("✅ **Avantages**").style("font-weight:600; color:#27ae60; margin-bottom:4px;")
+                                                ui.label("• Garde interprétabilité").style("font-size:13px;")
+                                                ui.label("• Pas de transformation").style("font-size:13px;")
+                                                ui.label("• Features originales").style("font-size:13px;")
+                                            
+                                            with ui.column().classes("flex-1"):
+                                                ui.label("❌ **Inconvénients**").style("font-weight:600; color:#e74c3c; margin-bottom:4px;")
+                                                ui.label("• Peut perdre info combinée").style("font-size:13px;")
+                                                ui.label("• Dépend du modèle d'évaluation").style("font-size:13px;")
+                                        
+                                        # Slider top K
+                                        ui.label("**Configuration**").style("font-weight:600; font-size:16px; margin:16px 0 12px 0;")
+                                        
+                                        k_slider = ui.slider(
+                                            min=1, max=n_features, value=min(15, n_features), step=1
+                                        ).props("label-always").classes("w-full mb-4")
+                                        k_label = ui.label(f"Top {k_slider.value} features").style(
+                                            "font-weight:600; margin-bottom:16px;"
+                                        )
+                                        
+                                        k_slider.on_value_change(
+                                            lambda e: (
+                                                k_label.set_text(f"Top {int(e.value)} features"),
+                                                state.update({"n_components": int(e.value)})
+                                            )
+                                        )
+                                    
+                                    # Affichage importance
+                                    feature_imp = get_feature_importance()
+                                    if feature_imp is not None:
+                                        ui.label("📊 Features par importance (Decision Tree)").style(
+                                            "font-weight:700; font-size:18px; color:#2c3e50; margin-bottom:12px;"
+                                        )
+                                        
+                                        # Bar chart importance
+                                        top_15 = feature_imp.head(15)
+                                        fig = go.Figure(go.Bar(
+                                            x=top_15['importance'],
+                                            y=top_15['feature'],
+                                            orientation='h',
+                                            marker_color='#3498db'
+                                        ))
+                                        fig.update_layout(
+                                            height=400,
+                                            xaxis_title="Importance",
+                                            yaxis_title="Feature",
+                                            yaxis={'categoryorder':'total ascending'},
+                                            paper_bgcolor='#f8f9fa',
+                                            plot_bgcolor='white'
+                                        )
+                                        ui.plotly(fig).classes("w-full")
+                        
+                        method_radio.on_value_change(lambda: update_config())
+                        update_config()
+            
+            enable_switch.on_value_change(lambda: update_options_visibility())
+            update_options_visibility()
+        
+        # Section Décision Finale
+        with ui.card().classes("w-full max-w-5xl p-8 mb-12").style(
+            "background:linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%); "
+            "border:4px solid #4caf50; border-radius:20px;"
+        ):
+            ui.label("💡 Décision Finale").style(
+                "font-weight:800; font-size:24px; color:#1b5e20; text-align:center; margin-bottom:20px;"
+            )
+            
+            ui.label("**Recommandation pour vos algorithmes** :").style(
+                "font-size:16px; color:#2e7d32; font-weight:600; margin-bottom:12px;"
+            )
+            
+            ui.label("🔵 **KNN** : PCA recommandée (améliore vitesse et précision)").style("font-size:14px; margin-bottom:6px;")
+            ui.label("🌳 **C4.5** : Feature Selection optionnelle (garde interprétabilité)").style("font-size:14px; margin-bottom:6px;")
+            ui.label("📊 **Naive Bayes** : Pas de réduction nécessaire").style("font-size:14px; margin-bottom:20px;")
+            
+            with ui.row().classes("w-full justify-center gap-6 mt-8"):
+                ui.button(
+                    "⏭️ Passer (pas de réduction)",
+                    on_click=skip_reduction
+                ).style(
+                    "background:#95a5a6; color:white; font-weight:600; "
+                    "height:56px; padding:0 32px; border-radius:12px; font-size:16px;"
+                )
+                
+                ui.button(
+                    "✅ Appliquer la Réduction",
+                    on_click=lambda: apply_reduction(
+                        state.get("reduction_method", "pca"),
+                        state.get("n_components", 10)
+                    )
+                ).style(
+                    "background:linear-gradient(135deg, #4caf50 0%, #45a049 100%); "
+                    "color:white; font-weight:700; height:56px; padding:0 40px; border-radius:12px; font-size:16px;"
+                ).bind_enabled_from(enable_switch, 'value')
+        
+        # Navigation
+        with ui.row().classes("w-full max-w-5xl justify-between mt-16"):
+            ui.button(
+                "⬅ Étape précédente",
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/scaling'")
+            ).style(
+                "background:#95a5a6; color:white; font-weight:600; "
+                "height:60px; width:260px; border-radius:16px; font-size:16px;"
+            )
+
+
+
+
+
+
+
+
 
 
 
