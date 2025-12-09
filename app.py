@@ -1066,6 +1066,19 @@ def preprocessing2_page():
                     ui.label(f"  - {cls}: {cnt} ({pct}%)").style("font-family:monospace; margin-left:10px;")
 
             ui.notify("✅ Split effectué avec succès !", color="positive")
+ 
+            # Affichage post-split stylé (simple)
+            ui.label(f"✅ Split effectué ! Train: {len(X_train)}, Val: {len(X_val)}, Test: {len(X_test)}").style(
+                "font-weight:600; color:#01335A;"
+            )
+
+            # ---- NOUVEAU BOUTON pour aller à l'étape 3.3 ----
+            ui.button(
+                "➡ Étape 3.3 : Analyse Univariée",
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/univariate_analysis'"),
+            ).style(
+                "background:#09538C; color:white; font-weight:600; border-radius:8px; height:40px; width:280px; margin-top:12px;"
+            )
 
         ui.button("✅ Effectuer le split", on_click=do_split).style(
             "background:linear-gradient(135deg, #01335A, #09538C); color:white; font-weight:600; border-radius:8px; height:46px; width:250px; margin-top:20px;"
@@ -1075,10 +1088,214 @@ def preprocessing2_page():
 
 
 
+from nicegui import ui
+import pandas as pd
+from scipy.stats import iqr, skew
+
+@ui.page('/supervised/univariate_analysis')
+def univariate_analysis_page():
+    # Récupération des données train
+    split = state.get("split")
+    if split is None:
+        with ui.column().classes("items-center justify-center w-full h-screen"):
+            ui.label("❌ Aucun split trouvé. Veuillez d'abord effectuer le split.").style(
+                "font-size:18px; color:#c0392b; font-weight:600;"
+            )
+            ui.button("⬅ Retour au Preprocessing", on_click=lambda: ui.run_javascript(
+                "window.location.href='/supervised/preprocessing2'"
+            )).style("margin-top:20px; background:#01335A; color:white; font-weight:600;")
+        return
+
+    X_train = split["X_train"]
+    y_train = split["y_train"]
+
+    numeric_cols = X_train.select_dtypes(include=['int64','float64']).columns.tolist()
+    categorical_cols = X_train.select_dtypes(exclude=['int64','float64']).columns.tolist()
+
+    # Container scrollable
+    with ui.column().classes("w-full h-screen overflow-auto p-6").style("background-color:#f5f6fa; font-family:'Inter', sans-serif;"):
+        ui.label("Phase 3.3 : Analyse univariée (Train uniquement)").style(
+            "font-weight:700; font-size:32px; color:#01335A; margin-bottom:24px; text-align:center;"
+        )
+
+        ui.label("Analyse par feature :").style("font-weight:600; font-size:18px; margin-bottom:12px;")
+
+        cards_container = ui.column().classes("w-full gap-4")
+
+        def add_feature_card(col):
+            series = X_train[col]
+            is_numeric = col in numeric_cols
+
+            # Crée la carte dans le container
+            with cards_container:
+                with ui.card().classes("w-full").style(
+                    "padding:12px; border-radius:10px; box-shadow:0 3px 10px rgba(0,0,0,0.08); background:white;"
+                ):
+                    ui.label(f"📊 {col} ({'Numérique' if is_numeric else 'Catégorielle'})").style(
+                        "font-weight:700; font-size:18px; color:#01335A; margin-bottom:6px;"
+                    )
+
+                    if is_numeric:
+                        mean_ = round(series.mean(),2)
+                        median_ = round(series.median(),2)
+                        std_ = round(series.std(),2)
+                        min_ = series.min()
+                        max_ = series.max()
+                        iqr_ = iqr(series)
+                        skewness = round(skew(series),2)
+                        lower = series.quantile(0.25) - 1.5*iqr_
+                        upper = series.quantile(0.75) + 1.5*iqr_
+                        outliers = series[(series < lower) | (series > upper)]
+
+                        ui.label(f"• Mean: {mean_}  • Median: {median_}  • Std: {std_}").style("font-family:monospace;")
+                        ui.label(f"• Min: {min_}  • Max: {max_}  • IQR: {iqr_}").style("font-family:monospace; margin-bottom:6px;")
+                        
+                        alerts = []
+                        if abs(skewness) > 0.5:
+                            alerts.append(f"Skewness: {skewness} (forte asymétrie)")
+                        if len(outliers) > 0:
+                            alerts.append(f"Outliers détectés: {len(outliers)} valeurs ({round(len(outliers)/len(series)*100,1)}%)")
+                        for a in alerts:
+                            ui.label(f"⚠️ {a}").style("color:#e67e22; font-size:14px;")
+
+                    else:
+                        counts = series.value_counts()
+                        total = len(series)
+                        for cls, cnt in counts.items():
+                            pct = round(cnt / total * 100, 1)
+                            with ui.row().classes("items-center gap-2 mb-1"):
+                                ui.label(f"{cls}: {cnt} ({pct}%)").style("width:150px; font-family:monospace;")
+                                ui.linear_progress(value=pct/100, color="blue").classes("w-full h-3 rounded-lg")
+
+                    actions = ["Garder", "Transformer", "Traiter Outliers", "Supprimer"] if is_numeric else ["Garder", "Regrouper modalités rares", "Supprimer"]
+                    ui.select(actions, label="Action à entreprendre").style("margin-top:6px; width:250px;")
+
+        # Ajoute toutes les features
+        for col in X_train.columns:
+            add_feature_card(col)
+
+        # Bouton pour passer à la page suivante (outliers)
+        ui.button("➡ Étape 3.4 : Détection Outliers", on_click=lambda: ui.run_javascript(
+            "window.location.href='/supervised/outliers_analysis'"
+        )).style(
+            "background:linear-gradient(135deg, #01335A, #09538C); color:white; font-weight:600; border-radius:8px; height:46px; width:300px; margin-top:20px;"
+        )
 
 
 
 
+
+from nicegui import ui
+import pandas as pd
+import numpy as np
+from scipy.stats import zscore, iqr
+
+@ui.page('/supervised/outliers_analysis')
+def outliers_analysis_page():
+    split = state.get("split")
+    if split is None:
+        with ui.column().classes("items-center justify-center w-full h-screen"):
+            ui.label("❌ Aucun split trouvé. Veuillez d'abord effectuer le split.").style(
+                "font-size:18px; color:#c0392b; font-weight:600;"
+            )
+            ui.button("⬅ Retour au Univariate Analysis", on_click=lambda: ui.run_javascript(
+                "window.location.href='/supervised/univariate_analysis'"
+            )).style("margin-top:20px; background:#01335A; color:white; font-weight:600;")
+        return
+
+    X_train = split["X_train"]
+
+    numeric_cols = X_train.select_dtypes(include=['int64','float64']).columns.tolist()
+    
+    # --------- Container principal scrollable ----------
+    with ui.column().classes("w-full h-screen overflow-auto p-6").style(
+        "background-color:#f5f6fa; font-family:'Inter', sans-serif;"
+    ):
+        ui.label("Phase 3.4 : Détection et gestion des outliers").style(
+            "font-weight:700; font-size:32px; color:#01335A; margin-bottom:24px; text-align:center;"
+        )
+
+        # ---------- Section A : Synthèse globale ----------
+        outlier_summary = []
+        total_outliers = 0
+        for col in numeric_cols:
+            series = X_train[col]
+            iqr_ = iqr(series)
+            q1, q3 = series.quantile(0.25), series.quantile(0.75)
+            lower, upper = q1 - 1.5*iqr_, q3 + 1.5*iqr_
+            out_iqr = series[(series < lower) | (series > upper)]
+            
+            zscores = np.abs(zscore(series))
+            out_z = series[zscores > 3]
+            
+            out_count = len(set(out_iqr.index.tolist() + out_z.index.tolist()))
+            total_outliers += out_count
+            
+            method = "IQR" if len(out_iqr) >= len(out_z) else "Z-score"
+            pct = round(out_count/len(series)*100,2)
+            if out_count > 0:
+                outlier_summary.append(f"{col} : {out_count} outliers ({pct}%) [Méthode: {method}]")
+
+        with ui.card().style("padding:12px; border-radius:10px; box-shadow:0 3px 10px rgba(0,0,0,0.08); margin-bottom:12px; background:white;"):
+            ui.label("🔍 Synthèse Globale des Outliers (Train Set)").style(
+                "font-weight:700; font-size:18px; color:#01335A; margin-bottom:6px;"
+            )
+            ui.label("Méthodes : Z-score (|z|>3) + IQR (Q1-1.5*IQR, Q3+1.5*IQR)").style("font-size:14px; margin-bottom:6px;")
+            for line in outlier_summary:
+                ui.label(f"├─ {line}").style("font-family:monospace; font-size:14px;")
+            ui.label(f"Total lignes affectées : {total_outliers} ({round(total_outliers/len(X_train)*100,2)}% du dataset)").style(
+                "font-weight:600; margin-top:6px;"
+            )
+
+        # ---------- Section B : Détail par feature ----------
+        cards_container = ui.column().classes("w-full gap-4 mt-4")
+        
+        def add_outlier_card(col):
+            series = X_train[col]
+            iqr_ = iqr(series)
+            q1, q3 = series.quantile(0.25), series.quantile(0.75)
+            lower, upper = q1 - 1.5*iqr_, q3 + 1.5*iqr_
+            out_iqr = series[(series < lower) | (series > upper)]
+            
+            zscores = np.abs(zscore(series))
+            out_z = series[zscores > 3]
+            
+            outliers_idx = set(out_iqr.index.tolist() + out_z.index.tolist())
+            outliers_values = series[list(outliers_idx)].tolist()
+            out_count = len(outliers_idx)
+            method = "IQR" if len(out_iqr) >= len(out_z) else "Z-score"
+            normal_min, normal_max = series.min(), series.max()
+            if len(outliers_values) > 0:
+                with cards_container:
+                    with ui.card().style(
+                        "padding:12px; border-radius:10px; box-shadow:0 3px 10px rgba(0,0,0,0.08); background:white;"
+                    ):
+                        ui.label(f"📊 {col} (Numérique)").style("font-weight:700; font-size:18px; color:#01335A; margin-bottom:6px;")
+                        ui.label(f"Outliers détectés : {out_count} valeurs").style("font-family:monospace; margin-bottom:4px;")
+                        ui.label(f"• Méthode : {method}").style("font-size:14px;")
+                        ui.label(f"• Range normal : [{round(normal_min,2)} - {round(normal_max,2)}]").style("font-size:14px; margin-bottom:6px;")
+                        if out_count > 0:
+                            ui.label(f"• Outliers range : [{', '.join([str(round(v,2)) for v in outliers_values[:10]])} ...]").style("font-size:14px; margin-bottom:6px;")
+                        
+                        # Dropdown Stratégie de traitement
+                        strategies = [
+                            "Garder les outliers",
+                            "Supprimer les lignes",
+                            "Winsorisation",
+                            "Transformation robuste",
+                            "Imputation par quantile"
+                        ]
+                        ui.select(strategies, label="Stratégie de traitement").style("margin-top:6px; width:300px;")
+
+        for col in numeric_cols:
+            add_outlier_card(col)
+
+        # Bouton pour aller à étape suivante (feature engineering / encodage)
+        ui.button("➡ Étape 3.5 : Feature Engineering", on_click=lambda: ui.run_javascript(
+            "window.location.href='/supervised/feature_engineering'"
+        )).style(
+            "background:linear-gradient(135deg, #01335A, #09538C); color:white; font-weight:600; border-radius:8px; height:46px; width:300px; margin-top:20px;"
+        )
 
 
 
