@@ -211,43 +211,67 @@ def home_page():
 
 
 # ----------------- PAGE UPLOAD -----------------
+from nicegui import ui
+import pandas as pd, io
+
+
+
 @ui.page('/upload')
 def upload_page():
 
-    with ui.column().style(
-        """
-        width: 100% !important;
-        height: 100vh !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        background-color: #f5f6fa !important;
-        """
-    ):
-        with ui.card().style(
+    # Conteneur principal
+    with ui.column() as main_col:
+        main_col.style(
             """
-            padding: 32px !important;
-            width: 460px !important;
-            border-radius: 12px !important;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.12) !important;
+            width: 100% !important;
+            min-height: 100vh !important;
             display: flex !important;
             flex-direction: column !important;
             align-items: center !important;
-            background-color: white !important;
+            justify-content: flex-start !important;
+            background-color: #f5f6fa !important;
+            padding-top: 60px !important;
+            font-family: 'Inter', sans-serif !important;
             """
-        ):
+        )
 
-            ui.label("Chargement du Dataset").style(
+        # Titre
+        ui.label("Phase 2 : Chargement et Validation des Données").style(
+            """
+            font-weight: 700 !important;
+            font-size: 32px !important;
+            color: #01335A !important;
+            margin-bottom: 24px !important;
+            text-align: center !important;
+            """
+        )
+
+        # Carte centrale
+        with ui.card() as card:
+            card.style(
+                """
+                padding: 32px !important;
+                width: 580px !important;
+                border-radius: 12px !important;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.12) !important;
+                display: flex !important;
+                flex-direction: column !important;
+                align-items: center !important;
+                background-color: white !important;
+                """
+            )
+
+            ui.label("📂 Importer un Dataset CSV").style(
                 """
                 font-weight: 700 !important;
-                font-size: 28px !important;
+                font-size: 24px !important;
                 color: #01335A !important;
                 text-align: center !important;
                 margin-bottom: 10px !important;
                 """
             )
 
-            ui.label("Importez votre fichier CSV pour commencer").style(
+            ui.label("Glissez-déposez un fichier CSV ou cliquez pour parcourir").style(
                 """
                 color: #09538C !important;
                 font-size: 15px !important;
@@ -282,28 +306,63 @@ def upload_page():
                 """
             )
 
-            async def on_upload(e):
-                import pandas as pd, io
-                content = await e.file.read()
-                df = pd.read_csv(io.BytesIO(content))
-                state['raw_df'] = df
+            table_placeholder = ui.column().style(
+                """
+                width: 100% !important;
+                margin-top: 20px !important;
+                border-top: 1px solid #ecf0f1 !important;
+                padding-top: 20px !important;
+                """
+            )
 
-                status_label.text = f"Fichier chargé : {df.shape[0]} lignes × {df.shape[1]} colonnes"
-                status_label.style(
-                    """
-                    color: #27ae60 !important;
-                    font-size: 14px !important;
-                    margin-bottom: 18px !important;
-                    font-weight: 600 !important;
-                    """
-                )
-                btn_next.enable()
-                ui.notify("Dataset chargé avec succès !", color='positive')
+            async def on_upload(e):
+                try:
+                    content = await e.file.read()
+                    df = pd.read_csv(io.BytesIO(content))
+                    state["raw_df"] = df
+
+                    # Mise à jour du statut
+                    status_label.text = f"Fichier chargé : {df.shape[0]} lignes × {df.shape[1]} colonnes"
+                    status_label.style(
+                        """
+                        color: #27ae60 !important;
+                        font-size: 14px !important;
+                        margin-bottom: 18px !important;
+                        font-weight: 600 !important;
+                        """
+                    )
+
+                    # Affichage aperçu
+                    table_placeholder.clear()
+                    with table_placeholder:
+                        ui.label("Aperçu des 10 premières lignes :").style(
+                            """
+                            font-weight: 600 !important;
+                            color: #01335A !important;
+                            font-size: 16px !important;
+                            margin-bottom: 8px !important;
+                            """
+                        )
+                        ui.table(rows=df.head(10).to_dict(orient="records")).style(
+                            """
+                            width: 100% !important;
+                            font-size: 14px !important;
+                            border: 1px solid #dfe6e9 !important;
+                            border-radius: 6px !important;
+                            background-color: #fafafa !important;
+                            """
+                        )
+
+                    btn_next.enable()
+                    ui.notify("Dataset chargé avec succès !", color='positive')
+
+                except Exception as err:
+                    ui.notify(f"Erreur lors de l'import : {err}", color='negative')
 
             # Zone de drag & drop
             ui.upload(
                 on_upload=on_upload,
-                label="Glissez-déposez un fichier CSV ou cliquez pour parcourir"
+                label="Glissez-déposez un fichier CSV ou cliquez ici"
             ).style(
                 """
                 width: 100% !important;
@@ -313,19 +372,24 @@ def upload_page():
                 border-radius: 10px !important;
                 text-align: center !important;
                 font-size: 15px !important;
-                color: #01335A !important ;
+                color: #01335A !important;
                 cursor: pointer !important;
+                background-color: #fdfdfd !important;
+                transition: all 0.2s ease !important;
                 """
             ).props('accept=".csv"')
 
+            # Boutons navigation
+            with ui.row() as buttons_row:
+                buttons_row.style(
+                    """
+                    width: 100% !important;
+                    display: flex !important;
+                    gap: 16px !important;
+                    margin-top: 12px !important;
+                    """
+                )
 
-            with ui.row().style(
-                """
-                width: 100% !important;
-                display: flex !important;
-                gap: 16px !important;
-                """
-            ):
                 ui.button(
                     "⬅ Retour",
                     on_click=lambda: ui.run_javascript("window.location.href='/'")
@@ -343,6 +407,7 @@ def upload_page():
                 )
 
                 btn_next.on_click(lambda: ui.run_javascript("window.location.href='/preprocess'"))
+
 
 
 
