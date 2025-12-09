@@ -1715,6 +1715,7 @@ def multivariate_analysis_page():
 # ----------------- PAGE 3.6 : GESTION DES VALEURS MANQUANTES (VERSION FINALE) -----------------
 
 # ----------------- PAGE 3.6 : GESTION DES VALEURS MANQUANTES (VERSION COMPLÈTE) -----------------
+# ----------------- PAGE 3.6 : GESTION DES VALEURS MANQUANTES (VERSION COMPLÈTE) -----------------
 from nicegui import ui
 import plotly.graph_objs as go
 import numpy as np
@@ -1870,13 +1871,13 @@ def missing_values_page():
         indices = df_data[mask].index.tolist()
         return indices[:max_rows]  # Limiter pour performance
 
-    def apply_and_propagate():
+    def apply_and_propagate(navigate_after=False):
         """✅ Applique l'imputation sur raw_df ET tous les splits"""
         try:
             strategies = state.get("missing_strategy", {})
             if not strategies:
                 ui.notify("⚠️ Aucune stratégie configurée", color="warning")
-                return
+                return False
             
             split = state.get("split", {})
             
@@ -1904,11 +1905,19 @@ def missing_values_page():
                 state["split"] = split
             
             ui.notify("✅ Imputation appliquée sur raw_df et tous les splits!", color="positive")
-            ui.run_javascript("setTimeout(() => window.location.reload(), 1000);")
+            
+            # ✅ Navigation conditionnelle
+            if navigate_after:
+                ui.run_javascript("setTimeout(() => window.location.href='/supervised/encoding', 1000);")
+            else:
+                ui.run_javascript("setTimeout(() => window.location.reload(), 1000);")
+            
+            return True
         
         except Exception as e:
             ui.notify(f"❌ Erreur lors de l'application : {str(e)}", color="negative")
             print(f"Détail erreur: {e}")
+            return False
 
     def open_feature_modal(col_name):
         """Ouvre un dialog pour configurer la stratégie d'imputation d'une colonne"""
@@ -2148,11 +2157,11 @@ def missing_values_page():
             return
         
         with ui.dialog() as dialog, ui.card().classes("p-6"):
-            ui.label(" Confirmation").style("font-weight:700; font-size:18px;")
+            ui.label("⚠️ Confirmation").style("font-weight:700; font-size:18px;")
             ui.label("Voulez-vous appliquer l'imputation sur raw_df et tous les datasets (train/val/test) ?").style(
                 "margin-top:8px; color:#2c3e50;"
             )
-            ui.label(" Cette action est irréversible (sauf si vous rechargez le fichier)").style(
+            ui.label("⚠️ Cette action est irréversible (sauf si vous rechargez le fichier)").style(
                 "margin-top:4px; color:#e74c3c; font-size:13px;"
             )
             
@@ -2160,9 +2169,9 @@ def missing_values_page():
                 ui.button("Annuler", on_click=dialog.close).props("flat")
                 
                 def confirm_and_next():
-                    apply_and_propagate()
                     dialog.close()
-                    ui.run_javascript("setTimeout(() => window.location.href='/supervised/encoding', 1500);")
+                    # ✅ Passer navigate_after=True pour aller à la page suivante
+                    apply_and_propagate(navigate_after=True)
                 
                 ui.button("Confirmer", on_click=confirm_and_next).style("background:#27ae60; color:white;")
         
@@ -2314,12 +2323,12 @@ def missing_values_page():
             
             with ui.row().classes("gap-2").style("margin-top:16px;"):
                 ui.button(
-                    " Preview (train)",
+                    "🔍 Preview (train)",
                     on_click=lambda e: preview_imputation()
                 ).style("background:#2d9cdb; color:white;")
                 
                 ui.button(
-                    " Appliquer maintenant",
+                    "✅ Appliquer maintenant",
                     on_click=lambda e: confirm_and_apply()
                 ).style("background:#27ae60; color:white;")
 
@@ -2334,7 +2343,6 @@ def missing_values_page():
                 "➡ Étape suivante",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/encoding'")
             ).style("background:#09538C; color:white;")
-
 
 
 
