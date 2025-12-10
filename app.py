@@ -1247,16 +1247,15 @@ import base64
 @ui.page('/supervised/outliers_analysis')
 def outliers_analysis_page():
     """
-    Page de gestion des outliers avec détection de fuite et visualisation avant/après.
-
-    PRINCIPES CLÉS :
-    1. Les bornes (IQR, percentiles) sont TOUJOURS calculées sur X_train
-    2. Ces bornes sont appliquées à X_val et X_test (pas de recalcul)
-    3. Visualisation avant/après pour chaque feature
-    4. Sauvegarde de l'état original pour permettre le reset
+    Page complète pour gestion des outliers avec :
+    - Visualisation avant/après détaillée
+    - Tableaux des valeurs extrêmes
+    - Statistiques comparatives
+    - Preview et Apply séparés
+    - Propagation sur tous les splits
     """
-
-    # ---------- VÉRIFICATION CONTEXTE ----------
+    
+    # ---------- CONTEXTE ----------
     split = state.get("split")
     if not split or "X_train" not in split:
         with ui.column().classes("items-center justify-center w-full h-screen"):
@@ -1269,337 +1268,256 @@ def outliers_analysis_page():
         return
 
     df_train = split["X_train"].copy()
-
-    # ✅ Sauvegarde de l'état original (une seule fois)
-    if "outliers_original_state" not in state:
-        state["outliers_original_state"] = {
-            "X_train": split["X_train"].copy(),
-            "X_val": split["X_val"].copy() if "X_val" in split and isinstance(split["X_val"], pd.DataFrame) else None,
-            "X_test": split["X_test"].copy() if "X_test" in split and isinstance(split["X_test"], pd.DataFrame) else None
-        }
-        print("✅ État original sauvegardé")
-
-    # États temporaires
+    
+    # ✅ Sauvegarde de l'état original si pas déjà fait
+    if "outliers_original_train" not in state:
+        state["outliers_original_train"] = df_train.copy()
+    
+    # État temporaire pour les previews
+    state.setdefault("outliers_preview", {})
     state.setdefault("outliers_strategy", {})
-    state.setdefault("outliers_bounds", {})  # Stockage des bornes calculées sur train
 
     numeric_features = df_train.select_dtypes(include=np.number).columns.tolist()
     if not numeric_features:
         ui.label("Aucune variable numérique détectée.").style("color:#e74c3c; font-weight:600;")
         return
 
-    # ---------- FONCTIONS HELPERS ----------
+    # ---------- HELPERS ----------
+    def detect_outliers_iqr(series):
+        """Détecte les outliers avec la méthode IQR"""
+        q1, q3 = series.quantile([0.25, 0.75])
+        iqr = q3 - q1
+        lower_bound = q1 - 1.5 * iqr
+        upper_bound = q3 + 1.5 * iqr
+        outliers_mask = (series < lower_bound) | (series > upper_bound)
+        return outliers_mask, lower_bound, upper_bound
 
-    def calculate_bounds_on_train(series, method, params=None):
-        """
-        Calcule les bornes UNIQUEMENT sur les données d'entraînement.
-        Ces bornes seront réutilisées pour val/test (pas de fuite).
-        """
-        params = params or {}
-        bounds = {}
-
-        if method == "cap":
-            # Bornes IQR
-            q1 = series.quantile(0.25)
-            q3 = series.quantile(0.75)
-            iqr = q3 - q1
-            bounds["lower"] = q1 - 1.5 * iqr
-            bounds["upper"] = q3 + 1.5 * iqr
-
-        elif method == "winsorize":
-            # Percentiles
-            lower_pct = params.get("lower", 1)
-            upper_pct = params.get("upper", 99)
-            bounds["lower"] = np.percentile(series.dropna(), lower_pct)
-            bounds["upper"] = np.percentile(series.dropna(), upper_pct)
-
-        elif method == "remove":
-            # Pour la suppression, on utilise aussi IQR
-            q1 = series.quantile(0.25)
-            q3 = series.quantile(0.75)
-            iqr = q3 - q1
-            bounds["lower"] = q1 - 1.5 * iqr
-            bounds["upper"] = q3 + 1.5 * iqr
-
-        return bounds
-
-    def apply_treatment_with_bounds(series, method, bounds, params=None):
-        """
-        Applique le traitement en utilisant des bornes pré-calculées.
-        """
-        result = series.copy()
-
-        if method == "remove":
-            # Remplacer outliers par NaN
-            outliers_mask = (series < bounds["lower"]) | (series > bounds["upper"])
-            result[outliers_mask] = np.nan
-
-        elif method == "winsorize" or method == "cap":
-            # Capping aux bornes
-            result = series.clip(bounds["lower"], bounds["upper"])
-
-        elif method == "log":
-            # Log transform (pas de bornes nécessaires)
-            result = np.log1p(series.clip(lower=0))
-
-        return result
-
-    def detect_outliers_with_bounds(series, bounds):
-        """Détecte les outliers avec des bornes données"""
-        outliers_mask = (series < bounds["lower"]) | (series > bounds["upper"])
+    def get_outlier_stats(series):
+        """Calcule les statistiques d'outliers"""
+        outliers_mask, lower, upper = detect_outliers_iqr(series)
         n_outliers = outliers_mask.sum()
         pct_outliers = (n_outliers / len(series) * 100) if len(series) > 0 else 0
-
+        
         return {
             "n_outliers": int(n_outliers),
             "pct_outliers": round(pct_outliers, 2),
-            "lower_bound": round(bounds["lower"], 2),
-            "upper_bound": round(bounds["upper"], 2),
+            "lower_bound": round(lower, 2),
+            "upper_bound": round(upper, 2),
             "outliers_mask": outliers_mask
         }
 
-    def get_stats_comparison(original, treated):
-        """Compare les stats avant/après"""
-        return {
-            "original": {
-                "mean": original.mean(),
-                "std": original.std(),
-                "min": original.min(),
-                "max": original.max(),
-                "median": original.median()
-            },
-            "treated": {
-                "mean": treated.mean(),
-                "std": treated.std(),
-                "min": treated.min(),
-                "max": treated.max(),
-                "median": treated.median()
-            }
-        }
+    def get_extreme_values(series, n=10):
+        """Récupère les n valeurs les plus extrêmes"""
+        outliers_mask, lower, upper = detect_outliers_iqr(series)
+        outliers = series[outliers_mask].sort_values()
+        
+        if len(outliers) == 0:
+            return pd.DataFrame()
+        
+        # Prendre les n plus petits et n plus grands
+        n_show = min(n, len(outliers))
+        extreme_low = outliers.head(n_show)
+        extreme_high = outliers.tail(n_show)
+        
+        result = pd.concat([extreme_low, extreme_high]).drop_duplicates()
+        return result
 
-    def create_before_after_plots(feature, original_data, treated_data, method_name, bounds):
-        """Crée des visualisations avant/après avec bornes"""
+    def apply_outlier_method(series, method, params=None):
+        """Applique une méthode de traitement des outliers"""
+        params = params or {}
+        result = series.copy()
+        
+        if method == "remove":
+            outliers_mask, _, _ = detect_outliers_iqr(series)
+            result[outliers_mask] = np.nan
+            
+        elif method == "winsorize":
+            lower_pct = params.get("lower", 1)
+            upper_pct = params.get("upper", 99)
+            lower_val, upper_val = np.percentile(series.dropna(), [lower_pct, upper_pct])
+            result = series.clip(lower_val, upper_val)
+            
+        elif method == "log":
+            # Log transform (log1p pour gérer les 0)
+            result = np.log1p(series.clip(lower=0))
+            
+        elif method == "cap":
+            # Cap aux bornes IQR
+            outliers_mask, lower, upper = detect_outliers_iqr(series)
+            result = series.clip(lower, upper)
+            
+        return result
 
-        # Subplot 1: Boxplots comparatifs
-        fig1 = go.Figure()
-
-        fig1.add_trace(go.Box(
-            y=original_data.dropna(),
-            name="Avant",
-            marker_color="#e74c3c",
-            boxmean='sd'
-        ))
-
-        fig1.add_trace(go.Box(
-            y=treated_data.dropna(),
-            name=f"Après ({method_name})",
-            marker_color="#27ae60",
-            boxmean='sd'
-        ))
-
-        # Ajouter les lignes de bornes
-        fig1.add_hline(y=bounds["lower"], line_dash="dash", line_color="orange",
-                       annotation_text=f"Borne inf: {bounds['lower']:.2f}")
-        fig1.add_hline(y=bounds["upper"], line_dash="dash", line_color="orange",
-                       annotation_text=f"Borne sup: {bounds['upper']:.2f}")
-
-        fig1.update_layout(
-            title=f"{feature} - Boxplot Avant/Après",
-            yaxis_title="Valeur",
-            height=400,
-            showlegend=True
-        )
-
-        # Subplot 2: Histogrammes superposés
-        fig2 = go.Figure()
-
-        fig2.add_trace(go.Histogram(
+    def create_comparison_plots(feature, original_data, treated_data, method_name):
+        """Crée des plots comparatifs avec Plotly"""
+        fig = go.Figure()
+        
+        # Histogramme AVANT
+        fig.add_trace(go.Histogram(
             x=original_data.dropna(),
             name="Avant",
             marker_color="#e74c3c",
             opacity=0.6,
             nbinsx=30
         ))
-
-        fig2.add_trace(go.Histogram(
+        
+        # Histogramme APRÈS
+        fig.add_trace(go.Histogram(
             x=treated_data.dropna(),
             name=f"Après ({method_name})",
             marker_color="#27ae60",
             opacity=0.6,
             nbinsx=30
         ))
-
-        # Lignes verticales pour les bornes
-        fig2.add_vline(x=bounds["lower"], line_dash="dash", line_color="orange")
-        fig2.add_vline(x=bounds["upper"], line_dash="dash", line_color="orange")
-
-        fig2.update_layout(
+        
+        fig.update_layout(
             title=f"{feature} - Distribution Avant/Après",
             xaxis_title="Valeur",
             yaxis_title="Fréquence",
             barmode='overlay',
-            height=400,
-            showlegend=True
+            height=350,
+            showlegend=True,
+            hovermode='x unified'
         )
+        
+        return fig
 
-        # Subplot 3: Scatter plot des valeurs
-        fig3 = go.Figure()
-
-        # Points normaux
-        original_reset = original_data.reset_index(drop=True)
-        outliers_mask = (original_reset < bounds["lower"]) | (original_reset > bounds["upper"])
-
-        fig3.add_trace(go.Scatter(
-            x=list(range(len(original_reset[~outliers_mask]))),
-            y=original_reset[~outliers_mask],
-            mode='markers',
-            name='Valeurs normales',
-            marker=dict(color='#4A90E2', size=5, opacity=0.6)
+    def create_boxplot_comparison(feature, original_data, treated_data, method_name):
+        """Crée des boxplots comparatifs"""
+        fig = go.Figure()
+        
+        fig.add_trace(go.Box(
+            y=original_data.dropna(),
+            name="Avant",
+            marker_color="#e74c3c",
+            boxmean='sd'
         ))
-
-        # Outliers
-        if outliers_mask.any():
-            # Construire les indices réels des outliers pour l'axe x
-            outlier_indices = np.where(outliers_mask)[0].tolist()
-            fig3.add_trace(go.Scatter(
-                x=outlier_indices,
-                y=original_reset[outliers_mask],
-                mode='markers',
-                name=f'Outliers ({outliers_mask.sum()})',
-                marker=dict(color='red', size=8, symbol='x')
-            ))
-
-        # Bornes
-        fig3.add_hline(y=bounds["lower"], line_dash="dash", line_color="orange")
-        fig3.add_hline(y=bounds["upper"], line_dash="dash", line_color="orange")
-
-        fig3.update_layout(
-            title=f"{feature} - Scatter des observations",
-            xaxis_title="Index",
+        
+        fig.add_trace(go.Box(
+            y=treated_data.dropna(),
+            name=f"Après ({method_name})",
+            marker_color="#27ae60",
+            boxmean='sd'
+        ))
+        
+        fig.update_layout(
+            title=f"{feature} - Boxplot Avant/Après",
             yaxis_title="Valeur",
-            height=400,
+            height=350,
             showlegend=True
         )
-
-        return fig1, fig2, fig3
+        
+        return fig
 
     def preview_treatment(feature, method, params=None):
-        """Preview le traitement avec calcul des bornes sur train"""
+        """Preview le traitement sur une feature"""
         original = df_train[feature].copy()
-
-        # 1. Calculer les bornes sur TRAIN uniquement
-        bounds = calculate_bounds_on_train(original, method, params)
-
-        # 2. Appliquer le traitement avec ces bornes
-        treated = apply_treatment_with_bounds(original, method, bounds, params)
-
-        # Sauvegarder les bornes pour utilisation ultérieure
-        state["outliers_bounds"][feature] = bounds
-
-        return original, treated, bounds
+        treated = apply_outlier_method(original, method, params)
+        
+        # Sauvegarder dans l'état de preview
+        state["outliers_preview"][feature] = {
+            "method": method,
+            "params": params,
+            "treated_data": treated
+        }
+        
+        return original, treated
 
     def apply_and_propagate(navigate_after=False):
-        """
-        ✅ Applique les traitements sur train/val/test.
-        IMPORTANT: Les bornes sont calculées UNIQUEMENT sur train,
-        puis appliquées identiquement sur val et test (pas de fuite).
-        """
+        """✅ Applique les traitements sur train/val/test"""
         try:
             strategies = state.get("outliers_strategy", {})
             if not strategies:
                 ui.notify("⚠️ Aucune stratégie configurée", color="warning")
                 return False
-
+            
             split = state.get("split", {})
-
-            # Pour chaque feature, calculer les bornes sur TRAIN
-            for feature, strat in strategies.items():
-                method = strat.get("method")
-                params = strat.get("params", {})
-
-                if feature not in df_train.columns:
-                    continue
-
-                # 1. Calculer les bornes sur TRAIN UNIQUEMENT
-                if feature not in state["outliers_bounds"]:
-                    bounds = calculate_bounds_on_train(df_train[feature], method, params)
-                    state["outliers_bounds"][feature] = bounds
-                else:
-                    bounds = state["outliers_bounds"][feature]
-
-                print(f"🔍 {feature}: Bornes calculées sur TRAIN -> [{bounds['lower']:.2f}, {bounds['upper']:.2f}]")
-
-                # 2. Appliquer sur X_train
-                if "X_train" in split:
-                    split["X_train"][feature] = apply_treatment_with_bounds(
-                        split["X_train"][feature], method, bounds, params
-                    )
-                    print(f"  ✅ Appliqué sur X_train")
-
-                # 3. Appliquer sur X_val (avec les MÊMES bornes)
-                if "X_val" in split and isinstance(split["X_val"], pd.DataFrame):
-                    if feature in split["X_val"].columns:
-                        split["X_val"][feature] = apply_treatment_with_bounds(
-                            split["X_val"][feature], method, bounds, params
-                        )
-                        print(f"  ✅ Appliqué sur X_val (MÊMES BORNES)")
-
-                # 4. Appliquer sur X_test (avec les MÊMES bornes)
-                if "X_test" in split and isinstance(split["X_test"], pd.DataFrame):
-                    if feature in split["X_test"].columns:
-                        split["X_test"][feature] = apply_treatment_with_bounds(
-                            split["X_test"][feature], method, bounds, params
-                        )
-                        print(f"  ✅ Appliqué sur X_test (MÊMES BORNES)")
-
+            
+            # Application sur X_train
+            if "X_train" in split:
+                df_train_new = split["X_train"].copy()
+                for feature, strat in strategies.items():
+                    if feature in df_train_new.columns:
+                        method = strat.get("method")
+                        params = strat.get("params", {})
+                        df_train_new[feature] = apply_outlier_method(df_train_new[feature], method, params)
+                split["X_train"] = df_train_new
+            
+            # Application sur X_val
+            if "X_val" in split and isinstance(split["X_val"], pd.DataFrame):
+                df_val_new = split["X_val"].copy()
+                for feature, strat in strategies.items():
+                    if feature in df_val_new.columns:
+                        method = strat.get("method")
+                        params = strat.get("params", {})
+                        df_val_new[feature] = apply_outlier_method(df_val_new[feature], method, params)
+                split["X_val"] = df_val_new
+            
+            # Application sur X_test
+            if "X_test" in split and isinstance(split["X_test"], pd.DataFrame):
+                df_test_new = split["X_test"].copy()
+                for feature, strat in strategies.items():
+                    if feature in df_test_new.columns:
+                        method = strat.get("method")
+                        params = strat.get("params", {})
+                        df_test_new[feature] = apply_outlier_method(df_test_new[feature], method, params)
+                split["X_test"] = df_test_new
+            
             state["split"] = split
-
-            ui.notify("✅ Traitement des outliers appliqué sur train/val/test (sans fuite)!", color="positive")
-
+            
+            ui.notify("✅ Traitement des outliers appliqué sur train/val/test!", color="positive")
+            
             if navigate_after:
                 ui.run_javascript("setTimeout(() => window.location.href='/supervised/missing_values', 1000);")
             else:
                 ui.run_javascript("setTimeout(() => window.location.reload(), 1000);")
-
+            
             return True
-
+            
         except Exception as e:
             ui.notify(f"❌ Erreur : {str(e)}", color="negative")
-            print(f"Erreur détaillée: {str(e)}")
-            import traceback
-            traceback.print_exc()
             return False
 
     def open_feature_config_modal(feature):
-        """Ouvre modal de configuration avec preview détaillé"""
+        """Ouvre modal de configuration pour une feature"""
         current_strategy = state.get("outliers_strategy", {}).get(feature, {})
         current_method = current_strategy.get("method", "none")
-
-        with ui.dialog() as dialog, ui.card().classes("w-full max-w-6xl p-6"):
-            ui.label(f"⚙️ Configuration : {feature}").style("font-weight:700; font-size:22px; color:#01335A;")
-
-            # Méthode de traitement
+        
+        with ui.dialog() as dialog, ui.card().classes("w-full max-w-4xl p-6"):
+            ui.label(f"⚙️ Configuration : {feature}").style("font-weight:700; font-size:20px; color:#01335A;")
+            
+            # Stats actuelles
+            stats = get_outlier_stats(df_train[feature])
+            with ui.row().classes("gap-4 mt-4"):
+                ui.label(f"🔴 Outliers détectés : {stats['n_outliers']} ({stats['pct_outliers']}%)").style(
+                    "font-size:14px; color:#e74c3c; font-weight:600;"
+                )
+                ui.label(f"📊 Bornes IQR : [{stats['lower_bound']}, {stats['upper_bound']}]").style(
+                    "font-size:14px; color:#636e72;"
+                )
+            
+            # Sélection de la méthode
             method_select = ui.select(
-                options=["none", "remove", "winsorize", "cap", "log"],
+                options=["none", "remove", "winsorize", "log", "cap"],
                 value=current_method,
                 label="Méthode de traitement"
             ).classes("w-full mt-4")
-
+            
             # Conteneur pour paramètres
             params_container = ui.column().classes("w-full mt-2")
-
+            
             winsor_lower = None
             winsor_upper = None
-
+            
             def update_method_params():
                 nonlocal winsor_lower, winsor_upper
                 params_container.clear()
-
+                
                 with params_container:
                     if method_select.value == "none":
-                        ui.label("Aucun traitement").style("color:#636e72; font-size:13px;")
+                        ui.label("Aucun traitement appliqué").style("color:#636e72; font-size:13px;")
                     elif method_select.value == "remove":
-                        ui.label("🗑️ Suppression : Remplace les outliers par NaN (bornes IQR)").style("color:#636e72; font-size:13px;")
+                        ui.label("🗑️ Suppression : Remplace les outliers par NaN").style("color:#636e72; font-size:13px;")
                     elif method_select.value == "winsorize":
                         ui.label("📉 Winsorisation : Cap aux percentiles").style("color:#636e72; font-size:13px; margin-bottom:8px;")
                         with ui.row().classes("gap-2"):
@@ -1616,298 +1534,251 @@ def outliers_analysis_page():
                                 max=100
                             ).props("outlined dense")
                     elif method_select.value == "log":
-                        ui.label("🔁 Log Transform : log1p (pas de bornes)").style("color:#636e72; font-size:13px;")
+                        ui.label("🔁 Log Transform : Transformation logarithmique (log1p)").style("color:#636e72; font-size:13px;")
                     elif method_select.value == "cap":
-                        ui.label("✂️ Capping IQR : Cap aux bornes Q1-1.5*IQR et Q3+1.5*IQR").style("color:#636e72; font-size:13px;")
-
+                        ui.label("✂️ Capping : Cap aux bornes IQR (Q1-1.5*IQR, Q3+1.5*IQR)").style("color:#636e72; font-size:13px;")
+            
             method_select.on_value_change(lambda: update_method_params())
             update_method_params()
-
+            
             # Preview container
             preview_container = ui.column().classes("w-full mt-4")
-
-            def show_preview(auto=False):
+            
+            def show_preview():
                 if method_select.value == "none":
                     ui.notify("Sélectionnez une méthode", color="warning")
                     return
-
+                
                 params = {}
                 if method_select.value == "winsorize" and winsor_lower and winsor_upper:
                     params = {"lower": winsor_lower.value, "upper": winsor_upper.value}
-
-                original, treated, bounds = preview_treatment(feature, method_select.value, params)
-
+                
+                original, treated = preview_treatment(feature, method_select.value, params)
+                
                 preview_container.clear()
                 with preview_container:
-                    ui.label("📊 Aperçu du traitement").style("font-weight:700; font-size:18px; margin-top:12px;")
-
-                    # Afficher les bornes calculées
-                    with ui.card().classes("w-full p-4 mb-4").style("background:#fff3cd; border-left:4px solid #ffc107;"):
-                        ui.label("🔍 Bornes calculées sur TRAIN (seront appliquées à val/test)").style(
-                            "font-weight:600; color:#856404; margin-bottom:8px;"
-                        )
-                        ui.label(f"Borne inférieure: {bounds['lower']:.4f}").style("font-size:14px; color:#333;")
-                        ui.label(f"Borne supérieure: {bounds['upper']:.4f}").style("font-size:14px; color:#333;")
-
+                    ui.label("📊 Aperçu du traitement").style("font-weight:600; font-size:16px; margin-top:12px;")
+                    
                     # Stats comparatives
-                    stats_comp = get_stats_comparison(original, treated)
-                    original_outliers = detect_outliers_with_bounds(original, bounds)
-                    treated_outliers = detect_outliers_with_bounds(treated, bounds)
-
-                    with ui.row().classes("gap-6 mt-2 mb-4"):
-                        with ui.card().classes("flex-1 p-4").style("background:#ffebee;"):
-                            ui.label("AVANT").style("font-weight:700; color:#c62828; font-size:16px;")
-                            ui.label(f"Outliers : {original_outliers['n_outliers']} ({original_outliers['pct_outliers']}%)").style("font-size:13px;")
-                            ui.label(f"Mean : {stats_comp['original']['mean']:.4f}").style("font-size:13px;")
-                            ui.label(f"Std : {stats_comp['original']['std']:.4f}").style("font-size:13px;")
-                            ui.label(f"Min : {stats_comp['original']['min']:.4f}").style("font-size:13px;")
-                            ui.label(f"Max : {stats_comp['original']['max']:.4f}").style("font-size:13px;")
-
-                        with ui.card().classes("flex-1 p-4").style("background:#e8f5e9;"):
-                            ui.label("APRÈS").style("font-weight:700; color:#2e7d32; font-size:16px;")
-                            ui.label(f"Outliers : {treated_outliers['n_outliers']} ({treated_outliers['pct_outliers']}%)").style("font-size:13px;")
-                            ui.label(f"Mean : {stats_comp['treated']['mean']:.4f}").style("font-size:13px;")
-                            ui.label(f"Std : {stats_comp['treated']['std']:.4f}").style("font-size:13px;")
-                            ui.label(f"Min : {stats_comp['treated']['min']:.4f}").style("font-size:13px;")
-                            ui.label(f"Max : {stats_comp['treated']['max']:.4f}").style("font-size:13px;")
-
-                    # Visualisations
-                    ui.label("📈 Visualisations comparatives").style("font-weight:700; font-size:18px; margin-top:16px; margin-bottom:12px;")
-
-                    fig1, fig2, fig3 = create_before_after_plots(feature, original, treated, method_select.value, bounds)
-
-                    # Row 1: Boxplot et Histogramme côte à côte
-                    with ui.row().classes("gap-3 w-full mb-3"):
-                        with ui.column().classes("flex-1"):
-                            ui.label("1️⃣ Boxplot avec bornes").style("font-weight:600; font-size:14px; color:#2c3e50; margin-bottom:4px;")
-                            ui.plotly(fig1).classes("w-full")
-
-                        with ui.column().classes("flex-1"):
-                            ui.label("2️⃣ Distributions superposées").style("font-weight:600; font-size:14px; color:#2c3e50; margin-bottom:4px;")
-                            ui.plotly(fig2).classes("w-full")
-
-                    # Row 2: Scatter plot en pleine largeur
-                    ui.label("3️⃣ Scatter plot des observations").style("font-weight:600; font-size:14px; color:#2c3e50; margin-bottom:4px; margin-top:8px;")
-                    ui.plotly(fig3).classes("w-full")
-
-            # Boutons d'action
-            with ui.row().classes("w-full justify-between mt-6"):
-                ui.button("🔍 Preview", on_click=show_preview).style("background:#2d9cdb; color:white; font-weight:600; padding:12px 24px;")
-
+                    with ui.row().classes("gap-6 mt-2"):
+                        with ui.column():
+                            ui.label("AVANT").style("font-weight:600; color:#e74c3c;")
+                            ui.label(f"Outliers : {stats['n_outliers']}").style("font-size:13px;")
+                            ui.label(f"Mean : {original.mean():.2f}").style("font-size:13px;")
+                            ui.label(f"Std : {original.std():.2f}").style("font-size:13px;")
+                        
+                        with ui.column():
+                            ui.label("APRÈS").style("font-weight:600; color:#27ae60;")
+                            treated_stats = get_outlier_stats(treated)
+                            ui.label(f"Outliers : {treated_stats['n_outliers']}").style("font-size:13px;")
+                            ui.label(f"Mean : {treated.mean():.2f}").style("font-size:13px;")
+                            ui.label(f"Std : {treated.std():.2f}").style("font-size:13px;")
+                    
+                    # Plots comparatifs
+                    with ui.row().classes("gap-2 mt-4 w-full"):
+                        ui.plotly(create_comparison_plots(feature, original, treated, method_select.value)).classes("flex-1")
+                        ui.plotly(create_boxplot_comparison(feature, original, treated, method_select.value)).classes("flex-1")
+                    
+                    # Tableau des valeurs extrêmes
+                    extreme_before = get_extreme_values(original, n=5)
+                    extreme_after = get_extreme_values(treated, n=5)
+                    
+                    if len(extreme_before) > 0:
+                        ui.label("🔍 Valeurs Extrêmes (sample)").style("font-weight:600; margin-top:12px;")
+                        with ui.row().classes("gap-4 w-full"):
+                            with ui.column().classes("flex-1"):
+                                ui.label("Avant").style("font-weight:600; color:#e74c3c; font-size:13px;")
+                                rows_before = [{"Index": idx, "Valeur": f"{val:.2f}"} for idx, val in extreme_before.items()]
+                                ui.table(
+                                    columns=[
+                                        {"name": "Index", "label": "Index", "field": "Index"},
+                                        {"name": "Valeur", "label": "Valeur", "field": "Valeur"}
+                                    ],
+                                    rows=rows_before
+                                ).props("dense").style("font-size:12px;")
+                            
+                            with ui.column().classes("flex-1"):
+                                ui.label("Après").style("font-weight:600; color:#27ae60; font-size:13px;")
+                                rows_after = [{"Index": idx, "Valeur": f"{val:.2f}"} for idx, val in extreme_after.items()]
+                                ui.table(
+                                    columns=[
+                                        {"name": "Index", "label": "Index", "field": "Index"},
+                                        {"name": "Valeur", "label": "Valeur", "field": "Valeur"}
+                                    ],
+                                    rows=rows_after
+                                ).props("dense").style("font-size:12px;")
+            
+            # Boutons
+            with ui.row().classes("w-full justify-between mt-4"):
+                ui.button("🔍 Preview", on_click=show_preview).style("background:#2d9cdb; color:white;")
+                
                 with ui.row().classes("gap-2"):
                     ui.button("Annuler", on_click=dialog.close).props("flat")
-
+                    
                     def save_strategy():
                         params = {}
                         if method_select.value == "winsorize" and winsor_lower and winsor_upper:
                             params = {"lower": winsor_lower.value, "upper": winsor_upper.value}
-
+                        
                         state.setdefault("outliers_strategy", {})[feature] = {
                             "method": method_select.value,
                             "params": params
                         }
-
+                        
                         ui.notify(f"✅ Stratégie sauvegardée pour {feature}", color="positive")
                         dialog.close()
-
-                    ui.button("Sauvegarder", on_click=save_strategy).style("background:#27ae60; color:white; font-weight:600; padding:12px 24px;")
-
+                    
+                    ui.button("Sauvegarder", on_click=save_strategy).style("background:#27ae60; color:white;")
+        
         dialog.open()
-
-        # Afficher automatiquement le preview si une méthode est déjà configurée
-        if current_method != "none":
-            show_preview(auto=True)
 
     def confirm_and_apply():
         """Confirme et applique le traitement"""
         strategies = state.get("outliers_strategy", {})
-
+        
         if not strategies:
             ui.notify("⚠️ Aucune stratégie configurée", color="warning")
             return
-
+        
         with ui.dialog() as dialog, ui.card().classes("p-6"):
-            ui.label("⚠️ Confirmation").style("font-weight:700; font-size:20px; color:#01335A;")
+            ui.label("⚠️ Confirmation").style("font-weight:700; font-size:18px;")
             ui.label(f"Appliquer le traitement des outliers sur {len(strategies)} features ?").style(
-                "margin-top:8px; color:#2c3e50; font-size:15px;"
+                "margin-top:8px; color:#2c3e50;"
             )
-
-            with ui.card().classes("w-full mt-3 p-3").style("background:#e3f2fd; border-left:4px solid #2196f3;"):
-                ui.label("ℹ️ Les bornes sont calculées sur TRAIN uniquement").style("font-weight:600; color:#1565c0;")
-                ui.label("Les mêmes bornes seront appliquées à VAL et TEST (pas de fuite de données)").style(
-                    "font-size:13px; color:#1976d2;"
-                )
-
-            ui.label("⚠️ Cette action modifiera train/val/test de manière irréversible").style(
-                "margin-top:8px; color:#e74c3c; font-size:13px;"
+            ui.label("⚠️ Cette action modifiera train/val/test").style(
+                "margin-top:4px; color:#e74c3c; font-size:13px;"
             )
-
+            
             with ui.row().classes("w-full justify-end gap-2 mt-4"):
                 ui.button("Annuler", on_click=dialog.close).props("flat")
-
+                
                 def confirm():
                     dialog.close()
                     apply_and_propagate(navigate_after=True)
-
-                ui.button("Confirmer", on_click=confirm).style("background:#27ae60; color:white; font-weight:600;")
-
+                
+                ui.button("Confirmer", on_click=confirm).style("background:#27ae60; color:white;")
+        
         dialog.open()
-
-    def reset_to_original():
-        """Réinitialise aux données originales"""
-        if "outliers_original_state" not in state:
-            ui.notify("⚠️ Pas d'état original sauvegardé", color="warning")
-            return
-
-        split = state.get("split", {})
-        original = state["outliers_original_state"]
-
-        split["X_train"] = original["X_train"].copy()
-        if original["X_val"] is not None:
-            split["X_val"] = original["X_val"].copy()
-        if original["X_test"] is not None:
-            split["X_test"] = original["X_test"].copy()
-
-        state["split"] = split
-        state["outliers_strategy"] = {}
-        state["outliers_bounds"] = {}
-
-        ui.notify("🔄 Données réinitialisées à l'état original", color="info")
-        ui.run_javascript("setTimeout(() => window.location.reload(), 500);")
 
     # ---------- UI ----------
     with ui.column().classes("w-full items-center p-8").style("background-color:#f5f6fa;"):
         ui.label("🔍 ÉTAPE 3.4 : GESTION DES OUTLIERS").style(
-            "font-weight:700; font-size:30px; color:#01335A; margin-bottom:8px;"
+            "font-weight:700; font-size:28px; color:#01335A; margin-bottom:10px;"
         )
-
+        
         ui.label(f"Détection et traitement sur {len(numeric_features)} variables numériques").style(
-            "font-size:16px; color:#636e72; margin-bottom:8px;"
+            "font-size:15px; color:#636e72; margin-bottom:24px;"
         )
 
-        # Avertissement sur la fuite
-        with ui.card().classes("w-full max-w-6xl p-4 mb-6").style("background:#fff3cd; border-left:4px solid #ffc107;"):
-            ui.label("⚠️ PRINCIPE ANTI-FUITE").style("font-weight:700; color:#856404; font-size:16px;")
-            ui.label("Les bornes (IQR, percentiles) sont calculées UNIQUEMENT sur X_train").style("font-size:14px; color:#856404;")
-            ui.label("Ces bornes sont ensuite appliquées identiquement à X_val et X_test (pas de recalcul)").style("font-size:14px; color:#856404;")
-
-        # Vue d'ensemble
+        # --- A - Vue d'ensemble ---
         with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
-            ui.label("📊 Vue d'ensemble").style("font-weight:700; font-size:20px; color:#2c3e50;")
-
-            # Calculer les stats globales (sur train uniquement)
+            ui.label("📊 Vue d'ensemble").style("font-weight:700; font-size:18px; color:#2c3e50;")
+            
+            # Calculer stats globales
             total_outliers = 0
             total_values = 0
             features_affected = 0
-
+            
             for feat in numeric_features:
-                # Calculer bornes IQR sur train
-                q1 = df_train[feat].quantile(0.25)
-                q3 = df_train[feat].quantile(0.75)
-                iqr = q3 - q1
-                lower = q1 - 1.5 * iqr
-                upper = q3 + 1.5 * iqr
-
-                outliers_mask = (df_train[feat] < lower) | (df_train[feat] > upper)
-                n_outliers = outliers_mask.sum()
-
-                if n_outliers > 0:
+                stats = get_outlier_stats(df_train[feat])
+                if stats['n_outliers'] > 0:
                     features_affected += 1
-                total_outliers += n_outliers
+                total_outliers += stats['n_outliers']
                 total_values += len(df_train[feat])
-
+            
             pct_global = round((total_outliers / total_values * 100), 2) if total_values > 0 else 0
-
+            
             with ui.row().classes("gap-6 mt-4"):
                 def metric(label, value, sub=""):
                     with ui.column().classes("items-start"):
                         ui.label(label).style("font-size:13px; color:#636e72;")
-                        ui.label(value).style("font-weight:700; font-size:22px; color:#01335A;")
+                        ui.label(value).style("font-weight:700; font-size:20px; color:#01335A;")
                         if sub:
                             ui.label(sub).style("font-size:12px; color:#2c3e50;")
-
-                metric("Total outliers (train)", f"{total_outliers}", f"{pct_global}% des valeurs")
+                
+                metric("Total outliers", f"{total_outliers}", f"{pct_global}% des valeurs")
                 metric("Features affectées", f"{features_affected}/{len(numeric_features)}", "")
                 metric("Stratégies configurées", f"{len(state.get('outliers_strategy', {}))}", "")
 
-        # Liste des features
+        # --- B - Tableau des features avec boutons d'action ---
         with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
-            ui.label("📋 Configuration par feature").style("font-weight:700; font-size:20px; color:#2c3e50;")
-
-            ui.label("💡 Cliquez sur ⚙️ pour configurer chaque feature").style(
-                "font-size:13px; color:#636e72; margin-top:4px; margin-bottom:12px;"
+            ui.label("📋 Détail par feature").style("font-weight:700; font-size:18px; color:#2c3e50;")
+            
+            ui.label("💡 Cliquez sur le bouton ⚙️ pour configurer le traitement de chaque feature").style(
+                "font-size:12px; color:#636e72; margin-top:4px; margin-bottom:12px;"
             )
-
+            
+            # Créer une grille pour chaque feature
             for feat in numeric_features:
-                # Stats sur train
-                q1 = df_train[feat].quantile(0.25)
-                q3 = df_train[feat].quantile(0.75)
-                iqr = q3 - q1
-                lower = q1 - 1.5 * iqr
-                upper = q3 + 1.5 * iqr
-
-                outliers_mask = (df_train[feat] < lower) | (df_train[feat] > upper)
-                n_outliers = outliers_mask.sum()
-                pct_outliers = round((n_outliers / len(df_train[feat]) * 100), 2)
-
+                stats = get_outlier_stats(df_train[feat])
                 strategy = state.get("outliers_strategy", {}).get(feat, {})
                 method = strategy.get("method", "none")
-
-                tag = "🔴" if pct_outliers > 5 else ("🟡" if pct_outliers > 1 else "🟢")
-
+                
+                tag = "🔴" if stats['pct_outliers'] > 5 else ("🟡" if stats['pct_outliers'] > 1 else "🟢")
+                
                 with ui.card().classes("w-full p-4 mb-2").style("background:#fafafa; border-left:4px solid #09538C;"):
                     with ui.row().classes("w-full items-center justify-between"):
-                        # Infos feature
+                        # Colonne gauche : infos
                         with ui.column().classes("flex-1"):
                             with ui.row().classes("items-center gap-2"):
                                 ui.label(feat).style("font-weight:700; font-size:16px; color:#01335A;")
                                 ui.label(tag).style("font-size:18px;")
-
+                            
                             with ui.row().classes("gap-4 mt-1"):
-                                ui.label(f"Outliers (train): {n_outliers} ({pct_outliers}%)").style(
+                                ui.label(f"Outliers: {stats['n_outliers']} ({stats['pct_outliers']}%)").style(
                                     "font-size:13px; color:#636e72;"
                                 )
-                                ui.label(f"Bornes IQR: [{lower:.2f}, {upper:.2f}]").style(
+                                ui.label(f"Bornes IQR: [{stats['lower_bound']:.2f}, {stats['upper_bound']:.2f}]").style(
                                     "font-size:13px; color:#636e72;"
                                 )
-
+                                
+                                # Badge stratégie
                                 if method != "none":
                                     ui.badge(method.upper(), color="green").style("font-size:11px;")
                                 else:
                                     ui.badge("NON CONFIGURÉ", color="grey").style("font-size:11px;")
-
-                        # Bouton config
+                        
+                        # Colonne droite : bouton action
                         ui.button(
                             "⚙️ Configurer",
                             on_click=lambda f=feat: open_feature_config_modal(f)
                         ).style("background:#09538C; color:white; font-weight:600;")
 
-        # Actions
+        # --- C - Actions ---
         with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
-            ui.label("⚡ Actions").style("font-weight:700; font-size:20px; color:#2c3e50;")
-
+            ui.label("⚡ Actions").style("font-weight:700; font-size:18px; color:#2c3e50;")
+            
             with ui.row().classes("gap-2 mt-4"):
                 ui.button(
                     "✅ Appliquer et continuer",
                     on_click=confirm_and_apply
-                ).style("background:#27ae60; color:white; font-weight:600; padding:12px 24px;")
-
+                ).style("background:#27ae60; color:white; font-weight:600;")
+                
+                def reset_strategies():
+                    state["outliers_strategy"] = {}
+                    ui.notify("🔄 Stratégies réinitialisées", color="info")
+                    ui.run_javascript("setTimeout(() => window.location.reload(), 500);")
+                
                 ui.button(
                     "🔄 Réinitialiser",
-                    on_click=reset_to_original
-                ).style("background:#95a5a6; color:white; padding:12px 24px;")
+                    on_click=reset_strategies
+                ).style("background:#95a5a6; color:white;")
 
-        # Navigation
+        # --- Navigation ---
         with ui.row().classes("w-full max-w-6xl justify-between mt-6"):
             ui.button(
                 "⬅ Étape précédente",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/split'")
-            ).style("background:#95a5a6; color:white; font-weight:600; padding:12px 24px;")
-
+            ).style("background:#95a5a6; color:white;")
+            
             ui.button(
                 "➡ Passer (sans traiter)",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/missing_values'")
-            ).style("background:#09538C; color:white; font-weight:600; padding:12px 24px;")
+            ).style("background:#09538C; color:white;")
+
+
+
+
 
 
 
@@ -5416,7 +5287,7 @@ def recap_validation_page():
                         
                         ui.button(
                             "▶️ Passer à la Page Algorithmes",
-                            on_click=lambda: (dialog.close(), ui.run_javascript("window.location.href='/supervised/algorithms'"))
+                            on_click=lambda: (dialog.close(), ui.run_javascript("window.location.href='/supervised/algorithm_config'"))
                         ).style(
                             "background:linear-gradient(135deg, #27ae60 0%, #229954 100%); "
                             "color:white; font-weight:700; height:56px; width:100%; border-radius:12px; margin-top:12px;"
@@ -5629,7 +5500,740 @@ def recap_validation_page():
 
 
 
-
+@ui.page('/supervised/algorithm_config')
+def algorithm_config_page():
+    """
+    Page de configuration des hyperparamètres des algorithmes avant training baseline
+    """
+    import pandas as pd
+    import numpy as np
+    from datetime import datetime
+    
+    # ---------- CONTEXTE ----------
+    df = state.get("raw_df", None)
+    split = state.get("split", None)
+    target_col = state.get("target_column", None)
+    
+    if df is None or split is None:
+        with ui.column().classes("items-center justify-center w-full h-screen"):
+            ui.label("❌ Données non disponibles. Complétez d'abord le preprocessing.").style(
+                "font-size:18px; color:#c0392b; font-weight:600;"
+            )
+            ui.button("⬅ Retour", on_click=lambda: ui.run_javascript("window.location.href='/supervised/recap_validation'"))
+        return
+    
+    # Initialiser configurations si pas déjà fait
+    if "algo_configs" not in state:
+        state["algo_configs"] = {
+            "knn": {
+                "n_neighbors": 5,
+                "metric": "euclidean",
+                "weights": "distance",
+                "algorithm": "auto"
+            },
+            "decision_tree": {
+                "criterion": "entropy",
+                "max_depth": None,
+                "min_samples_split": 2,
+                "min_samples_leaf": 1,
+                "max_features": None
+            },
+            "random_forest": {
+                "n_estimators": 100,
+                "criterion": "gini",
+                "max_depth": None,
+                "min_samples_split": 2,
+                "min_samples_leaf": 1,
+                "max_features": "sqrt"
+            }
+        }
+    
+    if "validation_strategy" not in state:
+        state["validation_strategy"] = "holdout"
+    
+    if "metrics_to_track" not in state:
+        state["metrics_to_track"] = ["accuracy", "precision", "recall", "f1"]
+    
+    # ---------- FONCTIONS ----------
+    def get_data_compatibility():
+        """Retourne l'état de compatibilité des données"""
+        n_samples = len(split.get("X_train", []))
+        n_features = len(split.get("X_train", pd.DataFrame()).columns)
+        scaling_applied = state.get("scaling_method", "none") != "none"
+        reduction_applied = state.get("reduction_applied", False)
+        missing_count = split.get("X_train", pd.DataFrame()).isna().sum().sum()
+        
+        return {
+            "n_samples": n_samples,
+            "n_features": n_features,
+            "scaling": scaling_applied,
+            "reduction": reduction_applied,
+            "missing": missing_count
+        }
+    
+    def get_recommended_k():
+        """Calcule le K recommandé pour KNN"""
+        n_samples = get_data_compatibility()["n_samples"]
+        return int(np.sqrt(n_samples))
+    
+    def apply_recommended_config(algo):
+        """Applique la configuration recommandée pour un algorithme"""
+        compat = get_data_compatibility()
+        
+        if algo == "knn":
+            state["algo_configs"]["knn"] = {
+                "n_neighbors": min(get_recommended_k(), 50),
+                "metric": "euclidean",
+                "weights": "distance",
+                "algorithm": "auto"
+            }
+            ui.notify("✅ Configuration KNN recommandée appliquée", color="positive")
+        
+        elif algo == "decision_tree":
+            state["algo_configs"]["decision_tree"] = {
+                "criterion": "entropy",
+                "max_depth": 15,
+                "min_samples_split": 5,
+                "min_samples_leaf": 5,
+                "max_features": "sqrt"
+            }
+            ui.notify("✅ Configuration Decision Tree recommandée appliquée", color="positive")
+        
+        elif algo == "random_forest":
+            state["algo_configs"]["random_forest"] = {
+                "n_estimators": 100,
+                "criterion": "gini",
+                "max_depth": 20,
+                "min_samples_split": 5,
+                "min_samples_leaf": 2,
+                "max_features": "sqrt"
+            }
+            ui.notify("✅ Configuration Random Forest recommandée appliquée", color="positive")
+        
+        # Recharger la page pour afficher les nouvelles valeurs
+        ui.run_javascript("location.reload()")
+    
+    def reset_config(algo):
+        """Réinitialise la configuration d'un algorithme aux valeurs par défaut"""
+        if algo == "knn":
+            state["algo_configs"]["knn"] = {
+                "n_neighbors": 5,
+                "metric": "euclidean",
+                "weights": "uniform",
+                "algorithm": "auto"
+            }
+        elif algo == "decision_tree":
+            state["algo_configs"]["decision_tree"] = {
+                "criterion": "gini",
+                "max_depth": None,
+                "min_samples_split": 2,
+                "min_samples_leaf": 1,
+                "max_features": None
+            }
+        elif algo == "random_forest":
+            state["algo_configs"]["random_forest"] = {
+                "n_estimators": 100,
+                "criterion": "gini",
+                "max_depth": None,
+                "min_samples_split": 2,
+                "min_samples_leaf": 1,
+                "max_features": "sqrt"
+            }
+        
+        ui.notify(f"🔄 Configuration {algo.upper()} réinitialisée", color="info")
+        ui.run_javascript("location.reload()")
+    
+    def validate_and_continue():
+        """Valide les configurations et passe à l'entraînement"""
+        # Vérifier que toutes les configs sont valides
+        configs = state["algo_configs"]
+        
+        # Validation KNN
+        if configs["knn"]["n_neighbors"] < 1:
+            ui.notify("❌ KNN: n_neighbors doit être >= 1", color="negative")
+            return
+        
+        # Validation Decision Tree
+        if configs["decision_tree"]["max_depth"] is not None and configs["decision_tree"]["max_depth"] < 1:
+            ui.notify("❌ Decision Tree: max_depth doit être >= 1 ou None", color="negative")
+            return
+        
+        # Validation Random Forest
+        if configs["random_forest"]["n_estimators"] < 1:
+            ui.notify("❌ Random Forest: n_estimators doit être >= 1", color="negative")
+            return
+        
+        # Sauvegarder timestamp
+        state["algo_config_timestamp"] = datetime.now().isoformat()
+        
+        ui.notify("✅ Configurations validées !", color="positive")
+        
+        # Rediriger vers la page d'entraînement
+        ui.run_javascript("window.location.href='/supervised/training'")
+    
+    # ---------- INTERFACE ----------
+    compat = get_data_compatibility()
+    
+    with ui.column().classes("w-full items-center p-8").style("background-color:#f8f9fa; min-height:100vh;"):
+        
+        # Header
+        ui.label("⚙️ CONFIGURATION DES ALGORITHMES").style(
+            "font-weight:700; font-size:32px; color:#2c3e50; margin-bottom:8px; text-align:center;"
+        )
+        ui.label("Configurer les hyperparamètres avant l'entraînement baseline").style(
+            "font-size:18px; color:#7f8c8d; margin-bottom:32px; text-align:center;"
+        )
+        
+        # Info données
+        with ui.card().classes("w-full max-w-6xl p-4 mb-6").style("background:#e3f2fd;"):
+            with ui.row().classes("w-full gap-8 items-center"):
+                ui.label("📊 Vos données :").style("font-weight:700; font-size:16px;")
+                ui.label(f"Train: {compat['n_samples']} samples").style("font-size:14px;")
+                ui.label(f"Features: {compat['n_features']}").style("font-size:14px;")
+                ui.label(f"Scaling: {'✅' if compat['scaling'] else '❌'}").style("font-size:14px;")
+                ui.label(f"Reduction: {'✅' if compat['reduction'] else '❌'}").style("font-size:14px;")
+                ui.label(f"Missing: {compat['missing']}").style("font-size:14px;")
+        
+        # ==================== CARTE 1: KNN ====================
+        with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
+            ui.label("🎯 K-Nearest Neighbors (KNN)").style(
+                "font-weight:700; font-size:24px; color:#2c3e50; margin-bottom:16px;"
+            )
+            
+            # Description
+            with ui.expansion("📖 Principe & Compatibilité", icon="info").classes("w-full mb-4"):
+                with ui.column().classes("p-4"):
+                    ui.label("Principe :").style("font-weight:700; margin-bottom:8px;")
+                    ui.label("Classification basée sur les K voisins les plus proches").style("font-size:14px; margin-bottom:16px;")
+                    
+                    ui.label("✅ Avantages :").style("font-weight:700; margin-bottom:8px;")
+                    ui.label("• Simple et intuitif").style("font-size:14px;")
+                    ui.label("• Non-paramétrique (pas d'hypothèses sur distribution)").style("font-size:14px;")
+                    ui.label("• Adapté aux frontières non-linéaires").style("font-size:14px; margin-bottom:16px;")
+                    
+                    ui.label("❌ Inconvénients :").style("font-weight:700; margin-bottom:8px;")
+                    ui.label("• Sensible au scaling (✅ déjà fait)").style("font-size:14px;")
+                    ui.label("• Coût computationnel élevé (prédiction)").style("font-size:14px;")
+                    ui.label("• Curse of dimensionality").style("font-size:14px; margin-bottom:16px;")
+                    
+                    ui.label("📊 Compatibilité :").style("font-weight:700; margin-bottom:8px;")
+                    ui.label(f"• Scaling : {'✅ Appliqué' if compat['scaling'] else '⚠️ Recommandé'}").style("font-size:14px;")
+                    ui.label(f"• Dimension : {'✅ Réduite' if compat['reduction'] else '⚠️ Peut affecter performance'}").style("font-size:14px;")
+                    ui.label(f"• Missing : {'✅ Aucune' if compat['missing'] == 0 else '❌ Présentes'}").style("font-size:14px;")
+            
+            ui.label("⚙️ CONFIGURATION").style("font-weight:700; font-size:18px; margin-top:16px; margin-bottom:12px;")
+            
+            # Hyperparamètres
+            knn_config = state["algo_configs"]["knn"]
+            
+            # 1. n_neighbors
+            with ui.row().classes("w-full items-center gap-4 mb-4"):
+                ui.label("1. Nombre de voisins (K)").style("font-weight:600; width:250px;")
+                knn_neighbors_slider = ui.slider(min=1, max=50, value=knn_config["n_neighbors"], step=1).classes("flex-1")
+                knn_neighbors_label = ui.label(f"K = {knn_config['n_neighbors']}").style("font-weight:700; width:80px;")
+                
+                def update_knn_neighbors(e):
+                    state["algo_configs"]["knn"]["n_neighbors"] = int(e.value)
+                    knn_neighbors_label.set_text(f"K = {int(e.value)}")
+                
+                knn_neighbors_slider.on_value_change(update_knn_neighbors)
+            
+            ui.label(f"💡 Règle : K = √n_samples ≈ {get_recommended_k()}").style("font-size:13px; color:#7f8c8d; margin-left:250px; margin-bottom:8px;")
+            ui.label("⚠️ K petit → Overfitting | K grand → Underfitting").style("font-size:13px; color:#e67e22; margin-left:250px; margin-bottom:16px;")
+            
+            # 2. metric
+            with ui.row().classes("w-full items-start gap-4 mb-4"):
+                ui.label("2. Métrique de distance").style("font-weight:600; width:250px;")
+                with ui.column().classes("flex-1"):
+                    knn_metric = ui.radio(
+                        options={
+                            "euclidean": "Euclidean (default) - Distance L2",
+                            "manhattan": "Manhattan - Distance L1 (robuste outliers)",
+                            "minkowski": "Minkowski - Généralisation",
+                            "chebyshev": "Chebyshev - Distance max"
+                        },
+                        value=knn_config["metric"]
+                    )
+                    knn_metric.on_value_change(lambda e: state["algo_configs"]["knn"].update({"metric": e.value}))
+            
+            # 3. weights
+            with ui.row().classes("w-full items-start gap-4 mb-4"):
+                ui.label("3. Pondération").style("font-weight:600; width:250px;")
+                with ui.column().classes("flex-1"):
+                    knn_weights = ui.radio(
+                        options={
+                            "uniform": "Uniform - Tous voisins poids égal",
+                            "distance": "Distance - Poids = 1/distance (favorise proches)"
+                        },
+                        value=knn_config["weights"]
+                    )
+                    knn_weights.on_value_change(lambda e: state["algo_configs"]["knn"].update({"weights": e.value}))
+            
+            # 4. algorithm
+            with ui.row().classes("w-full items-start gap-4 mb-4"):
+                ui.label("4. Algorithme recherche").style("font-weight:600; width:250px;")
+                with ui.column().classes("flex-1"):
+                    knn_algo = ui.radio(
+                        options={
+                            "auto": "Auto - Sélection automatique",
+                            "ball_tree": "Ball Tree - Rapide, haute dimension",
+                            "kd_tree": "KD Tree - Rapide, basse dimension (<20)",
+                            "brute": "Brute Force - Exhaustif (petit dataset)"
+                        },
+                        value=knn_config["algorithm"]
+                    )
+                    knn_algo.on_value_change(lambda e: state["algo_configs"]["knn"].update({"algorithm": e.value}))
+            
+            # Estimation
+            with ui.card().classes("w-full p-4 mt-4").style("background:#fff3cd;"):
+                ui.label("⏱️ Estimation :").style("font-weight:700; margin-bottom:8px;")
+                ui.label(f"• Temps training : ~0.1s (lazy learner)").style("font-size:14px;")
+                ui.label(f"• Temps prédiction : ~{compat['n_samples']*compat['n_features']/1000:.1f}s").style("font-size:14px;")
+                ui.label(f"• Mémoire : ~{compat['n_samples']*compat['n_features']*8/1024:.0f} KB").style("font-size:14px;")
+            
+            # Boutons
+            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                ui.button("🔄 Réinitialiser", on_click=lambda: reset_config("knn")).props("flat")
+                ui.button("💡 Appliquer Recommandation", on_click=lambda: apply_recommended_config("knn")).style(
+                    "background:#3498db; color:white;"
+                )
+        
+        # ==================== CARTE 2: DECISION TREE ====================
+        with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
+            ui.label("🌳 C4.5 Decision Tree").style(
+                "font-weight:700; font-size:24px; color:#2c3e50; margin-bottom:16px;"
+            )
+            
+            # Description
+            with ui.expansion("📖 Principe & Compatibilité", icon="info").classes("w-full mb-4"):
+                with ui.column().classes("p-4"):
+                    ui.label("Principe :").style("font-weight:700; margin-bottom:8px;")
+                    ui.label("Arbre de décision basé sur Information Gain (entropie)").style("font-size:14px; margin-bottom:16px;")
+                    
+                    ui.label("✅ Avantages :").style("font-weight:700; margin-bottom:8px;")
+                    ui.label("• Interprétable (structure arbre)").style("font-size:14px;")
+                    ui.label("• Gère features numériques et catégorielles").style("font-size:14px;")
+                    ui.label("• Peu sensible au scaling").style("font-size:14px;")
+                    ui.label("• Robuste aux outliers").style("font-size:14px; margin-bottom:16px;")
+                    
+                    ui.label("❌ Inconvénients :").style("font-weight:700; margin-bottom:8px;")
+                    ui.label("• Tendance à l'overfitting").style("font-size:14px;")
+                    ui.label("• Instable (petites variations → arbres différents)").style("font-size:14px;")
+                    ui.label("• Biais vers features multi-valeurs").style("font-size:14px; margin-bottom:16px;")
+                    
+                    ui.label("📊 Compatibilité :").style("font-weight:700; margin-bottom:8px;")
+                    ui.label("• Scaling : ⚠️ Non nécessaire (mais déjà fait)").style("font-size:14px;")
+                    ui.label(f"• Missing : {'✅ OK' if compat['missing'] == 0 else '⚠️ sklearn ne gère pas nativement'}").style("font-size:14px;")
+                    ui.label("• Outliers : ✅ Robuste").style("font-size:14px;")
+            
+            ui.label("⚙️ CONFIGURATION").style("font-weight:700; font-size:18px; margin-top:16px; margin-bottom:12px;")
+            
+            dt_config = state["algo_configs"]["decision_tree"]
+            
+            # 1. criterion
+            with ui.row().classes("w-full items-start gap-4 mb-4"):
+                ui.label("1. Critère de split").style("font-weight:600; width:250px;")
+                with ui.column().classes("flex-1"):
+                    dt_criterion = ui.radio(
+                        options={
+                            "gini": "Gini - Gini impurity (default sklearn)",
+                            "entropy": "Entropy - Information Gain (~ C4.5 original)",
+                            "log_loss": "Log Loss - Log loss"
+                        },
+                        value=dt_config["criterion"]
+                    )
+                    dt_criterion.on_value_change(lambda e: state["algo_configs"]["decision_tree"].update({"criterion": e.value}))
+                    ui.label("💡 Recommandation : Entropy (plus proche C4.5)").style("font-size:13px; color:#3498db; margin-top:4px;")
+            
+            # 2. max_depth
+            with ui.row().classes("w-full items-center gap-4 mb-4"):
+                ui.label("2. Profondeur maximale").style("font-weight:600; width:250px;")
+                
+                with ui.column().classes("flex-1"):
+                    dt_depth_checkbox = ui.checkbox("Limiter la profondeur", value=dt_config["max_depth"] is not None)
+                    dt_depth_slider = ui.slider(min=1, max=30, value=15 if dt_config["max_depth"] is None else dt_config["max_depth"], step=1).classes("w-full")
+                    dt_depth_label = ui.label(f"max_depth = {dt_config['max_depth'] if dt_config['max_depth'] is not None else 'None (illimité)'}").style("font-weight:700;")
+                    
+                    if dt_config["max_depth"] is None:
+                        dt_depth_slider.disable()
+                    
+                    def update_dt_depth_checkbox(e):
+                        if e.value:
+                            state["algo_configs"]["decision_tree"]["max_depth"] = int(dt_depth_slider.value)
+                            dt_depth_slider.enable()
+                            dt_depth_label.set_text(f"max_depth = {int(dt_depth_slider.value)}")
+                        else:
+                            state["algo_configs"]["decision_tree"]["max_depth"] = None
+                            dt_depth_slider.disable()
+                            dt_depth_label.set_text("max_depth = None (illimité)")
+                    
+                    def update_dt_depth_slider(e):
+                        if dt_depth_checkbox.value:
+                            state["algo_configs"]["decision_tree"]["max_depth"] = int(e.value)
+                            dt_depth_label.set_text(f"max_depth = {int(e.value)}")
+                    
+                    dt_depth_checkbox.on_value_change(update_dt_depth_checkbox)
+                    dt_depth_slider.on_value_change(update_dt_depth_slider)
+                    
+                    ui.label("⚠️ None = Pas de limite (risque overfitting)").style("font-size:13px; color:#e67e22; margin-top:4px;")
+            
+            # 3. min_samples_split
+            with ui.row().classes("w-full items-center gap-4 mb-4"):
+                ui.label("3. Min samples split").style("font-weight:600; width:250px;")
+                dt_split_slider = ui.slider(min=2, max=100, value=dt_config["min_samples_split"], step=1).classes("flex-1")
+                dt_split_label = ui.label(f"{dt_config['min_samples_split']}").style("font-weight:700; width:80px;")
+                
+                def update_dt_split(e):
+                    state["algo_configs"]["decision_tree"]["min_samples_split"] = int(e.value)
+                    dt_split_label.set_text(f"{int(e.value)}")
+                
+                dt_split_slider.on_value_change(update_dt_split)
+            
+            ui.label("Minimum d'échantillons pour splitter un nœud").style("font-size:13px; color:#7f8c8d; margin-left:250px; margin-bottom:16px;")
+            
+            # 4. min_samples_leaf
+            with ui.row().classes("w-full items-center gap-4 mb-4"):
+                ui.label("4. Min samples leaf").style("font-weight:600; width:250px;")
+                dt_leaf_slider = ui.slider(min=1, max=50, value=dt_config["min_samples_leaf"], step=1).classes("flex-1")
+                dt_leaf_label = ui.label(f"{dt_config['min_samples_leaf']}").style("font-weight:700; width:80px;")
+                
+                def update_dt_leaf(e):
+                    state["algo_configs"]["decision_tree"]["min_samples_leaf"] = int(e.value)
+                    dt_leaf_label.set_text(f"{int(e.value)}")
+                
+                dt_leaf_slider.on_value_change(update_dt_leaf)
+            
+            ui.label("Minimum d'échantillons dans une feuille").style("font-size:13px; color:#7f8c8d; margin-left:250px; margin-bottom:16px;")
+            
+            # 5. max_features
+            with ui.row().classes("w-full items-start gap-4 mb-4"):
+                ui.label("5. Max features").style("font-weight:600; width:250px;")
+                with ui.column().classes("flex-1"):
+                    dt_features = ui.radio(
+                        options={
+                            "None": f"None - Toutes features ({compat['n_features']})",
+                            "sqrt": f"Sqrt - √features ≈ {int(np.sqrt(compat['n_features']))}",
+                            "log2": f"Log2 - log₂(features) ≈ {int(np.log2(compat['n_features']))}",
+                        },
+                        value="None" if dt_config["max_features"] is None else dt_config["max_features"]
+                    )
+                    
+                    def update_dt_features(e):
+                        state["algo_configs"]["decision_tree"]["max_features"] = None if e.value == "None" else e.value
+                    
+                    dt_features.on_value_change(update_dt_features)
+            
+            # Boutons
+            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                ui.button("🔄 Réinitialiser", on_click=lambda: reset_config("decision_tree")).props("flat")
+                ui.button("💡 Appliquer Recommandation", on_click=lambda: apply_recommended_config("decision_tree")).style(
+                    "background:#3498db; color:white;"
+                )
+        
+        # ==================== CARTE 3: RANDOM FOREST ====================
+        with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
+            ui.label("🌲 Random Forest").style(
+                "font-weight:700; font-size:24px; color:#2c3e50; margin-bottom:16px;"
+            )
+            
+            # Description
+            with ui.expansion("📖 Principe & Compatibilité", icon="info").classes("w-full mb-4"):
+                with ui.column().classes("p-4"):
+                    ui.label("Principe :").style("font-weight:700; margin-bottom:8px;")
+                    ui.label("Ensemble d'arbres de décision avec bagging et feature sampling").style("font-size:14px; margin-bottom:16px;")
+                    
+                    ui.label("✅ Avantages :").style("font-weight:700; margin-bottom:8px;")
+                    ui.label("• Très performant (souvent meilleur que single tree)").style("font-size:14px;")
+                    ui.label("• Réduit l'overfitting vs Decision Tree").style("font-size:14px;")
+                    ui.label("• Robuste au bruit et outliers").style("font-size:14px;")
+                    ui.label("• Fournit feature importance").style("font-size:14px; margin-bottom:16px;")
+                    
+                    ui.label("❌ Inconvénients :").style("font-weight:700; margin-bottom:8px;")
+                    ui.label("• Moins interprétable qu'un seul arbre").style("font-size:14px;")
+                    ui.label("• Plus lent à entraîner et prédire").style("font-size:14px;")
+                    ui.label("• Plus de mémoire requise").style("font-size:14px; margin-bottom:16px;")
+                    
+                    ui.label("📊 Compatibilité :").style("font-weight:700; margin-bottom:8px;")
+                    ui.label("• Scaling : ⚠️ Non nécessaire").style("font-size:14px;")
+                    ui.label("• Dimension : ✅ Gère bien").style("font-size:14px;")
+                    ui.label(f"• Missing : {'✅ OK' if compat['missing'] == 0 else '⚠️ À gérer avant'}").style("font-size:14px;")
+            
+            ui.label("⚙️ CONFIGURATION").style("font-weight:700; font-size:18px; margin-top:16px; margin-bottom:12px;")
+            
+            rf_config = state["algo_configs"]["random_forest"]
+            
+            # 1. n_estimators
+            with ui.row().classes("w-full items-center gap-4 mb-4"):
+                ui.label("1. Nombre d'arbres").style("font-weight:600; width:250px;")
+                rf_estimators_slider = ui.slider(min=10, max=500, value=rf_config["n_estimators"], step=10).classes("flex-1")
+                rf_estimators_label = ui.label(f"n_estimators = {rf_config['n_estimators']}").style("font-weight:700; width:150px;")
+                
+                def update_rf_estimators(e):
+                    state["algo_configs"]["random_forest"]["n_estimators"] = int(e.value)
+                    rf_estimators_label.set_text(f"n_estimators = {int(e.value)}")
+                
+                rf_estimators_slider.on_value_change(update_rf_estimators)
+            
+            ui.label("💡 Plus d'arbres = meilleure performance (mais plus lent)").style("font-size:13px; color:#3498db; margin-left:250px; margin-bottom:16px;")
+            
+            # 2. criterion
+            with ui.row().classes("w-full items-start gap-4 mb-4"):
+                ui.label("2. Critère de split").style("font-weight:600; width:250px;")
+                with ui.column().classes("flex-1"):
+                    rf_criterion = ui.radio(
+                        options={
+                            "gini": "Gini - Gini impurity (plus rapide)",
+                            "entropy": "Entropy - Information Gain",
+                            "log_loss": "Log Loss - Log loss"
+                        },
+                        value=rf_config["criterion"]
+                    )
+                    rf_criterion.on_value_change(lambda e: state["algo_configs"]["random_forest"].update({"criterion": e.value}))
+            
+            # 3. max_depth
+            with ui.row().classes("w-full items-center gap-4 mb-4"):
+                ui.label("3. Profondeur maximale").style("font-weight:600; width:250px;")
+                
+                with ui.column().classes("flex-1"):
+                    rf_depth_checkbox = ui.checkbox("Limiter la profondeur", value=rf_config["max_depth"] is not None)
+                    rf_depth_slider = ui.slider(min=1, max=30, value=20 if rf_config["max_depth"] is None else rf_config["max_depth"], step=1).classes("w-full")
+                    rf_depth_label = ui.label(f"max_depth = {rf_config['max_depth'] if rf_config['max_depth'] is not None else 'None (illimité)'}").style("font-weight:700;")
+                    
+                    if rf_config["max_depth"] is None:
+                        rf_depth_slider.disable()
+                    
+                    def update_rf_depth_checkbox(e):
+                        if e.value:
+                            state["algo_configs"]["random_forest"]["max_depth"] = int(rf_depth_slider.value)
+                            rf_depth_slider.enable()
+                            rf_depth_label.set_text(f"max_depth = {int(rf_depth_slider.value)}")
+                        else:
+                            state["algo_configs"]["random_forest"]["max_depth"] = None
+                            rf_depth_slider.disable()
+                            rf_depth_label.set_text("max_depth = None (illimité)")
+                    
+                    def update_rf_depth_slider(e):
+                        if rf_depth_checkbox.value:
+                            state["algo_configs"]["random_forest"]["max_depth"] = int(e.value)
+                            rf_depth_label.set_text(f"max_depth = {int(e.value)}")
+                    
+                    rf_depth_checkbox.on_value_change(update_rf_depth_checkbox)
+                    rf_depth_slider.on_value_change(update_rf_depth_slider)
+            
+            # 4. min_samples_split
+            with ui.row().classes("w-full items-center gap-4 mb-4"):
+                ui.label("4. Min samples split").style("font-weight:600; width:250px;")
+                rf_split_slider = ui.slider(min=2, max=100, value=rf_config["min_samples_split"], step=1).classes("flex-1")
+                rf_split_label = ui.label(f"{rf_config['min_samples_split']}").style("font-weight:700; width:80px;")
+                
+                def update_rf_split(e):
+                    state["algo_configs"]["random_forest"]["min_samples_split"] = int(e.value)
+                    rf_split_label.set_text(f"{int(e.value)}")
+                
+                rf_split_slider.on_value_change(update_rf_split)
+            
+            # 5. min_samples_leaf
+            with ui.row().classes("w-full items-center gap-4 mb-4"):
+                ui.label("5. Min samples leaf").style("font-weight:600; width:250px;")
+                rf_leaf_slider = ui.slider(min=1, max=50, value=rf_config["min_samples_leaf"], step=1).classes("flex-1")
+                rf_leaf_label = ui.label(f"{rf_config['min_samples_leaf']}").style("font-weight:700; width:80px;")
+                
+                def update_rf_leaf(e):
+                    state["algo_configs"]["random_forest"]["min_samples_leaf"] = int(e.value)
+                    rf_leaf_label.set_text(f"{int(e.value)}")
+                
+                rf_leaf_slider.on_value_change(update_rf_leaf)
+            
+            # 6. max_features
+            with ui.row().classes("w-full items-start gap-4 mb-4"):
+                ui.label("6. Max features").style("font-weight:600; width:250px;")
+                with ui.column().classes("flex-1"):
+                    rf_features = ui.radio(
+                        options={
+                            "sqrt": f"Sqrt - √features ≈ {int(np.sqrt(compat['n_features']))} (recommandé)",
+                            "log2": f"Log2 - log₂(features) ≈ {int(np.log2(compat['n_features']))}",
+                            "None": f"None - Toutes features ({compat['n_features']})"
+                        },
+                        value="None" if rf_config["max_features"] is None else rf_config["max_features"]
+                    )
+                    
+                    def update_rf_features(e):
+                        state["algo_configs"]["random_forest"]["max_features"] = None if e.value == "None" else e.value
+                    
+                    rf_features.on_value_change(update_rf_features)
+                    ui.label("💡 Sqrt est généralement optimal pour classification").style("font-size:13px; color:#3498db; margin-top:4px;")
+            
+            # Estimation
+            with ui.card().classes("w-full p-4 mt-4").style("background:#fff3cd;"):
+                ui.label("⏱️ Estimation :").style("font-weight:700; margin-bottom:8px;")
+                n_est = rf_config["n_estimators"]
+                ui.label(f"• Temps training : ~{n_est * 0.05:.1f}s ({n_est} arbres)").style("font-size:14px;")
+                ui.label(f"• Temps prédiction : ~{n_est * 0.002:.2f}s").style("font-size:14px;")
+                ui.label(f"• Mémoire : ~{n_est * 100}KB - {n_est * 500}KB").style("font-size:14px;")
+            
+            # Boutons
+            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                ui.button("🔄 Réinitialiser", on_click=lambda: reset_config("random_forest")).props("flat")
+                ui.button("💡 Appliquer Recommandation", on_click=lambda: apply_recommended_config("random_forest")).style(
+                    "background:#3498db; color:white;"
+                )
+        
+        # ==================== SECTION GLOBALE: VALIDATION STRATEGY ====================
+        with ui.card().classes("w-full max-w-6xl p-6 mb-6").style("background:#e8f5e9; border:2px solid #4caf50;"):
+            ui.label("🎯 STRATÉGIE DE VALIDATION").style(
+                "font-weight:700; font-size:24px; color:#2c3e50; margin-bottom:16px;"
+            )
+            
+            # Info splits
+            with ui.card().classes("w-full p-4 mb-4").style("background:white;"):
+                ui.label("📊 Vos données :").style("font-weight:700; margin-bottom:8px;")
+                ui.label(f"• Train : {len(split.get('X_train', []))} samples").style("font-size:14px;")
+                ui.label(f"• Validation : {len(split.get('X_val', []))} samples").style("font-size:14px;")
+                ui.label(f"• Test : {len(split.get('X_test', []))} samples (réservé pour évaluation finale)").style("font-size:14px;")
+            
+            # Méthode validation
+            ui.label("Méthode de validation :").style("font-weight:600; font-size:16px; margin-bottom:8px;")
+            
+            validation_strategy = ui.radio(
+                options={
+                    "holdout": "Hold-out (Train → Val) - Rapide, déjà splitté ✅",
+                    "cv": "Cross-Validation K-Fold sur Train - Plus robuste mais plus lent"
+                },
+                value=state.get("validation_strategy", "holdout")
+            ).classes("mb-4")
+            
+            validation_strategy.on_value_change(lambda e: state.update({"validation_strategy": e.value}))
+            
+            # Si CV, montrer options
+            cv_options_container = ui.column().classes("w-full")
+            
+            def update_cv_display():
+                cv_options_container.clear()
+                if state.get("validation_strategy") == "cv":
+                    with cv_options_container:
+                        with ui.card().classes("w-full p-4").style("background:#fff3cd;"):
+                            ui.label("⚙️ Paramètres Cross-Validation :").style("font-weight:600; margin-bottom:8px;")
+                            
+                            with ui.row().classes("w-full items-center gap-4"):
+                                ui.label("Nombre de folds :").style("width:200px;")
+                                cv_folds_slider = ui.slider(min=3, max=10, value=state.get("cv_folds", 5), step=1).classes("flex-1")
+                                cv_folds_label = ui.label(f"K = {state.get('cv_folds', 5)}").style("font-weight:700; width:80px;")
+                                
+                                def update_cv_folds(e):
+                                    state["cv_folds"] = int(e.value)
+                                    cv_folds_label.set_text(f"K = {int(e.value)}")
+                                
+                                cv_folds_slider.on_value_change(update_cv_folds)
+                            
+                            ui.label(f"💡 Chaque fold : ~{len(split.get('X_train', []))//state.get('cv_folds', 5)} samples").style(
+                                "font-size:13px; color:#7f8c8d; margin-top:8px;"
+                            )
+                            ui.label("⚠️ Le temps d'entraînement sera multiplié par K").style(
+                                "font-size:13px; color:#e67e22; margin-top:4px;"
+                            )
+            
+            update_cv_display()
+            validation_strategy.on_value_change(lambda e: update_cv_display())
+            
+            # Métriques à tracker
+            ui.label("Métriques à suivre :").style("font-weight:600; font-size:16px; margin-top:16px; margin-bottom:8px;")
+            
+            metrics_selected = state.get("metrics_to_track", ["accuracy", "precision", "recall", "f1"])
+            
+            with ui.row().classes("gap-4"):
+                metric_accuracy = ui.checkbox("Accuracy", value="accuracy" in metrics_selected)
+                metric_precision = ui.checkbox("Precision", value="precision" in metrics_selected)
+                metric_recall = ui.checkbox("Recall", value="recall" in metrics_selected)
+                metric_f1 = ui.checkbox("F1-Score", value="f1" in metrics_selected)
+            
+            def update_metrics():
+                metrics = []
+                if metric_accuracy.value:
+                    metrics.append("accuracy")
+                if metric_precision.value:
+                    metrics.append("precision")
+                if metric_recall.value:
+                    metrics.append("recall")
+                if metric_f1.value:
+                    metrics.append("f1")
+                state["metrics_to_track"] = metrics
+            
+            metric_accuracy.on_value_change(lambda: update_metrics())
+            metric_precision.on_value_change(lambda: update_metrics())
+            metric_recall.on_value_change(lambda: update_metrics())
+            metric_f1.on_value_change(lambda: update_metrics())
+            
+            with ui.card().classes("w-full p-4 mt-4").style("background:#e3f2fd;"):
+                ui.label("📖 Définitions des métriques :").style("font-weight:700; margin-bottom:8px;")
+                ui.label("• Accuracy : (TP + TN) / Total - Précision globale").style("font-size:13px;")
+                ui.label("• Precision : TP / (TP + FP) - Fiabilité des prédictions positives").style("font-size:13px;")
+                ui.label("• Recall : TP / (TP + FN) - Capacité à détecter les vrais positifs").style("font-size:13px;")
+                ui.label("• F1-Score : 2×(Precision×Recall)/(Precision+Recall) - Moyenne harmonique").style("font-size:13px;")
+        
+        # ==================== RÉCAPITULATIF FINAL ====================
+        with ui.card().classes("w-full max-w-6xl p-6 mb-8").style(
+            "background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius:16px;"
+        ):
+            ui.label("📋 RÉCAPITULATIF CONFIGURATION").style(
+                "font-weight:700; font-size:24px; color:white; margin-bottom:16px; text-align:center;"
+            )
+            
+            with ui.column().classes("w-full gap-4"):
+                # KNN
+                with ui.card().classes("p-4"):
+                    ui.label("🎯 KNN").style("font-weight:700; font-size:16px; margin-bottom:8px;")
+                    knn_cfg = state["algo_configs"]["knn"]
+                    ui.label(f"• n_neighbors: {knn_cfg['n_neighbors']}").style("font-size:14px;")
+                    ui.label(f"• metric: {knn_cfg['metric']}").style("font-size:14px;")
+                    ui.label(f"• weights: {knn_cfg['weights']}").style("font-size:14px;")
+                    ui.label(f"• algorithm: {knn_cfg['algorithm']}").style("font-size:14px;")
+                
+                # Decision Tree
+                with ui.card().classes("p-4"):
+                    ui.label("🌳 Decision Tree").style("font-weight:700; font-size:16px; margin-bottom:8px;")
+                    dt_cfg = state["algo_configs"]["decision_tree"]
+                    ui.label(f"• criterion: {dt_cfg['criterion']}").style("font-size:14px;")
+                    ui.label(f"• max_depth: {dt_cfg['max_depth'] if dt_cfg['max_depth'] is not None else 'None'}").style("font-size:14px;")
+                    ui.label(f"• min_samples_split: {dt_cfg['min_samples_split']}").style("font-size:14px;")
+                    ui.label(f"• min_samples_leaf: {dt_cfg['min_samples_leaf']}").style("font-size:14px;")
+                    ui.label(f"• max_features: {dt_cfg['max_features'] if dt_cfg['max_features'] is not None else 'None'}").style("font-size:14px;")
+                
+                # Random Forest
+                with ui.card().classes("p-4"):
+                    ui.label("🌲 Random Forest").style("font-weight:700; font-size:16px; margin-bottom:8px;")
+                    rf_cfg = state["algo_configs"]["random_forest"]
+                    ui.label(f"• n_estimators: {rf_cfg['n_estimators']}").style("font-size:14px;")
+                    ui.label(f"• criterion: {rf_cfg['criterion']}").style("font-size:14px;")
+                    ui.label(f"• max_depth: {rf_cfg['max_depth'] if rf_cfg['max_depth'] is not None else 'None'}").style("font-size:14px;")
+                    ui.label(f"• min_samples_split: {rf_cfg['min_samples_split']}").style("font-size:14px;")
+                    ui.label(f"• min_samples_leaf: {rf_cfg['min_samples_leaf']}").style("font-size:14px;")
+                    ui.label(f"• max_features: {rf_cfg['max_features'] if rf_cfg['max_features'] is not None else 'None'}").style("font-size:14px;")
+                
+                # Validation
+                with ui.card().classes("p-4"):
+                    ui.label("🎯 Validation").style("font-weight:700; font-size:16px; margin-bottom:8px;")
+                    ui.label(f"• Stratégie: {state.get('validation_strategy', 'holdout').upper()}").style("font-size:14px;")
+                    if state.get("validation_strategy") == "cv":
+                        ui.label(f"• K-Folds: {state.get('cv_folds', 5)}").style("font-size:14px;")
+                    metrics_str = ", ".join(state.get("metrics_to_track", []))
+                    ui.label(f"• Métriques: {metrics_str}").style("font-size:14px;")
+        
+        # ==================== BOUTONS FINAUX ====================
+        with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
+            ui.button(
+                "⬅ Retour au Récapitulatif",
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/recap_validation'")
+            ).style(
+                "background:#95a5a6; color:white; font-weight:600; height:56px; padding:0 32px; border-radius:12px; font-size:16px;"
+            )
+            
+            ui.button(
+                "✅ Valider et Lancer l'Entraînement",
+                on_click=validate_and_continue
+            ).style(
+                "background:linear-gradient(135deg, #27ae60 0%, #229954 100%); "
+                "color:white; font-weight:700; height:56px; padding:0 40px; border-radius:12px; font-size:16px;"
+            )
 
 
 
