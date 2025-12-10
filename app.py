@@ -1,19 +1,70 @@
 # ----------------- IMPORTS -----------------
+
+# === Interface ===
 from nicegui import ui
+
+# === Outils de base ===
+import io
+import os
+import copy
+import time
+import math
+import base64
+import random
+import pickle
+import asyncio
+from datetime import datetime
+
+# === Manipulation de données ===
 import pandas as pd
 import numpy as np
-import io, base64, random
+
+# === Visualisation ===
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
+# === Statistiques & Analyse ===
+from scipy import stats
+from scipy.stats import (
+    iqr, skew, boxcox, yeojohnson,
+    chi2_contingency, f_oneway, pearsonr
+)
+import statsmodels.api as sm
+from statsmodels.stats.outliers_influence import variance_inflation_factor
 
-from sklearn.preprocessing import MinMaxScaler, StandardScaler
+# === Préprocessing ===
+from sklearn.preprocessing import (
+    StandardScaler, MinMaxScaler, RobustScaler, MaxAbsScaler,
+    LabelEncoder, OrdinalEncoder, OneHotEncoder, PowerTransformer
+)
+from sklearn.impute import SimpleImputer, KNNImputer
+from sklearn.experimental import enable_iterative_imputer  # noqa: F401
+from sklearn.impute import IterativeImputer
+from sklearn.feature_selection import SelectKBest, f_classif, chi2
+
+# === Modélisation & Évaluation ===
+from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.decomposition import PCA
-from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score, f1_score,
+    classification_report, confusion_matrix,
+    roc_auc_score, roc_curve, auc,
+    precision_recall_curve, average_precision_score,
+    silhouette_score, davies_bouldin_score, calinski_harabasz_score
+)
+
+# === Algorithmes de Machine Learning ===
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.cluster import KMeans, DBSCAN, AgglomerativeClustering
+from sklearn_extra.cluster import KMedoids
+
+# === Clustering hiérarchique ===
 from scipy.cluster.hierarchy import linkage, dendrogram
 
-from sklearn.cluster import KMeans, DBSCAN, AgglomerativeClustering 
-from sklearn_extra.cluster import KMedoids 
 
 
 # ----------------- ÉTAT GLOBAL -----------------
@@ -49,7 +100,7 @@ def ensure_original_saved():
     if "df_original" not in state:
         if "raw_df" in state:
             state["df_original"] = state["raw_df"].copy()
-            print("✅ df_original sauvegardé automatiquement")
+            print(" df_original sauvegardé automatiquement")
         else:
             print("⚠️ Impossible de sauvegarder df_original : raw_df absent")
 
@@ -187,7 +238,7 @@ def home_page():
                 with ui.row().classes("gap-4 mt-6 w-full justify-center"):
                     ui.button(
                         "Commencer",
-                        on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/upload'")
+                        on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/supervised/upload'")
                     ).style(
                         "background: linear-gradient(135deg, #01335A, #09538C) !important; "
                         "color:white !important; font-weight:600 !important; height:48px !important; width:100% !important; border-radius:8px !important;"
@@ -238,12 +289,9 @@ def home_page():
 
 
 # ----------------- PAGE UPLOAD -----------------
-from nicegui import ui
-import pandas as pd, io
 
 
-
-@ui.page('/unsupervised/upload')
+@ui.page('/unsupervised/supervised/upload')
 def unsupervised_upload_page():
 
 
@@ -515,23 +563,6 @@ def supervised_upload_page():
                 """
             )
 
-            btn_next = ui.button("Continuer ➡")
-            btn_next.disable()
-            btn_next.style(
-                """
-                width: 100% !important;
-                height: 48px !important;
-                margin-top: 14px !important;
-                border-radius: 8px !important;
-                background: linear-gradient(135deg, #01335A, #09538C) !important;
-                color: white !important;
-                font-weight: 600 !important;
-                font-size: 15px !important;
-                border: none !important;
-                cursor: pointer !important;
-                """
-            )
-
             table_placeholder = ui.column().style(
                 """
                 width: 100% !important;
@@ -616,6 +647,23 @@ def supervised_upload_page():
                     """
                 )
 
+                btn_next = ui.button("Continuer ➡")
+                btn_next.disable()
+                btn_next.style(
+                    """
+                    width: 100% !important;
+                    height: 48px !important;
+                    margin-top: 14px !important;
+                    border-radius: 8px !important;
+                    background: linear-gradient(0deg,rgba(1, 51, 90, 1) 0%, rgba(15, 50, 102, 1) 100%) !important;
+                    color: white !important;
+                    font-weight: 600 !important;
+                    font-size: 15px !important;
+                    border: none !important;
+                    cursor: pointer !important;
+                    """
+                )
+
                 ui.button(
                     "⬅ Retour",
                     on_click=lambda: ui.run_javascript("window.location.href='/'")
@@ -636,28 +684,13 @@ def supervised_upload_page():
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-###########################################################
-
 # ----------------- PAGE PREPROCESS -----------------
-# ----------------- PAGE PREPROCESS (UNSUPERVISED) -----------------
 @ui.page('/preprocess')
 def preprocess_page():
     if state["raw_df"] is None:
         ui.notify("⚠️ Aucun dataset chargé", color='warning')
         # 🔧 Correction : on revient vers la page upload UNSUPERVISÉE
-        ui.run_javascript("window.location.href='/unsupervised/upload'")
+        ui.run_javascript("window.location.href='/unsupervised/supervised/upload'")
         return
 
     df = state["raw_df"]
@@ -667,7 +700,7 @@ def preprocess_page():
         ui.label("Prétraitement des Données").classes("text-3xl font-bold")
 
         # 🔧 Correction : redirection correcte
-        ui.button("⬅ Retour Upload", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/upload'"))
+        ui.button("⬅ Retour Upload", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/supervised/upload'"))
 
         ui.button(
             "➡ Continuer au clustering",
@@ -676,10 +709,6 @@ def preprocess_page():
 
 
 # ----------------- PAGE PREPROCESS (SUPERVISE) -----------------
-# ----------------- PAGE /supervised/preprocessing -----------------
-from nicegui import ui
-import numpy as np
-import pandas as pd
 
 @ui.page('/supervised/preprocessing')
 def supervised_preprocessing_page():
@@ -690,7 +719,7 @@ def supervised_preprocessing_page():
             ui.label("❌ Aucun dataset chargé. Veuillez importer un fichier avant de continuer.").style(
                 "font-size:18px !important; color:#c0392b !important; font-weight:600 !important;"
             )
-            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/upload'")).style(
+            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")).style(
                 "margin-top:20px !important; background:#01335A !important; color:white !important; font-weight:600 !important;"
             )
         return
@@ -791,7 +820,7 @@ def supervised_preprocessing_page():
 
         # ---------- BOUTONS NAVIGATION ----------
         with ui.row().classes("justify-between w-full max-w-6xl mt-8"):
-            ui.button("⬅ Retour", on_click=lambda: ui.run_javascript("window.location.href='/upload'")).style(
+            ui.button("⬅ Retour", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
             )
 
@@ -801,7 +830,6 @@ def supervised_preprocessing_page():
 
 
 # ----------------- PAGE /supervised/user_decisions -----------------
-from nicegui import ui
 
 def map_detected_type(detected_type):
     # Remap pour dropdown
@@ -820,55 +848,103 @@ def user_decisions_page():
     columns_info = state.get("columns_info", None)
 
     if df is None or columns_info is None:
-        with ui.column().classes("w-full h-screen").style("display:flex; align-items:center; justify-content:center;"):
+        with ui.column().classes("w-full h-screen items-center justify-center"):
             ui.label("❌ Aucun dataset chargé ou informations de colonnes manquantes.").style(
                 "font-size:18px; color:#c0392b; font-weight:600;"
             )
-            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/upload'")).style(
-                "margin-top:20px; background:#01335A; color:white; font-weight:600;"
+            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")).style(
+                "margin-top:20px; background:#01335A; color:white; font-weight:600; padding:12px 32px; border-radius:8px;"
             )
         return
 
+    # Définir la dernière colonne comme target par défaut
+    default_target = columns_info[-1]["Colonne"] if columns_info else None
+
     # ----------- STYLES GÉNÉRAUX ----------- 
-    with ui.column().style(
-        "width:100%; min-height:100vh; padding:40px; background-color:#f5f6fa; font-family:'Inter', sans-serif;"
+    with ui.column().classes("w-full items-center p-8").style(
+        "min-height:100vh; background-color:#f5f6fa; font-family:'Inter', sans-serif;"
     ):
-        ui.label("Phase 3.2 : Décisions Utilisateur").style(
-            "font-weight:700; font-size:32px; color:#01335A; margin-bottom:32px; text-align:center;"
+        # HEADER
+        ui.label(" PHASE 3.2 : DÉCISIONS UTILISATEUR").style(
+            "font-weight:700; font-size:32px; color:#01335A; margin-bottom:8px; text-align:center;"
+        )
+        ui.label("Configurez votre analyse et sélectionnez les colonnes pertinentes").style(
+            "font-size:16px; color:#7f8c8d; margin-bottom:32px; text-align:center;"
         )
 
-        # ---------- 1️⃣ Sélection de la Target ----------
-        with ui.card().style(
-            "width:100%; max-width:900px; padding:24px; margin-bottom:24px; background:white; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.08);"
+        # ---------- 1️⃣ SÉLECTION DE LA TARGET ----------
+        with ui.card().classes("w-full max-w-4xl p-6 mb-6").style(
+            "background:white; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.08);"
         ):
-            ui.label("🎯 Sélection de la colonne Target").style(
-                "font-weight:700; font-size:20px; color:#01335A; margin-bottom:12px;"
+            ui.label(" Sélection de la colonne Target").style(
+                "font-weight:700; font-size:22px; color:#01335A; margin-bottom:16px;"
+            )
+            
+            ui.label("La colonne target est la variable que vous souhaitez prédire").style(
+                "font-size:14px; color:#7f8c8d; margin-bottom:12px;"
             )
 
             target_dropdown = ui.select(
                 options=[col["Colonne"] for col in columns_info],
-                label="Sélectionnez la colonne cible",
+                label="Colonne cible",
+                value=default_target,  # 🔥 Dernière colonne par défaut
                 on_change=lambda e: on_target_change(e.value)
-            ).props("clearable dense")
+            ).props("outlined dense").classes("w-full")
 
-            target_warning = ui.label("").style("color:#e67e22; font-weight:600; margin-top:6px;")
-            imbalance_label = ui.label("").style("margin-top:6px; font-size:14px; color:#2c3e50;")
-            smote_cb = ui.checkbox("Appliquer un rééquilibrage (SMOTE/undersampling)").disable()
+            target_warning = ui.label("").style(
+                "color:#01335A; font-weight:600; margin-top:8px; font-size:14px;"
+            )
+            imbalance_label = ui.label("").style(
+                "margin-top:8px; font-size:14px; color:#2c3e50;"
+            )
+            
+            with ui.row().classes("w-full items-center gap-2 mt-4"):
+                smote_cb = ui.checkbox("Appliquer un rééquilibrage (SMOTE/undersampling)")
+                smote_cb.disable()
+                ui.label("Recommandé si classes déséquilibrées").style(
+                    "font-size:12px; color:#7f8c8d;"
+                )
 
-        # ---------- 2️⃣ Correction des Types ----------
-        with ui.card().style(
-            "width:100%; max-width:1200px; padding:24px; margin-bottom:24px; background:white; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.08);"
+        # ---------- 2️⃣ CORRECTION DES TYPES ----------
+        with ui.card().classes("w-full max-w-6xl p-6 mb-6").style(
+            "background:white; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.08);"
         ):
             ui.label("🛠 Correction des types de colonnes").style(
-                "font-weight:700; font-size:20px; color:#01335A; margin-bottom:12px;"
+                "font-weight:700; font-size:22px; color:#01335A; margin-bottom:16px;"
+            )
+            
+            ui.label("Vérifiez et corrigez les types détectés automatiquement").style(
+                "font-size:14px; color:#7f8c8d; margin-bottom:20px;"
             )
 
             column_type_widgets = {}
             column_exclude_widgets = {}
 
+            # Header du tableau
+            with ui.row().classes("w-full items-center gap-4 mb-3 pb-3").style(
+                "border-bottom:2px solid #e1e8ed;"
+            ):
+                ui.label("Colonne").style(
+                    "width:200px; font-weight:700; font-size:14px; color:#01335A;"
+                )
+                ui.label("Type").style(
+                    "flex:1; font-weight:700; font-size:14px; color:#01335A;"
+                )
+                ui.label("Exclure").style(
+                    "width:100px; font-weight:700; font-size:14px; color:#01335A; text-align:center;"
+                )
+
+            # Lignes des colonnes
             for col in columns_info:
-                with ui.row().style("display:flex; align-items:center; gap:12px; margin-bottom:8px;"):
-                    ui.label(col["Colonne"]).style("width:180px; font-weight:600;")
+                with ui.row().classes("w-full items-center gap-4 mb-2").style(
+                    "padding:8px; border-radius:6px; background:#f8f9fa;"
+                ):
+                    # Nom de la colonne
+                    ui.label(col["Colonne"]).style(
+                        "width:200px; font-weight:600; font-size:14px; color:#2c3e50;"
+                    )
+                    
+                    # Type selector
                     col_type = ui.select(
                         options=[
                             "Numérique Continue",
@@ -880,28 +956,63 @@ def user_decisions_page():
                             "Identifiant"
                         ],
                         value=map_detected_type(col["Type Détecté"])
-                    )
+                    ).props("outlined dense").classes("flex-1")
+                    
                     column_type_widgets[col["Colonne"]] = col_type
 
-                    # Checkbox Exclusion
+                    # Checkbox Exclusion avec détection automatique
                     auto_exclude = False
                     if col["Cardinalité"] == 1:
                         auto_exclude = True
                     if "%" in col["% Missing"]:
-                        if float(col["% Missing"].replace("%","")) >= 100:
+                        missing_pct = float(col["% Missing"].replace("%","").strip())
+                        if missing_pct >= 100:
                             auto_exclude = True
                     if col["Colonne"].lower().startswith("id") or col["Cardinalité"] / len(df) > 0.95:
                         auto_exclude = True
-                    exclude_cb = ui.checkbox("Exclure", value=auto_exclude)
+                    
+                    exclude_cb = ui.checkbox("", value=auto_exclude).style(
+                        "width:100px;"
+                    )
                     column_exclude_widgets[col["Colonne"]] = exclude_cb
 
-        # ---------- BOUTONS CONFIRMER + SUIVANT ----------
-        with ui.row().style("display:flex; gap:12px; margin-top:20px; justify-content:center;"):
-            ui.button("✅ Valider les décisions", on_click=lambda: on_confirm()).style(
-                "background:linear-gradient(135deg, #01335A, #09538C); color:white; font-weight:600; border-radius:8px; height:46px; width:250px;"
+            # Info sur les exclusions automatiques
+            with ui.card().classes("w-full p-4 mt-4").style(
+                "background:#e3f2fd; border-left:4px solid #2196f3;"
+            ):
+                ui.label("💡 Exclusions automatiques détectées :").style(
+                    "font-weight:600; margin-bottom:8px; color:#01335A;"
+                )
+                ui.label("• Colonnes avec cardinalité = 1 (valeur unique)").style(
+                    "font-size:13px; color:#2c3e50;"
+                )
+                ui.label("• Colonnes avec 100% de valeurs manquantes").style(
+                    "font-size:13px; color:#2c3e50;"
+                )
+                ui.label("• Colonnes identifiants (commençant par 'id' ou cardinalité > 95%)").style(
+                    "font-size:13px; color:#2c3e50;"
+                )
+
+        # ---------- BOUTONS D'ACTION ----------
+        def go_to_split():
+            on_confirm()  #  Sauvegarder AVANT de naviguer
+            ui.navigate.to('/supervised/preprocessing2')
+
+        with ui.row().classes("w-full max-w-4xl gap-4 mt-8 justify-center"):
+            ui.button(
+                " Valider les décisions", 
+                on_click=lambda: on_confirm()
+            ).style(
+                "background:#01335A !important; color:white; font-weight:600; "
+                "border-radius:8px !important; height:50px; min-width:220px; font-size:16px;"
             )
-            ui.button("➡ Passer à Split", on_click=lambda: save_and_go_to_split()).style(
-                "background:#27ae60; color:white; font-weight:600; border-radius:8px; height:46px; width:250px;"
+            
+            ui.button(
+                "➡ Passer à Split", 
+                on_click=lambda: go_to_split()
+            ).style(
+                "background:#01335A !important; color:white; font-weight:600; "
+                "border-radius:8px !important; height:50px; min-width:220px; font-size:16px;"
             )
 
     # ----------------- FONCTIONS INTERNES -----------------
@@ -911,42 +1022,83 @@ def user_decisions_page():
             imbalance_label.text = "Sélectionnez la target pour voir la distribution"
             smote_cb.disable()
             return
+        
         n_unique = df[target_col].nunique(dropna=True)
+        
         if n_unique > 20:
-            target_warning.text = "⚠️ Attention : cela semble être une régression"
+            target_warning.text = "⚠️ Attention : Plus de 20 valeurs uniques détectées - Cela semble être une régression"
+            imbalance_label.text = ""
+            smote_cb.disable()
         else:
             target_warning.text = ""
-        counts = df[target_col].value_counts()
-        if n_unique <= 20:
-            imbalance_label.text = "Distribution des classes : " + ", ".join([f"{k}: {v}" for k,v in counts.items()])
-            smote_cb.enable()
-        else:
-            imbalance_label.text = "C'est une variable continue (régression)"
-            smote_cb.disable()
+            counts = df[target_col].value_counts()
+            total = counts.sum()
+            
+            # Formater l'affichage
+            distribution_text = "📊 Distribution des classes : "
+            for k, v in counts.items():
+                pct = (v / total * 100)
+                distribution_text += f"{k}: {v} ({pct:.1f}%) | "
+            distribution_text = distribution_text.rstrip(" | ")
+            
+            imbalance_label.text = distribution_text
+            
+            # Activer SMOTE si déséquilibre détecté
+            min_class = counts.min()
+            max_class = counts.max()
+            if max_class / min_class > 1.5:  # Déséquilibre détecté
+                smote_cb.enable()
+                imbalance_label.text += "\n⚠️ Déséquilibre détecté - SMOTE recommandé"
+                imbalance_label.style("color:#01335A;")
+            else:
+                smote_cb.enable()
+                imbalance_label.style("color:#27ae60;")
 
     def on_confirm():
         target_col = target_dropdown.value
         if target_col is None:
-            ui.notify("Veuillez sélectionner une colonne target avant de continuer.", color="negative")
+            ui.notify("⚠️ Veuillez sélectionner une colonne target avant de continuer.", color="negative")
             return
+        
+        # Sauvegarder target
         state["target_column"] = target_col
+        
+        # Sauvegarder types
         for col_name, widget in column_type_widgets.items():
             state.setdefault("columns_types", {})[col_name] = widget.value
+        
+        # Sauvegarder exclusions
         for col_name, cb in column_exclude_widgets.items():
             state.setdefault("columns_exclude", {})[col_name] = cb.value
-        ui.notify("✅ Décisions enregistrées avec succès !", color="positive")
-
-    def save_and_go_to_split():
-        on_confirm()  # Sauvegarde des décisions avant de passer à la page suivante
-        ui.run_javascript("window.location.href='/supervised/preprocessing2'")
-
-
+        
+        # Sauvegarder SMOTE
+        state["apply_smote"] = smote_cb.value
+        
+        ui.notify(" Décisions enregistrées avec succès !", color="positive")
 
 
 
-from nicegui import ui
-from sklearn.model_selection import train_test_split
-import pandas as pd
+    # 🔥 Déclencher l'analyse initiale avec la target par défaut (APRÈS la définition de la fonction)
+    if default_target:
+        on_target_change(default_target)
+
+
+
+# Fonction helper (si pas déjà définie ailleurs)
+def map_detected_type(detected_type):
+    """Mappe le type détecté vers les options du dropdown"""
+    mapping = {
+        "int64": "Numérique Discrète",
+        "float64": "Numérique Continue",
+        "object": "Catégorielle Nominale",
+        "datetime64": "Date/Datetime",
+        "bool": "Catégorielle Nominale",
+        "category": "Catégorielle Nominale"
+    }
+    return mapping.get(detected_type, "Catégorielle Nominale")
+
+
+
 
 @ui.page('/supervised/preprocessing2')
 def preprocessing2_page():
@@ -980,7 +1132,7 @@ def preprocessing2_page():
         with ui.card().classes("w-full max-w-4xl p-6 mb-6").style(
             "background:white; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.08);"
         ):
-            ui.label(f"🎯 Distribution de la target '{target_col}'").style(
+            ui.label(f" Distribution de la target '{target_col}'").style(
                 "font-weight:700; font-size:20px; color:#01335A; margin-bottom:12px;"
             )
 
@@ -992,12 +1144,12 @@ def preprocessing2_page():
                 pct = round(cnt / total * 100, 1)
                 with ui.row().classes("items-center gap-2 mb-1"):
                     ui.label(f"{cls}: {cnt} ({pct}%)").style("width:120px; font-family:monospace;")
-                    ui.linear_progress(value=pct/100, color="blue").classes("w-full h-3 rounded-lg")
+                    ui.linear_progress(value=pct/100, color="#01335A").classes("w-full h-3 rounded-lg")
 
             if len(counts) > 1 and counts.min() / total * 100 < 30:
                 imbalance_detected = True
                 ui.label("⚠️ Déséquilibre détecté !").style(
-                    "color:#e67e22; font-weight:600; margin-top:6px;"
+                    "color:#01335A; font-weight:600; margin-top:6px;"
                 )
                 ui.label("Recommandation : Stratified split + métriques adaptées (F1-score, recall)").style(
                     "font-size:14px; margin-top:4px;"
@@ -1052,7 +1204,7 @@ def preprocessing2_page():
             strategy_radio = ui.radio(
                 options=["Stratified (recommandé)", "Random", "Time-based (si date)"],
                 value="Stratified (recommandé)"
-            ).style("margin-top:12px;")
+            ).style("margin-top:12px; color:#01335A !important;")
 
             seed_input = ui.input(label="Random Seed", value=42).style("margin-top:12px; width:150px;")
 
@@ -1067,7 +1219,7 @@ def preprocessing2_page():
 
             stratify_col = df_active[target_col] if "Stratified" in strategy_radio.value else None
 
-            # ✅ NOUVEAU : Sauvegarder l'état original AVANT split
+            #  NOUVEAU : Sauvegarder l'état original AVANT split
             if "df_original" not in state:
                 state["df_original"] = df_active.copy()  # Dataset AVANT transformations
 
@@ -1093,40 +1245,84 @@ def preprocessing2_page():
             }
 
             result_container.clear()
-            with result_container:
-                for name, y_set in [("Train", y_train), ("Validation", y_val), ("Test", y_test)]:
-                    counts = y_set.value_counts()
-                    total = len(y_set)
-                    ui.label(f"{name} set : {total} samples").style("font-weight:600; color:#01335A; margin-top:8px;")
-                    for cls, cnt in counts.items():
-                        pct = round(cnt / total * 100, 1)
-                        ui.label(f"  - {cls}: {cnt} ({pct}%)").style("font-family:monospace; margin-left:10px;")
+            
+            with result_container: 
+                with ui.card().classes("w-full p-6 mt-4").style(
+                    "background-color:#01335A; border-radius:16px; box-shadow:0 8px 24px rgba(0,0,0,0.15);"
+                ):
+                    ui.label(" Split effectué avec succès !").style(
+                        "font-weight:700; font-size:24px; color:white; margin-bottom:20px; text-align:center;"
+                    )
+                    
+                    with ui.row().classes("w-full gap-4 justify-center"):
+                        for name, y_set, color, icon in [
+                            ("Train", y_train, "#01335A", ""),
+                            ("Validation", y_val, "#01335A", ""),
+                            ("Test", y_test, "#01335A", "")
+                        ]:
+                            with ui.card().classes("p-5").style(
+                                f"background:white; border-radius:12px; min-width:250px;"
+                                f"border-left:6px solid {color}; box-shadow:0 4px 15px rgba(0,0,0,0.1);"
+                            ):
+                                # Header avec icône
+                                with ui.row().classes("items-center gap-2 mb-3"):
+                                    ui.label(icon).style("font-size:28px; color:#01335A;")
+                                    ui.label(f"{name} Set").style(
+                                        f"font-weight:700; font-size:20px; color:{color};"
+                                    )
+                                
+                                # Nombre total d'échantillons
+                                counts = y_set.value_counts()
+                                total = len(y_set)
+                                ui.label(f"{total:,} échantillons").style(
+                                    "font-weight:600; font-size:16px; color:#01335A; margin-bottom:12px;"
+                                )
+                                
+                                # Distribution des classes
+                                ui.label("Distribution :").style(
+                                    "font-weight:600; font-size:14px; color:#01335A; margin-bottom:8px;"
+                                )
+                                
+                                for cls, cnt in counts.items():
+                                    pct = round(cnt / total * 100, 1)
+                                    
+                                    with ui.column().classes("w-full gap-1 mb-2"):
+                                        with ui.row().classes("items-center justify-between w-full"):
+                                            ui.label(f"{cls}").style(
+                                                "font-weight:600; font-size:14px; color:#01335A;"
+                                            )
+                                            ui.label(f"{cnt:,} ({pct}%)").style(
+                                                "font-family:monospace; font-size:13px; color:#01335A;"
+                                            )
+                                        
+                                        # Barre de progression
+                                        ui.linear_progress(value=pct/100).props(
+                                            f'color="white" size="8px"'
+                                        ).classes("rounded-full bg-[#01335A]")
 
-            ui.notify("✅ Split effectué avec succès !", color="positive")
+            
+            ui.notify(" Split effectué avec succès !", color="positive")
  
             # Affichage post-split stylé (simple)
-            ui.label(f"✅ Split effectué ! Train: {len(X_train)}, Val: {len(X_val)}, Test: {len(X_test)}").style(
+            ui.label(f" Split effectué ! Train: {len(X_train)}, Val: {len(X_val)}, Test: {len(X_test)}").style(
                 "font-weight:600; color:#01335A;"
             )
 
             ui.button(
-                "➡ Étape 3.3 : Analyse Univariée",
+                "➡ Analyse Univariée",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/univariate_analysis'"),
             ).style(
-                "background:#09538C; color:white; font-weight:600; border-radius:8px; height:40px; width:280px; margin-top:12px;"
+                "background:#09538C !important; color:white; font-weight:600; border-radius:8px; height:40px; width:280px; margin-top:12px;"
             )
 
-        ui.button("✅ Effectuer le split", on_click=do_split).style(
-            "background:linear-gradient(135deg, #01335A, #09538C); color:white; font-weight:600; border-radius:8px; height:46px; width:250px; margin-top:20px;"
+        ui.button(" Effectuer le split", on_click=do_split).style(
+            "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white; font-weight:600; border-radius:8px; height:46px; width:250px; margin-top:20px;"
         )
 
 
 
 
 
-from nicegui import ui
-import pandas as pd
-from scipy.stats import iqr, skew
 
 @ui.page('/supervised/univariate_analysis')
 def univariate_analysis_page():
@@ -1167,7 +1363,7 @@ def univariate_analysis_page():
                 with ui.card().classes("w-full").style(
                     "padding:12px; border-radius:10px; box-shadow:0 3px 10px rgba(0,0,0,0.08); background:white;"
                 ):
-                    ui.label(f"📊 {col} ({'Numérique' if is_numeric else 'Catégorielle'})").style(
+                    ui.label(f" {col} ({'Numérique' if is_numeric else 'Catégorielle'})").style(
                         "font-weight:700; font-size:18px; color:#01335A; margin-bottom:6px;"
                     )
 
@@ -1192,7 +1388,7 @@ def univariate_analysis_page():
                         if len(outliers) > 0:
                             alerts.append(f"Outliers détectés: {len(outliers)} valeurs ({round(len(outliers)/len(series)*100,1)}%)")
                         for a in alerts:
-                            ui.label(f"⚠️ {a}").style("color:#e67e22; font-size:14px;")
+                            ui.label(f"⚠️ {a}").style("color:#01335A; font-size:14px;")
 
                     else:
                         counts = series.value_counts()
@@ -1201,48 +1397,29 @@ def univariate_analysis_page():
                             pct = round(cnt / total * 100, 1)
                             with ui.row().classes("items-center gap-2 mb-1"):
                                 ui.label(f"{cls}: {cnt} ({pct}%)").style("width:150px; font-family:monospace;")
-                                ui.linear_progress(value=pct/100, color="blue").classes("w-full h-3 rounded-lg")
+                                ui.linear_progress(value=pct/100, color="#01335A").classes("w-full h-3 rounded-lg")
 
-                    actions = ["Garder", "Transformer", "Traiter Outliers", "Supprimer"] if is_numeric else ["Garder", "Regrouper modalités rares", "Supprimer"]
-                    ui.select(actions, label="Action à entreprendre").style("margin-top:6px; width:250px;")
-
+                    
         # Ajoute toutes les features
         for col in X_train.columns:
             add_feature_card(col)
 
         # Bouton pour passer à la page suivante (outliers)
-        ui.button("➡ Étape 3.4 : Détection Outliers", on_click=lambda: ui.run_javascript(
+        ui.button(" Détection Outliers", on_click=lambda: ui.run_javascript(
             "window.location.href='/supervised/outliers_analysis'"
         )).style(
-            "background:linear-gradient(135deg, #01335A, #09538C); color:white; font-weight:600; border-radius:8px; height:46px; width:300px; margin-top:20px;"
+            "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white; font-weight:600; border-radius:8px; height:46px; width:300px; margin-top:20px;"
         )
 
 
 
 
-
-
-
-
-
-from nicegui import ui
-
-import pandas as pd
-import numpy as np
-import io, base64
-import matplotlib.pyplot as plt
-
 global_state = state
 
 # ----------------- PAGE 3.4 : GESTION DES OUTLIERS (VERSION COMPLÈTE) -----------------
 # ----------------- PAGE 3.4 : GESTION DES OUTLIERS (VERSION COMPLÈTE) -----------------
-from nicegui import ui
-import plotly.graph_objs as go
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import io
-import base64
+
+
 
 @ui.page('/supervised/outliers_analysis')
 def outliers_analysis_page():
@@ -1263,13 +1440,13 @@ def outliers_analysis_page():
                 "font-size:18px; color:#c0392b; font-weight:600;"
             )
             ui.button("⬅ Retour au Split",
-                      on_click=lambda: ui.run_javascript("window.location.href='/supervised/split'")
+                      on_click=lambda: ui.run_javascript("window.location.href='/supervised/preprocessing2'")
             ).style("margin-top:20px; background:#01335A; color:white; font-weight:600;")
         return
 
     df_train = split["X_train"].copy()
     
-    # ✅ Sauvegarde de l'état original si pas déjà fait
+    #  Sauvegarde de l'état original si pas déjà fait
     if "outliers_original_train" not in state:
         state["outliers_original_train"] = df_train.copy()
     
@@ -1424,7 +1601,7 @@ def outliers_analysis_page():
         return original, treated
 
     def apply_and_propagate(navigate_after=False):
-        """✅ Applique les traitements sur train/val/test"""
+        """ Applique les traitements sur train/val/test"""
         try:
             strategies = state.get("outliers_strategy", {})
             if not strategies:
@@ -1465,7 +1642,7 @@ def outliers_analysis_page():
             
             state["split"] = split
             
-            ui.notify("✅ Traitement des outliers appliqué sur train/val/test!", color="positive")
+            ui.notify(" Traitement des outliers appliqué sur train/val/test!", color="positive")
             
             if navigate_after:
                 ui.run_javascript("setTimeout(() => window.location.href='/supervised/missing_values', 1000);")
@@ -1584,7 +1761,7 @@ def outliers_analysis_page():
                     extreme_after = get_extreme_values(treated, n=5)
                     
                     if len(extreme_before) > 0:
-                        ui.label("🔍 Valeurs Extrêmes (sample)").style("font-weight:600; margin-top:12px;")
+                        ui.label(" Valeurs Extrêmes (sample)").style("font-weight:600; margin-top:12px;")
                         with ui.row().classes("gap-4 w-full"):
                             with ui.column().classes("flex-1"):
                                 ui.label("Avant").style("font-weight:600; color:#e74c3c; font-size:13px;")
@@ -1610,7 +1787,7 @@ def outliers_analysis_page():
             
             # Boutons
             with ui.row().classes("w-full justify-between mt-4"):
-                ui.button("🔍 Preview", on_click=show_preview).style("background:#2d9cdb; color:white;")
+                ui.button(" Preview", on_click=show_preview).style("background:#2d9cdb; color:white;")
                 
                 with ui.row().classes("gap-2"):
                     ui.button("Annuler", on_click=dialog.close).props("flat")
@@ -1625,7 +1802,7 @@ def outliers_analysis_page():
                             "params": params
                         }
                         
-                        ui.notify(f"✅ Stratégie sauvegardée pour {feature}", color="positive")
+                        ui.notify(f" Stratégie sauvegardée pour {feature}", color="positive")
                         dialog.close()
                     
                     ui.button("Sauvegarder", on_click=save_strategy).style("background:#27ae60; color:white;")
@@ -1662,7 +1839,7 @@ def outliers_analysis_page():
 
     # ---------- UI ----------
     with ui.column().classes("w-full items-center p-8").style("background-color:#f5f6fa;"):
-        ui.label("🔍 ÉTAPE 3.4 : GESTION DES OUTLIERS").style(
+        ui.label(" GESTION DES OUTLIERS").style(
             "font-weight:700; font-size:28px; color:#01335A; margin-bottom:10px;"
         )
         
@@ -1750,7 +1927,7 @@ def outliers_analysis_page():
             
             with ui.row().classes("gap-2 mt-4"):
                 ui.button(
-                    "✅ Appliquer et continuer",
+                    " Appliquer et continuer",
                     on_click=confirm_and_apply
                 ).style("background:#27ae60; color:white; font-weight:600;")
                 
@@ -1768,7 +1945,7 @@ def outliers_analysis_page():
         with ui.row().classes("w-full max-w-6xl justify-between mt-6"):
             ui.button(
                 "⬅ Étape précédente",
-                on_click=lambda: ui.run_javascript("window.location.href='/supervised/split'")
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/preprocessing2'")
             ).style("background:#95a5a6; color:white;")
             
             ui.button(
@@ -1782,13 +1959,7 @@ def outliers_analysis_page():
 
 
 
-# ----------------- PAGE 3.5 : ANALYSE MULTIVARIÉE -----------------
-from nicegui import ui
-import plotly.graph_objs as go
-from plotly.subplots import make_subplots
-from statsmodels.stats.outliers_influence import variance_inflation_factor
-import statsmodels.api as sm
-import math
+# ----------------- PAGE 3.5 : ANALYSE MULTIVARIÉE ----------------
 
 @ui.page('/supervised/multivariate_analysis')
 def multivariate_analysis_page():
@@ -1799,7 +1970,7 @@ def multivariate_analysis_page():
     if df is None:
         with ui.column().classes("items-center justify-center w-full h-screen"):
             ui.label("❌ Aucun dataset chargé.").style("font-size:18px; color:#c0392b; font-weight:600;")
-            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/upload'"))
+            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'"))
         return
 
     # Préparations
@@ -1812,7 +1983,7 @@ def multivariate_analysis_page():
 
     # Container principal
     with ui.column().classes("w-full items-center p-8").style("background-color:#f5f6fa;"):
-        ui.label("### ÉTAPE 3.5 : ANALYSE MULTIVARIÉE (Corrélations & Redondance)").style(
+        ui.label(" ANALYSE MULTIVARIÉE (Corrélations & Redondance)").style(
             "font-weight:700; font-size:28px; color:#01335A; margin-bottom:12px;"
         )
 
@@ -1823,7 +1994,7 @@ def multivariate_analysis_page():
             )
 
             if len(active_numeric) < 2:
-                ui.label("Pas assez de colonnes numériques actives pour calculer la corrélation.").style("color:#e67e22")
+                ui.label("Pas assez de colonnes numériques actives pour calculer la corrélation.").style("color:#01335A")
             else:
                 corr = df[active_numeric].corr()
 
@@ -1914,7 +2085,7 @@ def multivariate_analysis_page():
                     ).style("width:100%")
 
             else:
-                ui.label("Pas assez de variables numériques actives pour détecter des corrélations.").style("color:#e67e22")
+                ui.label("Pas assez de variables numériques actives pour détecter des corrélations.").style("color:#01335A")
 
         # ----- SECTION C : VIF -----
         with ui.card().classes("w-full max-w-6xl p-6 mb-6").style("background:white; border-radius:12px;"):
@@ -1922,7 +2093,7 @@ def multivariate_analysis_page():
                 "font-weight:700; font-size:18px; color:#01335A; margin-bottom:8px;"
             )
             if len(active_numeric) < 2:
-                ui.label("Pas assez de colonnes numériques actives pour calculer le VIF.").style("color:#e67e22")
+                ui.label("Pas assez de colonnes numériques actives pour calculer le VIF.").style("color:#01335A")
             else:
                 vif_df = []
                 try:
@@ -2052,7 +2223,7 @@ def multivariate_analysis_page():
             df[new_name] = new_series
             state.setdefault("raw_df", df)
             state.setdefault("engineered_features", []).append((new_name, f"{formula_str} of {b} and {a}"))
-            ui.notify(f"✅ Feature '{new_name}' créée.", color="positive")
+            ui.notify(f" Feature '{new_name}' créée.", color="positive")
             dialog_obj.close()
         except Exception as e:
             ui.notify("Erreur création feature: " + str(e), color="negative")
@@ -2061,15 +2232,15 @@ def multivariate_analysis_page():
         # keep = a or b or "both"
         if keep == a:
             state.setdefault("columns_exclude", {})[b] = True
-            ui.notify(f"✅ On garde {a} et on exclut {b}.", color="positive")
+            ui.notify(f" On garde {a} et on exclut {b}.", color="positive")
         elif keep == b:
             state.setdefault("columns_exclude", {})[a] = True
-            ui.notify(f"✅ On garde {b} et on exclut {a}.", color="positive")
+            ui.notify(f" On garde {b} et on exclut {a}.", color="positive")
         else:
             # keep both: ensure none excluded
             state.setdefault("columns_exclude", {})[a] = False
             state.setdefault("columns_exclude", {})[b] = False
-            ui.notify(f"✅ Les deux features sont conservées.", color="positive")
+            ui.notify(f" Les deux features sont conservées.", color="positive")
 
     def apply_naivebayes_prune():
         # For each highly correlated pair, exclude the feature with smaller corr to target (if target exists), otherwise exclude the one with higher VIF
@@ -2102,7 +2273,7 @@ def multivariate_analysis_page():
                 except:
                     # default: exclude second
                     state.setdefault("columns_exclude", {})[b] = True
-        ui.notify("✅ Recommandation appliquée (pruning Naive Bayes).", color="positive")
+        ui.notify(" Recommandation appliquée (pruning Naive Bayes).", color="positive")
 
     def open_bulk_engineer_modal():
         # simple modal to create a combined feature from two chosen columns (free choice)
@@ -2144,16 +2315,6 @@ def multivariate_analysis_page():
 
 # ----------------- PAGE 3.6 : GESTION DES VALEURS MANQUANTES (VERSION FINALE) -----------------
 
-# ----------------- PAGE 3.6 : GESTION DES VALEURS MANQUANTES (VERSION COMPLÈTE) -----------------
-# ----------------- PAGE 3.6 : GESTION DES VALEURS MANQUANTES (VERSION COMPLÈTE) -----------------
-from nicegui import ui
-import plotly.graph_objs as go
-import numpy as np
-import pandas as pd
-from sklearn.impute import SimpleImputer, KNNImputer
-from sklearn.experimental import enable_iterative_imputer  # noqa: F401
-from sklearn.impute import IterativeImputer
-
 @ui.page('/supervised/missing_values')
 def missing_values_page():
     """
@@ -2173,10 +2334,10 @@ def missing_values_page():
     if df is None:
         with ui.column().classes("items-center justify-center w-full h-screen"):
             ui.label("❌ Aucun dataset chargé.").style("font-size:18px; color:#c0392b; font-weight:600;")
-            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/upload'"))
+            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'"))
         return
 
-    # ✅ Sauvegarde df_original si pas déjà fait
+    #  Sauvegarde df_original si pas déjà fait
     if "df_original" not in state:
         state["df_original"] = df.copy()
 
@@ -2302,7 +2463,7 @@ def missing_values_page():
         return indices[:max_rows]  # Limiter pour performance
 
     def apply_and_propagate(navigate_after=False):
-        """✅ Applique l'imputation sur raw_df ET tous les splits"""
+        """ Applique l'imputation sur raw_df ET tous les splits"""
         try:
             strategies = state.get("missing_strategy", {})
             if not strategies:
@@ -2311,7 +2472,7 @@ def missing_values_page():
             
             split = state.get("split", {})
             
-            # ✅ 1. FIT sur le bon dataset
+            #  1. FIT sur le bon dataset
             if split and "X_train" in split:
                 df_train_for_fit = split["X_train"].copy()
                 if target_col and "y_train" in split and target_col not in df_train_for_fit.columns:
@@ -2323,10 +2484,10 @@ def missing_values_page():
             fitted = fit_imputers(strategies, df_train_for_fit)
             state["fitted_imputers"] = serialize_fitted_imputers(fitted)
             
-            # ✅ 2. APPLICATION sur raw_df
+            #  2. APPLICATION sur raw_df
             state["raw_df"] = apply_fitted_imputers(state["raw_df"], fitted, active_cols)
             
-            # ✅ 3. APPLICATION sur les splits si présents
+            #  3. APPLICATION sur les splits si présents
             if split:
                 for key in ["X_train", "X_val", "X_test"]:
                     if key in split and isinstance(split[key], pd.DataFrame):
@@ -2334,9 +2495,9 @@ def missing_values_page():
                 
                 state["split"] = split
             
-            ui.notify("✅ Imputation appliquée sur raw_df et tous les splits!", color="positive")
+            ui.notify(" Imputation appliquée sur raw_df et tous les splits!", color="positive")
             
-            # ✅ Navigation conditionnelle
+            #  Navigation conditionnelle
             if navigate_after:
                 ui.run_javascript("setTimeout(() => window.location.href='/supervised/encoding', 1000);")
             else:
@@ -2425,7 +2586,7 @@ def missing_values_page():
                         "params": params
                     }
                     
-                    ui.notify(f"✅ Stratégie sauvegardée pour {col_name}", color="positive")
+                    ui.notify(f" Stratégie sauvegardée pour {col_name}", color="positive")
                     dialog.close()
                 
                 ui.button("Sauvegarder", on_click=save_strategy).style("background:#27ae60; color:white;")
@@ -2433,7 +2594,7 @@ def missing_values_page():
         dialog.open()
 
     def preview_imputation():
-        """✅ Prévisualise l'imputation avec tableaux BEFORE/AFTER des lignes affectées"""
+        """ Prévisualise l'imputation avec tableaux BEFORE/AFTER des lignes affectées"""
         strategies = state.get("missing_strategy", {})
         
         if not strategies:
@@ -2444,7 +2605,7 @@ def missing_values_page():
             # Fit sur df_train
             fitted = fit_imputers(strategies, df_train)
             
-            # ✅ Récupérer les lignes avec missing values AVANT traitement
+            #  Récupérer les lignes avec missing values AVANT traitement
             cols_with_strategy = list(strategies.keys())
             cols_to_check = [c for c in cols_with_strategy if c in df_train.columns]
             
@@ -2473,10 +2634,10 @@ def missing_values_page():
             after_missing = df_preview[active_cols].isna().sum().sum()
             
             preview_info.set_text(
-                f"✅ Preview généré : {before_missing} valeurs manquantes → {after_missing} après imputation | {len(missing_indices)} lignes affichées"
+                f" Preview généré : {before_missing} valeurs manquantes → {after_missing} après imputation | {len(missing_indices)} lignes affichées"
             )
             
-            # ✅ Affichage des tableaux BEFORE/AFTER
+            #  Affichage des tableaux BEFORE/AFTER
             table_before_container.clear()
             table_after_container.clear()
             
@@ -2507,7 +2668,7 @@ def missing_values_page():
                 ).style("width:100%; font-size:12px;").props("dense")
             
             with table_after_container:
-                ui.label("✅ APRÈS Imputation (mêmes lignes)").style(
+                ui.label(" APRÈS Imputation (mêmes lignes)").style(
                     "font-weight:700; font-size:16px; color:#27ae60; margin-bottom:8px;"
                 )
                 
@@ -2523,7 +2684,7 @@ def missing_values_page():
                             was_nan = pd.isna(df_before.loc[idx, col])
                             display_val = str(val)[:30]
                             if was_nan:
-                                row_dict[col] = f"✅ {display_val}"
+                                row_dict[col] = f" {display_val}"
                             else:
                                 row_dict[col] = display_val
                     rows_after.append(row_dict)
@@ -2600,7 +2761,7 @@ def missing_values_page():
                 
                 def confirm_and_next():
                     dialog.close()
-                    # ✅ Passer navigate_after=True pour aller à la page suivante
+                    #  Passer navigate_after=True pour aller à la page suivante
                     apply_and_propagate(navigate_after=True)
                 
                 ui.button("Confirmer", on_click=confirm_and_next).style("background:#27ae60; color:white;")
@@ -2618,7 +2779,7 @@ def missing_values_page():
                 if miss_pct.get(col, 0.0) > 20:
                     state.setdefault("columns_exclude", {})[col] = True
                     excluded_count += 1
-            ui.notify(f"✅ Conservative : {excluded_count} colonnes >20% marquées pour exclusion", color="positive")
+            ui.notify(f" Conservative : {excluded_count} colonnes >20% marquées pour exclusion", color="positive")
 
         elif val.startswith("Balanced"):
             strategy_count = 0
@@ -2628,7 +2789,7 @@ def missing_values_page():
                 method = "median" if pd.api.types.is_numeric_dtype(df[col]) else "mode"
                 state.setdefault("missing_strategy", {})[col] = {"method": method, "params": {}}
                 strategy_count += 1
-            ui.notify(f"✅ Balanced : {strategy_count} colonnes configurées (Median/Mode)", color="positive")
+            ui.notify(f" Balanced : {strategy_count} colonnes configurées (Median/Mode)", color="positive")
 
         elif val.startswith("Aggressive"):
             knn_count = 0
@@ -2636,14 +2797,14 @@ def missing_values_page():
                 if pd.api.types.is_numeric_dtype(df[col]) and df[col].isna().sum() > 0:
                     state.setdefault("missing_strategy", {})[col] = {"method": "knn", "params": {"n_neighbors": 5}}
                     knn_count += 1
-            ui.notify(f"✅ Aggressive : KNN appliqué à {knn_count} colonnes numériques", color="positive")
+            ui.notify(f" Aggressive : KNN appliqué à {knn_count} colonnes numériques", color="positive")
 
         elif val.startswith("Custom"):
             ui.notify("ℹ️ Choix Custom : configure colonne par colonne via le tableau", color="info")
 
     # ---------- UI ----------
     with ui.column().classes("w-full items-center p-8").style("background-color:#f5f6fa;"):
-        ui.label("ÉTAPE 3.6 : GESTION DES VALEURS MANQUANTES").style(
+        ui.label(" GESTION DES VALEURS MANQUANTES").style(
             "font-weight:700; font-size:28px; color:#01335A; margin-bottom:10px;"
         )
 
@@ -2732,12 +2893,12 @@ def missing_values_page():
 
         # --- D - Preview & Apply ---
         with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
-            ui.label("🔍 Preview & Application").style("font-weight:700; font-size:18px; color:#2c3e50;")
+            ui.label(" Preview & Application").style("font-weight:700; font-size:18px; color:#2c3e50;")
             preview_info = ui.label("Cliquez sur 'Preview' pour visualiser l'impact de l'imputation").style(
                 "font-size:14px; color:#636e72; margin-top:8px;"
             )
             
-            # ✅ Conteneurs pour les tableaux BEFORE/AFTER
+            #  Conteneurs pour les tableaux BEFORE/AFTER
             with ui.row().classes("gap-4 w-full").style("margin-top:16px;"):
                 with ui.column().classes("flex-1"):
                     table_before_container = ui.column().classes("w-full")
@@ -2753,12 +2914,12 @@ def missing_values_page():
             
             with ui.row().classes("gap-2").style("margin-top:16px;"):
                 ui.button(
-                    "🔍 Preview (train)",
+                    " Preview (train)",
                     on_click=lambda e: preview_imputation()
                 ).style("background:#2d9cdb; color:white;")
                 
                 ui.button(
-                    "✅ Appliquer maintenant",
+                    " Appliquer maintenant",
                     on_click=lambda e: confirm_and_apply()
                 ).style("background:#27ae60; color:white;")
 
@@ -2782,13 +2943,7 @@ def missing_values_page():
 
 
 # ----------------- PAGE 3.7 : ENCODAGE DES FEATURES CATÉGORIELLES -----------------
-# ----------------- PAGE 3.7 : ENCODAGE DES FEATURES CATÉGORIELLES -----------------
-from nicegui import ui
-import plotly.graph_objs as go
-import numpy as np
-import pandas as pd
-from sklearn.preprocessing import LabelEncoder, OrdinalEncoder, OneHotEncoder
-import copy
+
 
 @ui.page('/supervised/encoding')
 def encoding_page():
@@ -2805,7 +2960,7 @@ def encoding_page():
     if df is None:
         with ui.column().classes("items-center justify-center w-full h-screen"):
             ui.label("❌ Aucun dataset chargé.").style("font-size:18px; color:#c0392b; font-weight:600;")
-            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/upload'"))
+            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'"))
         return
     
     # Préparer df_train
@@ -3057,7 +3212,7 @@ def encoding_page():
 
 Principe : Assigne un entier à chaque modalité (0, 1, 2...)
 
-✅ Adapté pour : Variables binaires  
+ Adapté pour : Variables binaires  
 ⚠️ Attention : Impose un ordre arbitraire
                         """).classes("p-4").style("background:#f8f9fa; border-radius:8px;")
                     
@@ -3067,7 +3222,7 @@ Principe : Assigne un entier à chaque modalité (0, 1, 2...)
 
 Principe : Crée une colonne binaire par modalité
 
-✅ Avantages : Pas d'ordre imposé, interprétable  
+ Avantages : Pas d'ordre imposé, interprétable  
 ❌ Inconvénients : Explosion dimensionnelle si haute cardinalité
                         """).classes("p-4").style("background:#f8f9fa; border-radius:8px;")
                         
@@ -3082,7 +3237,7 @@ Principe : Crée une colonne binaire par modalité
 
 Principe : Assigne des entiers selon un ordre défini
 
-✅ Applicable uniquement si ordre naturel existe
+ Applicable uniquement si ordre naturel existe
                         """).classes("p-4").style("background:#f8f9fa; border-radius:8px;")
                         
                         ui.label("Définir l'ordre (du plus bas au plus haut) :").style("font-weight:600; margin-top:12px;")
@@ -3101,7 +3256,7 @@ Principe : Assigne des entiers selon un ordre défini
 
 Principe : Remplace par la fréquence d'apparition
 
-✅ Avantages : Simple, pas de leakage, 1 colonne  
+ Avantages : Simple, pas de leakage, 1 colonne  
 ❌ Limites : Perd l'info sémantique
                         """).classes("p-4").style("background:#f8f9fa; border-radius:8px;")
                     
@@ -3111,7 +3266,7 @@ Principe : Remplace par la fréquence d'apparition
 
 Principe : Remplace par la moyenne de la target
 
-✅ Avantages : Capture relation avec target, 1 colonne  
+ Avantages : Capture relation avec target, 1 colonne  
 ⚠️ Risques : Overfitting / Data leakage
                         """).classes("p-4").style("background:#f8f9fa; border-radius:8px;")
                         
@@ -3144,7 +3299,7 @@ Principe : Remplace par la moyenne de la target
                     state.setdefault("encoding_strategy", {})[col_name] = method
                     state.setdefault("encoding_params", {})[col_name] = params
                     
-                    ui.notify(f"✅ Encodage configuré pour {col_name}", color="positive")
+                    ui.notify(f" Encodage configuré pour {col_name}", color="positive")
                     dialog.close()
                     table.update()
                 
@@ -3173,7 +3328,7 @@ Principe : Remplace par la moyenne de la target
                     try:
                         params = state.get("encoding_params", {})
                         
-                        # ✅ CORRECTION : FIT sur X_train uniquement
+                        #  CORRECTION : FIT sur X_train uniquement
                         if split and "X_train" in split:
                             df_train_for_fit = split["X_train"].copy()
                             if target_col and "y_train" in split:
@@ -3181,7 +3336,7 @@ Principe : Remplace par la moyenne de la target
                         else:
                             df_train_for_fit = df_train.copy()
                     
-                        # ✅ FIT sur train
+                        #  FIT sur train
                         _, encoders = apply_encoding(
                             df_train_for_fit, 
                             strategies, 
@@ -3202,7 +3357,7 @@ Principe : Remplace par la moyenne de la target
                                         fitted_encoders=encoders
                                     )
                         
-                        ui.notify("✅ Encodages appliqués avec succès!", color="positive")
+                        ui.notify(" Encodages appliqués avec succès!", color="positive")
                         dialog.close()
                         ui.run_javascript("setTimeout(() => window.location.href='/supervised/distribution_transform', 1500);")
                     
@@ -3237,12 +3392,12 @@ Principe : Remplace par la moyenne de la target
             
             state.setdefault("encoding_params", {})[col] = params
         
-        ui.notify("✅ Recommandations appliquées", color="positive")
+        ui.notify(" Recommandations appliquées", color="positive")
         table.update()
     
     # ---------- UI ----------
     with ui.column().classes("w-full items-center p-8").style("background-color:#f5f6fa;"):
-        ui.label("ÉTAPE 3.7 : ENCODAGE DES FEATURES CATÉGORIELLES").style(
+        ui.label("ENCODAGE DES FEATURES CATÉGORIELLES").style(
             "font-weight:700; font-size:28px; color:#01335A; margin-bottom:10px;"
         )
         
@@ -3257,7 +3412,7 @@ Principe : Remplace par la moyenne de la target
             )
             
             if len(cat_cols) == 0:
-                ui.label("✅ Aucune feature catégorielle détectée - vous pouvez passer à l'étape suivante").style(
+                ui.label(" Aucune feature catégorielle détectée - vous pouvez passer à l'étape suivante").style(
                     "color:#27ae60; margin-top:12px;"
                 )
             else:
@@ -3317,7 +3472,7 @@ Principe : Remplace par la moyenne de la target
                     ).style("background:#3498db; color:white;")
                     
                     ui.button(
-                        "✅ Appliquer les encodages",
+                        " Appliquer les encodages",
                         on_click=apply_all_encodings
                     ).style("background:#27ae60; color:white;")
         
@@ -3338,29 +3493,7 @@ Principe : Remplace par la moyenne de la target
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 # ----------------- PAGE 3.8 : TRANSFORMATIONS DE DISTRIBUTIONS -----------------
-from nicegui import ui
-import plotly.graph_objs as go
-from plotly.subplots import make_subplots
-import numpy as np
-import pandas as pd
-from scipy import stats
-from scipy.stats import boxcox, yeojohnson
-from sklearn.preprocessing import PowerTransformer
-import copy
 
 @ui.page('/supervised/distribution_transform')
 def distribution_transform_page():
@@ -3378,7 +3511,7 @@ def distribution_transform_page():
     if df is None:
         with ui.column().classes("items-center justify-center w-full h-screen"):
             ui.label("❌ Aucun dataset chargé.").style("font-size:18px; color:#c0392b; font-weight:600;")
-            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/upload'"))
+            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'"))
         return
     
     # Préparer df_train
@@ -3500,7 +3633,7 @@ def distribution_transform_page():
         
         # Gaussian Naive Bayes
         if abs_skew < 0.5:
-            impacts["Gaussian NB"] = ("✅", "Distribution normale", "green")
+            impacts["Gaussian NB"] = ("", "Distribution normale", "green")
         elif abs_skew < 1.5:
             impacts["Gaussian NB"] = ("🟡", "Assume normalité (légèrement violée)", "orange")
         else:
@@ -3508,14 +3641,14 @@ def distribution_transform_page():
         
         # KNN
         if abs_skew < 0.5:
-            impacts["KNN"] = ("✅", "Distances équilibrées", "green")
+            impacts["KNN"] = ("", "Distances équilibrées", "green")
         elif abs_skew < 1.5:
             impacts["KNN"] = ("🟡", "Distances légèrement biaisées", "orange")
         else:
             impacts["KNN"] = ("🟡", "Distances biaisées vers extrêmes", "orange")
         
         # C4.5
-        impacts["C4.5"] = ("✅", "Robuste aux distributions", "green")
+        impacts["C4.5"] = ("", "Robuste aux distributions", "green")
         
         return impacts
     
@@ -3637,7 +3770,7 @@ def distribution_transform_page():
                         elif has_zero:
                             ui.label("⚠️ Contient zéros").style("color:#f39c12; font-weight:600;")
                         else:
-                            ui.label("✅ Toutes valeurs > 0").style("color:#27ae60; font-weight:600;")
+                            ui.label(" Toutes valeurs > 0").style("color:#27ae60; font-weight:600;")
             
             # Impact algorithmes
             if selected_algos:
@@ -3686,7 +3819,7 @@ def distribution_transform_page():
                         ui.markdown("""
 **📌 Log Transform : log(x + c)**
 
-✅ Avantages :
+ Avantages :
 - Réduit skewness fort
 - Compresse valeurs extrêmes
 
@@ -3707,7 +3840,7 @@ def distribution_transform_page():
                         ui.markdown("""
 **📌 Square Root : sqrt(x)**
 
-✅ Pour skewness modéré (0.5-1.5)
+ Pour skewness modéré (0.5-1.5)
 - Plus douce que log
 - Préserve mieux les relations
                         """).classes("p-4").style("background:#f8f9fa; border-radius:8px;")
@@ -3732,7 +3865,7 @@ Trouve meilleur λ pour normaliser
                         ui.markdown("""
 **📌 Yeo-Johnson (Box-Cox généralisé)**
 
-✅ Gère valeurs négatives et zéros
+ Gère valeurs négatives et zéros
 
 λ optimal sera calculé automatiquement
                         """).classes("p-4").style("background:#f8f9fa; border-radius:8px;")
@@ -3782,7 +3915,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                     state.setdefault("transform_strategy", {})[col_name] = method
                     state.setdefault("transform_params", {})[col_name] = params
                     
-                    ui.notify(f"✅ Transformation configurée pour {col_name}", color="positive")
+                    ui.notify(f" Transformation configurée pour {col_name}", color="positive")
                     dialog.close()
                     table.update()
                 
@@ -3817,7 +3950,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                         else:
                             df_train_for_fit = df_train.copy()
 
-                        # ✅ FIT sur train et sauvegarder paramètres
+                        #  FIT sur train et sauvegarder paramètres
                         for col, method in strategies.items():
                             if method != "Aucune" and col in df_train_for_fit.columns:
                                 col_params = params.get(col, {})
@@ -3848,7 +3981,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                                                 df_split[col] = transformed_data
                                     split[key] = df_split
                         
-                        ui.notify("✅ Transformations appliquées avec succès!", color="positive")
+                        ui.notify(" Transformations appliquées avec succès!", color="positive")
                         dialog.close()
                         ui.run_javascript("setTimeout(() => window.location.href='/supervised/scaling', 1500);")
                     
@@ -3878,12 +4011,12 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                 
                 state.setdefault("transform_params", {})[col] = params
         
-        ui.notify("✅ Recommandations appliquées", color="positive")
+        ui.notify(" Recommandations appliquées", color="positive")
         table.update()
     
     # ---------- UI ----------
     with ui.column().classes("w-full items-center p-8").style("background-color:#f5f6fa;"):
-        ui.label("ÉTAPE 3.8 : TRANSFORMATIONS DE DISTRIBUTIONS").style(
+        ui.label("TRANSFORMATIONS DE DISTRIBUTIONS").style(
             "font-weight:700; font-size:28px; color:#01335A; margin-bottom:10px;"
         )
         
@@ -3904,7 +4037,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                     skewed_cols.append(col)
             
             if len(skewed_cols) == 0:
-                ui.label("✅ Aucune feature nécessitant transformation - vous pouvez passer à l'étape suivante").style(
+                ui.label(" Aucune feature nécessitant transformation - vous pouvez passer à l'étape suivante").style(
                     "color:#27ae60; margin-top:12px;"
                 )
             else:
@@ -3986,7 +4119,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                     ).style("background:#3498db; color:white;")
                     
                     ui.button(
-                        "✅ Appliquer les transformations",
+                        " Appliquer les transformations",
                         on_click=apply_all_transforms
                     ).style("background:#27ae60; color:white;")
         
@@ -4007,31 +4140,21 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
 
 
 # ----------------- PAGE 3.9 : FEATURE SCALING -----------------
-from nicegui import ui
-import plotly.graph_objs as go
-from plotly.subplots import make_subplots
-import numpy as np
-import pandas as pd
-from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler, MaxAbsScaler
-import copy
+
 
 @ui.page('/supervised/scaling')
 def feature_scaling_page():
     """
     Page complète pour le Feature Scaling avec détection intelligente des variables continues
     """
-    import pandas as pd
-    import numpy as np
-    from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler, MaxAbsScaler
-    import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
+   
     
     # ---------- CONTEXTE ----------
     df = state.get("raw_df", None)
     if df is None:
         with ui.column().classes("items-center justify-center w-full h-screen"):
             ui.label("❌ Aucun dataset chargé.").style("font-size:18px; color:#c0392b; font-weight:600;")
-            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/upload'"))
+            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'"))
         return
     
     df_train = df.copy()
@@ -4209,7 +4332,7 @@ def feature_scaling_page():
         else:
             plot_container.clear()
             with plot_container:
-                ui.label("⚠️ Aucune visualisation disponible").style("color:#e67e22; font-size:16px;")
+                ui.label("⚠️ Aucune visualisation disponible").style("color:#01335A; font-size:16px;")
     
     def apply_scaling(method):
         ensure_original_saved()
@@ -4222,7 +4345,7 @@ def feature_scaling_page():
         
         if method == "none":
             state["scaling_method"] = "none"
-            ui.notify("✅ Aucun scaling appliqué", color="positive")
+            ui.notify(" Aucun scaling appliqué", color="positive")
             ui.run_javascript("setTimeout(() => window.location.href='/supervised/dimension_reduction', 1000);")
             return
         
@@ -4239,16 +4362,16 @@ def feature_scaling_page():
                     try:
                         scaler = scalers[method]
                     
-                        # ✅ CORRECTION : FIT sur X_train uniquement
+                        #  CORRECTION : FIT sur X_train uniquement
                         if split and "X_train" in split:
                             X_train_for_fit = split["X_train"][num_cols].copy()
                         else:
                             X_train_for_fit = df_train[num_cols].copy()
                     
-                        # ✅ FIT sur train
+                        #  FIT sur train
                         scaler.fit(X_train_for_fit)
                     
-                        # ✅ TRANSFORM sur chaque split
+                        #  TRANSFORM sur chaque split
                         if split:
                             for key in ["X_train", "X_val", "X_test"]:
                                 if key in split and isinstance(split[key], pd.DataFrame):
@@ -4258,14 +4381,14 @@ def feature_scaling_page():
                         state["fitted_scaler"] = scaler  # Sauvegarder le scaler fitté
                         state["scaled_columns"] = num_cols
                     
-                        ui.notify(f"✅ Scaling appliqué sans data leakage!", color="positive")
+                        ui.notify(f" Scaling appliqué sans data leakage!", color="positive")
                         dialog.close()
                         ui.run_javascript("setTimeout(() => window.location.href='/supervised/dimension_reduction', 1000);")
                 
                     except Exception as e:
                         ui.notify(f"❌ Erreur: {str(e)}", color="negative")
             
-                ui.button("✅ Confirmer", on_click=do_apply).style("background:#27ae60; color:white; font-weight:600;")
+                ui.button(" Confirmer", on_click=do_apply).style("background:#27ae60; color:white; font-weight:600;")
     
         dialog.open()
 
@@ -4277,7 +4400,7 @@ def feature_scaling_page():
     # ---------- INTERFACE ----------
     with ui.column().classes("w-full items-center p-8").style("background-color:#f8f9fa; min-height:100vh;"):
         # Header
-        ui.label("🚀 ÉTAPE 3.9 : FEATURE SCALING").style(
+        ui.label(" FEATURE SCALING").style(
             "font-weight:700; font-size:32px; color:#2c3e50; margin-bottom:8px; text-align:center;"
         )
         ui.label("Normalisation/Standardisation des features continues").style(
@@ -4286,10 +4409,10 @@ def feature_scaling_page():
         
         # Info détection intelligente
         with ui.card().classes("w-full max-w-6xl p-6 mb-8").style("background:#fff3cd; border-left:5px solid #ffc107;"):
-            ui.label("🔍 Détection Intelligente").style("font-weight:700; font-size:18px; color:#856404; margin-bottom:12px;")
+            ui.label(" Détection Intelligente").style("font-weight:700; font-size:18px; color:#856404; margin-bottom:12px;")
             with ui.row().classes("w-full gap-8"):
                 with ui.column().classes("flex-1"):
-                    ui.label(f"✅ **{len(num_cols)} features continues** détectées").style("font-size:15px; margin-bottom:4px;")
+                    ui.label(f" **{len(num_cols)} features continues** détectées").style("font-size:15px; margin-bottom:4px;")
                     if num_cols:
                         ui.label(f"→ {', '.join(num_cols[:5])}{'...' if len(num_cols) > 5 else ''}").style(
                             "font-size:13px; color:#666;"
@@ -4305,14 +4428,14 @@ def feature_scaling_page():
         
         # Objectif
         with ui.card().classes("w-full max-w-6xl p-6 mb-8").style("background:#e3f2fd; border-left:5px solid #2196f3;"):
-            ui.label("🎯 Objectif principal").style("font-weight:700; font-size:18px; color:#1976d2; margin-bottom:12px;")
+            ui.label(" Objectif principal").style("font-weight:700; font-size:18px; color:#1976d2; margin-bottom:12px;")
             with ui.row().classes("w-full gap-8"):
                 with ui.column().classes("flex-1"):
                     ui.label("🔴 **CRITIQUE** pour KNN").style("font-size:15px; font-weight:600; margin-bottom:4px;")
                     ui.label("→ Les distances sont biaisées par les échelles différentes").style("font-size:13px; color:#666;")
                 
                 with ui.column().classes("flex-1"):
-                    ui.label("✅ **INUTILE** pour C4.5").style("font-size:15px; font-weight:600; margin-bottom:4px;")
+                    ui.label(" **INUTILE** pour C4.5").style("font-size:15px; font-weight:600; margin-bottom:4px;")
                     ui.label("→ Arbres de décision insensibles aux échelles").style("font-size:13px; color:#666;")
                 
                 with ui.column().classes("flex-1"):
@@ -4457,7 +4580,7 @@ def feature_scaling_page():
             )
             
             ui.button(
-                "✅ Appliquer & Continuer",
+                " Appliquer & Continuer",
                 on_click=lambda: apply_scaling(method_select.value)
             ).style(
                 "background:linear-gradient(135deg, #2c3e50 0%, #34495e 100%); "
@@ -4473,13 +4596,7 @@ def dimension_reduction_page():
     """
     Page complète pour la Réduction de Dimension (PCA, Feature Selection)
     """
-    import pandas as pd
-    import numpy as np
-    from sklearn.decomposition import PCA
-    from sklearn.feature_selection import SelectKBest, f_classif, chi2
-    from sklearn.tree import DecisionTreeClassifier
-    import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
+    
     
     # ---------- CONTEXTE ----------
     df = state.get("raw_df", None)
@@ -4651,7 +4768,7 @@ def dimension_reduction_page():
                 
                 variance_explained = pca.explained_variance_ratio_.sum() * 100
                 
-                ui.notify(f"✅ PCA appliqué : {n_features} → {n_comp} composantes ({variance_explained:.1f}% variance)", 
+                ui.notify(f" PCA appliqué : {n_features} → {n_comp} composantes ({variance_explained:.1f}% variance)", 
                          color="positive", timeout=3000)
                 
             elif method == "feature_selection":
@@ -4671,7 +4788,7 @@ def dimension_reduction_page():
                 state["reduction_applied"] = True
                 state["reduction_method"] = "feature_selection"
                 
-                ui.notify(f"✅ Feature Selection : {n_features} → {n_comp} features", 
+                ui.notify(f" Feature Selection : {n_features} → {n_comp} features", 
                          color="positive", timeout=3000)
             
             # Mettre à jour colonnes exclues
@@ -4686,14 +4803,14 @@ def dimension_reduction_page():
     def skip_reduction():
         """Passer l'étape sans réduction"""
         state["reduction_applied"] = False
-        ui.notify("✅ Aucune réduction appliquée", color="info")
+        ui.notify(" Aucune réduction appliquée", color="info")
         ui.run_javascript("setTimeout(() => window.location.href='/supervised/recap_validation', 1000);")
     
     # ---------- INTERFACE ----------
     with ui.column().classes("w-full items-center p-8").style("background-color:#f8f9fa; min-height:100vh;"):
         
         # Header
-        ui.label("🎯 ÉTAPE 3.10 : RÉDUCTION DE DIMENSION").style(
+        ui.label(" RÉDUCTION DE DIMENSION").style(
             "font-weight:700; font-size:32px; color:#2c3e50; margin-bottom:8px; text-align:center;"
         )
         ui.label("Optionnel - Réduire curse of dimensionality pour KNN").style(
@@ -4711,19 +4828,19 @@ def dimension_reduction_page():
                     ui.label(f"**Features après preprocessing** : {n_features}").style("font-size:15px; margin-bottom:8px;")
                     ui.label(f"**Samples (train)** : {n_samples}").style("font-size:15px; margin-bottom:8px;")
                     ui.label(f"**Ratio samples/features** : {ratio:.1f}").style(
-                        f"font-size:15px; font-weight:700; color:{'#27ae60' if ratio > 50 else '#e67e22'};"
+                        f"font-size:15px; font-weight:700; color:{'#27ae60' if ratio > 50 else '#01335A'};"
                     )
             
             # Recommandations
             with ui.card().classes("w-full p-4").style("background:#fff3cd; border-left:4px solid #ffc107;"):
                 ui.label("⚠️ Recommandations par algorithme").style("font-weight:700; font-size:16px; margin-bottom:12px;")
-                ui.label(f"• **KNN** : Ratio idéal > 50 {'✅' if ratio > 50 else '⚠️ Curse of dimensionality'}").style("font-size:14px; margin-bottom:6px;")
-                ui.label("• **C4.5** : Pas de limite stricte ✅").style("font-size:14px; margin-bottom:6px;")
-                ui.label("• **Naive Bayes** : Assume indépendance (déjà traité) ✅").style("font-size:14px;")
+                ui.label(f"• **KNN** : Ratio idéal > 50 {'' if ratio > 50 else '⚠️ Curse of dimensionality'}").style("font-size:14px; margin-bottom:6px;")
+                ui.label("• **C4.5** : Pas de limite stricte ").style("font-size:14px; margin-bottom:6px;")
+                ui.label("• **Naive Bayes** : Assume indépendance (déjà traité) ").style("font-size:14px;")
             
             if ratio < 50:
                 ui.label("💡 Réduction recommandée pour améliorer KNN").style(
-                    "font-size:16px; color:#e67e22; font-weight:600; margin-top:12px; text-align:center;"
+                    "font-size:16px; color:#01335A; font-weight:600; margin-top:12px; text-align:center;"
                 )
         
         # Section B : Options
@@ -4780,7 +4897,7 @@ def dimension_reduction_page():
                                         
                                         with ui.row().classes("w-full gap-8 mb-4"):
                                             with ui.column().classes("flex-1"):
-                                                ui.label("✅ **Avantages**").style("font-weight:600; color:#27ae60; margin-bottom:4px;")
+                                                ui.label(" **Avantages**").style("font-weight:600; color:#27ae60; margin-bottom:4px;")
                                                 ui.label("• Linéaire, rapide, déterministe").style("font-size:13px;")
                                                 ui.label("• Préserve variance maximale").style("font-size:13px;")
                                                 ui.label("• Transformable pour new data").style("font-size:13px;")
@@ -4789,7 +4906,7 @@ def dimension_reduction_page():
                                                 ui.label("❌ **Inconvénients**").style("font-weight:600; color:#e74c3c; margin-bottom:4px;")
                                                 ui.label("• Perd interprétabilité").style("font-size:13px;")
                                                 ui.label("• Assume linéarité").style("font-size:13px;")
-                                                ui.label("• Sensible au scaling (déjà fait ✅)").style("font-size:13px;")
+                                                ui.label("• Sensible au scaling (déjà fait )").style("font-size:13px;")
                                         
                                         # Slider nombre de composantes
                                         ui.label("**Configuration**").style("font-weight:600; font-size:16px; margin:16px 0 12px 0;")
@@ -4854,7 +4971,7 @@ def dimension_reduction_page():
                                         
                                         with ui.row().classes("w-full gap-8 mb-4"):
                                             with ui.column().classes("flex-1"):
-                                                ui.label("✅ **Avantages**").style("font-weight:600; color:#27ae60; margin-bottom:4px;")
+                                                ui.label(" **Avantages**").style("font-weight:600; color:#27ae60; margin-bottom:4px;")
                                                 ui.label("• Garde interprétabilité").style("font-size:13px;")
                                                 ui.label("• Pas de transformation").style("font-size:13px;")
                                                 ui.label("• Features originales").style("font-size:13px;")
@@ -4939,7 +5056,7 @@ def dimension_reduction_page():
                 )
                 
                 ui.button(
-                    "✅ Appliquer la Réduction",
+                    " Appliquer la Réduction",
                     on_click=lambda: apply_reduction(
                         state.get("reduction_method", "pca"),
                         state.get("n_components", 10)
@@ -4969,13 +5086,7 @@ def recap_validation_page():
     """
     Page complète de récapitulatif et validation finale du preprocessing
     """
-    import pandas as pd
-    import numpy as np
-    import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
-    import io
-    import base64
-    from datetime import datetime
+    
     
     # ---------- CONTEXTE ----------
     df = state.get("raw_df", None)
@@ -4986,7 +5097,7 @@ def recap_validation_page():
     if df is None:
         with ui.column().classes("items-center justify-center w-full h-screen"):
             ui.label("❌ Aucun dataset chargé.").style("font-size:18px; color:#c0392b; font-weight:600;")
-            ui.button("⬅ Retour", on_click=lambda: ui.run_javascript("window.location.href='/upload'"))
+            ui.button("⬅ Retour", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'"))
         return
     
     # Collecter toutes les transformations
@@ -5186,7 +5297,7 @@ def recap_validation_page():
                 link.click();
             ''')
             
-            ui.notify("✅ Téléchargement démarré !", color="positive")
+            ui.notify(" Téléchargement démarré !", color="positive")
         
         except Exception as e:
             ui.notify(f"❌ Erreur lors du téléchargement : {str(e)}", color="negative")
@@ -5215,7 +5326,7 @@ def recap_validation_page():
             ui.label("Choisir l'étape à modifier").style("font-weight:700; font-size:20px; margin-bottom:16px;")
             
             ui.label("⚠️ Attention : Modifier une étape peut invalider les étapes suivantes").style(
-                "color:#e67e22; font-size:14px; margin-bottom:16px;"
+                "color:#01335A; font-size:14px; margin-bottom:16px;"
             )
             
             step_radio = ui.radio(
@@ -5240,7 +5351,7 @@ def recap_validation_page():
     def validate_and_continue():
         """Valide le preprocessing et prépare pour les algorithmes"""
         with ui.dialog() as dialog, ui.card().classes("w-full max-w-3xl p-6"):
-            ui.label("✅ Validation du Pipeline").style("font-weight:700; font-size:20px; margin-bottom:16px;")
+            ui.label(" Validation du Pipeline").style("font-weight:700; font-size:20px; margin-bottom:16px;")
             
             # Progress
             progress_container = ui.column().classes("w-full")
@@ -5270,12 +5381,12 @@ def recap_validation_page():
                     state["preprocessing_validated"] = True
                     state["validation_timestamp"] = datetime.now().isoformat()
                     
-                    ui.notify("✅ Pipeline validé avec succès !", color="positive")
+                    ui.notify(" Pipeline validé avec succès !", color="positive")
                     
                     # Afficher résumé final
                     progress_container.clear()
                     with progress_container:
-                        ui.label("✅ Validation complète !").style(
+                        ui.label(" Validation complète !").style(
                             "font-weight:700; font-size:20px; color:#27ae60; margin-bottom:16px;"
                         )
                         
@@ -5334,7 +5445,7 @@ def recap_validation_page():
     with ui.column().classes("w-full items-center p-8").style("background-color:#f8f9fa; min-height:100vh;"):
         
         # Header
-        ui.label("🎯 ÉTAPE 3.11 : RÉCAPITULATIF & VALIDATION").style(
+        ui.label(" RÉCAPITULATIF & VALIDATION").style(
             "font-weight:700; font-size:32px; color:#2c3e50; margin-bottom:8px; text-align:center;"
         )
         ui.label("Vue d'ensemble avant lancement des algorithmes").style(
@@ -5360,7 +5471,7 @@ def recap_validation_page():
                     row_key="Étape"
                 ).style("width:100%;")
             else:
-                ui.label("⚠️ Aucune transformation appliquée").style("color:#e67e22; font-size:16px;")
+                ui.label("⚠️ Aucune transformation appliquée").style("color:#01335A; font-size:16px;")
         
         # Section B : Statistiques comparatives
         with ui.card().classes("w-full max-w-6xl p-6 mb-8"):
@@ -5410,7 +5521,7 @@ def recap_validation_page():
                 ui.plotly(comparison_fig).classes("w-full")
             else:
                 ui.label("⚠️ Dataset original non disponible pour comparaison").style(
-                    "color:#e67e22; font-size:14px;"
+                    "color:#01335A; font-size:14px;"
                 )
         
         # Section D : Aperçu des données
@@ -5456,7 +5567,7 @@ def recap_validation_page():
             "background:linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%); "
             "border:4px solid #4caf50; border-radius:20px;"
         ):
-            ui.label("🎯 Décisions Finales").style(
+            ui.label(" Décisions Finales").style(
                 "font-weight:800; font-size:24px; color:#1b5e20; text-align:center; margin-bottom:20px;"
             )
             
@@ -5482,7 +5593,7 @@ def recap_validation_page():
                 )
                 
                 ui.button(
-                    "✅ Valider et Continuer",
+                    " Valider et Continuer",
                     on_click=validate_and_continue
                 ).style(
                     "background:linear-gradient(135deg, #27ae60 0%, #229954 100%); "
@@ -5503,11 +5614,13 @@ def recap_validation_page():
 @ui.page('/supervised/algorithm_config')
 def algorithm_config_page():
     """
-    Page de configuration des hyperparamètres des algorithmes avant training baseline
+    Page complète de configuration des algorithmes supervisés
+    - Sélection des algos à entraîner
+    - Configuration des hyperparamètres
+    - Validation strategy
+    - Récapitulatif avant training
     """
-    import pandas as pd
-    import numpy as np
-    from datetime import datetime
+    
     
     # ---------- CONTEXTE ----------
     df = state.get("raw_df", None)
@@ -5522,7 +5635,8 @@ def algorithm_config_page():
             ui.button("⬅ Retour", on_click=lambda: ui.run_javascript("window.location.href='/supervised/recap_validation'"))
         return
     
-    # Initialiser configurations si pas déjà fait
+    # ---------- INITIALISATION STATE ----------
+    # Configurations par défaut des algorithmes
     if "algo_configs" not in state:
         state["algo_configs"] = {
             "knn": {
@@ -5545,16 +5659,28 @@ def algorithm_config_page():
                 "min_samples_split": 2,
                 "min_samples_leaf": 1,
                 "max_features": "sqrt"
+            },
+            "naive_bayes": {
+                "var_smoothing": 1e-9
             }
         }
     
+    # Algorithmes sélectionnés par défaut
+    if "selected_algos" not in state:
+        state["selected_algos"] = ["KNN", "Decision Tree", "Naive Bayes"]
+    
+    # Stratégie de validation
     if "validation_strategy" not in state:
         state["validation_strategy"] = "holdout"
     
+    if "cv_folds" not in state:
+        state["cv_folds"] = 5
+    
+    # Métriques à tracker
     if "metrics_to_track" not in state:
         state["metrics_to_track"] = ["accuracy", "precision", "recall", "f1"]
     
-    # ---------- FONCTIONS ----------
+    # ---------- FONCTIONS HELPERS ----------
     def get_data_compatibility():
         """Retourne l'état de compatibilité des données"""
         n_samples = len(split.get("X_train", []))
@@ -5587,7 +5713,7 @@ def algorithm_config_page():
                 "weights": "distance",
                 "algorithm": "auto"
             }
-            ui.notify("✅ Configuration KNN recommandée appliquée", color="positive")
+            ui.notify(" Configuration KNN recommandée appliquée", color="positive")
         
         elif algo == "decision_tree":
             state["algo_configs"]["decision_tree"] = {
@@ -5597,7 +5723,7 @@ def algorithm_config_page():
                 "min_samples_leaf": 5,
                 "max_features": "sqrt"
             }
-            ui.notify("✅ Configuration Decision Tree recommandée appliquée", color="positive")
+            ui.notify(" Configuration Decision Tree recommandée appliquée", color="positive")
         
         elif algo == "random_forest":
             state["algo_configs"]["random_forest"] = {
@@ -5608,495 +5734,556 @@ def algorithm_config_page():
                 "min_samples_leaf": 2,
                 "max_features": "sqrt"
             }
-            ui.notify("✅ Configuration Random Forest recommandée appliquée", color="positive")
+            ui.notify(" Configuration Random Forest recommandée appliquée", color="positive")
         
-        # Recharger la page pour afficher les nouvelles valeurs
-        ui.run_javascript("location.reload()")
+        elif algo == "naive_bayes":
+            state["algo_configs"]["naive_bayes"] = {
+                "var_smoothing": 1e-9
+            }
+            ui.notify(" Configuration Naive Bayes par défaut appliquée", color="positive")
+        
+        ui.run_javascript("setTimeout(() => location.reload(), 800);")
     
     def reset_config(algo):
         """Réinitialise la configuration d'un algorithme aux valeurs par défaut"""
-        if algo == "knn":
-            state["algo_configs"]["knn"] = {
+        defaults = {
+            "knn": {
                 "n_neighbors": 5,
                 "metric": "euclidean",
                 "weights": "uniform",
                 "algorithm": "auto"
-            }
-        elif algo == "decision_tree":
-            state["algo_configs"]["decision_tree"] = {
+            },
+            "decision_tree": {
                 "criterion": "gini",
                 "max_depth": None,
                 "min_samples_split": 2,
                 "min_samples_leaf": 1,
                 "max_features": None
-            }
-        elif algo == "random_forest":
-            state["algo_configs"]["random_forest"] = {
+            },
+            "random_forest": {
                 "n_estimators": 100,
                 "criterion": "gini",
                 "max_depth": None,
                 "min_samples_split": 2,
                 "min_samples_leaf": 1,
                 "max_features": "sqrt"
+            },
+            "naive_bayes": {
+                "var_smoothing": 1e-9
             }
+        }
         
-        ui.notify(f"🔄 Configuration {algo.upper()} réinitialisée", color="info")
-        ui.run_javascript("location.reload()")
+        if algo in defaults:
+            state["algo_configs"][algo] = defaults[algo]
+            ui.notify(f"🔄 Configuration {algo.upper()} réinitialisée", color="info")
+            ui.run_javascript("setTimeout(() => location.reload(), 800);")
     
     def validate_and_continue():
         """Valide les configurations et passe à l'entraînement"""
-        # Vérifier que toutes les configs sont valides
+        # Vérifier qu'au moins un algo est sélectionné
+        if not state.get("selected_algos", []):
+            ui.notify("❌ Sélectionnez au moins un algorithme", color="negative")
+            return
+        
+        # Vérifier qu'au moins une métrique est sélectionnée
+        if not state.get("metrics_to_track", []):
+            ui.notify("❌ Sélectionnez au moins une métrique", color="negative")
+            return
+        
         configs = state["algo_configs"]
+        selected = state["selected_algos"]
         
         # Validation KNN
-        if configs["knn"]["n_neighbors"] < 1:
-            ui.notify("❌ KNN: n_neighbors doit être >= 1", color="negative")
-            return
+        if "KNN" in selected:
+            if configs["knn"]["n_neighbors"] < 1:
+                ui.notify("❌ KNN: n_neighbors doit être >= 1", color="negative")
+                return
         
         # Validation Decision Tree
-        if configs["decision_tree"]["max_depth"] is not None and configs["decision_tree"]["max_depth"] < 1:
-            ui.notify("❌ Decision Tree: max_depth doit être >= 1 ou None", color="negative")
-            return
+        if "Decision Tree" in selected:
+            if configs["decision_tree"]["max_depth"] is not None and configs["decision_tree"]["max_depth"] < 1:
+                ui.notify("❌ Decision Tree: max_depth doit être >= 1 ou None", color="negative")
+                return
         
         # Validation Random Forest
-        if configs["random_forest"]["n_estimators"] < 1:
-            ui.notify("❌ Random Forest: n_estimators doit être >= 1", color="negative")
-            return
+        if "Random Forest" in selected:
+            if configs["random_forest"]["n_estimators"] < 1:
+                ui.notify("❌ Random Forest: n_estimators doit être >= 1", color="negative")
+                return
+        
+        # Validation Naive Bayes
+        if "Naive Bayes" in selected:
+            if configs["naive_bayes"]["var_smoothing"] <= 0:
+                ui.notify("❌ Naive Bayes: var_smoothing doit être > 0", color="negative")
+                return
         
         # Sauvegarder timestamp
         state["algo_config_timestamp"] = datetime.now().isoformat()
         
-        ui.notify("✅ Configurations validées !", color="positive")
+        ui.notify(" Configurations validées !", color="positive")
         
         # Rediriger vers la page d'entraînement
-        ui.run_javascript("window.location.href='/supervised/training'")
+        ui.run_javascript("setTimeout(() => window.location.href='/supervised/feature_importance', 1000);")
     
     # ---------- INTERFACE ----------
     compat = get_data_compatibility()
     
     with ui.column().classes("w-full items-center p-8").style("background-color:#f8f9fa; min-height:100vh;"):
         
-        # Header
-        ui.label("⚙️ CONFIGURATION DES ALGORITHMES").style(
+        # ==================== HEADER ====================
+        ui.label("CONFIGURATION DES ALGORITHMES").style(
             "font-weight:700; font-size:32px; color:#2c3e50; margin-bottom:8px; text-align:center;"
         )
-        ui.label("Configurer les hyperparamètres avant l'entraînement baseline").style(
+        ui.label("Sélectionner et configurer vos algorithmes avant l'entraînement").style(
             "font-size:18px; color:#7f8c8d; margin-bottom:32px; text-align:center;"
         )
         
-        # Info données
-        with ui.card().classes("w-full max-w-6xl p-4 mb-6").style("background:#e3f2fd;"):
+        # ==================== INFO DONNÉES ====================
+        with ui.card().classes("w-full max-w-6xl p-4 mb-6").style("background:#e3f2fd; border-left:5px solid #2196f3;"):
             with ui.row().classes("w-full gap-8 items-center"):
-                ui.label("📊 Vos données :").style("font-weight:700; font-size:16px;")
-                ui.label(f"Train: {compat['n_samples']} samples").style("font-size:14px;")
+                ui.label("📊 État des données :").style("font-weight:700; font-size:16px;")
+                ui.label(f"Train: {compat['n_samples']:,} samples").style("font-size:14px;")
                 ui.label(f"Features: {compat['n_features']}").style("font-size:14px;")
-                ui.label(f"Scaling: {'✅' if compat['scaling'] else '❌'}").style("font-size:14px;")
-                ui.label(f"Reduction: {'✅' if compat['reduction'] else '❌'}").style("font-size:14px;")
+                ui.label(f"Scaling: {'' if compat['scaling'] else '❌'}").style("font-size:14px;")
+                ui.label(f"Reduction: {'' if compat['reduction'] else '❌'}").style("font-size:14px;")
                 ui.label(f"Missing: {compat['missing']}").style("font-size:14px;")
         
-        # ==================== CARTE 1: KNN ====================
-        with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
-            ui.label("🎯 K-Nearest Neighbors (KNN)").style(
-                "font-weight:700; font-size:24px; color:#2c3e50; margin-bottom:16px;"
+        # ==================== SÉLECTION ALGORITHMES ====================
+        with ui.card().classes("w-full max-w-6xl p-6 mb-8").style("background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);"):
+            ui.label(" SÉLECTION DES ALGORITHMES À ENTRAÎNER").style(
+                "font-weight:700; font-size:24px; color:white; margin-bottom:16px; text-align:center;"
             )
             
-            # Description
-            with ui.expansion("📖 Principe & Compatibilité", icon="info").classes("w-full mb-4"):
-                with ui.column().classes("p-4"):
-                    ui.label("Principe :").style("font-weight:700; margin-bottom:8px;")
-                    ui.label("Classification basée sur les K voisins les plus proches").style("font-size:14px; margin-bottom:16px;")
-                    
-                    ui.label("✅ Avantages :").style("font-weight:700; margin-bottom:8px;")
-                    ui.label("• Simple et intuitif").style("font-size:14px;")
-                    ui.label("• Non-paramétrique (pas d'hypothèses sur distribution)").style("font-size:14px;")
-                    ui.label("• Adapté aux frontières non-linéaires").style("font-size:14px; margin-bottom:16px;")
-                    
-                    ui.label("❌ Inconvénients :").style("font-weight:700; margin-bottom:8px;")
-                    ui.label("• Sensible au scaling (✅ déjà fait)").style("font-size:14px;")
-                    ui.label("• Coût computationnel élevé (prédiction)").style("font-size:14px;")
-                    ui.label("• Curse of dimensionality").style("font-size:14px; margin-bottom:16px;")
-                    
-                    ui.label("📊 Compatibilité :").style("font-weight:700; margin-bottom:8px;")
-                    ui.label(f"• Scaling : {'✅ Appliqué' if compat['scaling'] else '⚠️ Recommandé'}").style("font-size:14px;")
-                    ui.label(f"• Dimension : {'✅ Réduite' if compat['reduction'] else '⚠️ Peut affecter performance'}").style("font-size:14px;")
-                    ui.label(f"• Missing : {'✅ Aucune' if compat['missing'] == 0 else '❌ Présentes'}").style("font-size:14px;")
+            ui.label("Choisissez les algorithmes que vous souhaitez tester sur vos données").style(
+                "font-size:16px; color:white; text-align:center; margin-bottom:20px;"
+            )
             
-            ui.label("⚙️ CONFIGURATION").style("font-weight:700; font-size:18px; margin-top:16px; margin-bottom:12px;")
-            
-            # Hyperparamètres
-            knn_config = state["algo_configs"]["knn"]
-            
-            # 1. n_neighbors
-            with ui.row().classes("w-full items-center gap-4 mb-4"):
-                ui.label("1. Nombre de voisins (K)").style("font-weight:600; width:250px;")
-                knn_neighbors_slider = ui.slider(min=1, max=50, value=knn_config["n_neighbors"], step=1).classes("flex-1")
-                knn_neighbors_label = ui.label(f"K = {knn_config['n_neighbors']}").style("font-weight:700; width:80px;")
+            # Conteneur des checkboxes
+            with ui.card().classes("w-full p-6").style("background:white;"):
+                selected_algos = state.get("selected_algos", [])
                 
-                def update_knn_neighbors(e):
-                    state["algo_configs"]["knn"]["n_neighbors"] = int(e.value)
-                    knn_neighbors_label.set_text(f"K = {int(e.value)}")
+                with ui.row().classes("w-full gap-8 justify-center"):
+                    algo_knn_cb = ui.checkbox(" K-Nearest Neighbors", value="KNN" in selected_algos).classes("text-lg")
+                    algo_dt_cb = ui.checkbox("🌳 Decision Tree (C4.5)", value="Decision Tree" in selected_algos).classes("text-lg")
+                    algo_nb_cb = ui.checkbox("📊 Naive Bayes", value="Naive Bayes" in selected_algos).classes("text-lg")
                 
-                knn_neighbors_slider.on_value_change(update_knn_neighbors)
-            
-            ui.label(f"💡 Règle : K = √n_samples ≈ {get_recommended_k()}").style("font-size:13px; color:#7f8c8d; margin-left:250px; margin-bottom:8px;")
-            ui.label("⚠️ K petit → Overfitting | K grand → Underfitting").style("font-size:13px; color:#e67e22; margin-left:250px; margin-bottom:16px;")
-            
-            # 2. metric
-            with ui.row().classes("w-full items-start gap-4 mb-4"):
-                ui.label("2. Métrique de distance").style("font-weight:600; width:250px;")
-                with ui.column().classes("flex-1"):
-                    knn_metric = ui.radio(
-                        options={
-                            "euclidean": "Euclidean (default) - Distance L2",
-                            "manhattan": "Manhattan - Distance L1 (robuste outliers)",
-                            "minkowski": "Minkowski - Généralisation",
-                            "chebyshev": "Chebyshev - Distance max"
-                        },
-                        value=knn_config["metric"]
-                    )
-                    knn_metric.on_value_change(lambda e: state["algo_configs"]["knn"].update({"metric": e.value}))
-            
-            # 3. weights
-            with ui.row().classes("w-full items-start gap-4 mb-4"):
-                ui.label("3. Pondération").style("font-weight:600; width:250px;")
-                with ui.column().classes("flex-1"):
-                    knn_weights = ui.radio(
-                        options={
-                            "uniform": "Uniform - Tous voisins poids égal",
-                            "distance": "Distance - Poids = 1/distance (favorise proches)"
-                        },
-                        value=knn_config["weights"]
-                    )
-                    knn_weights.on_value_change(lambda e: state["algo_configs"]["knn"].update({"weights": e.value}))
-            
-            # 4. algorithm
-            with ui.row().classes("w-full items-start gap-4 mb-4"):
-                ui.label("4. Algorithme recherche").style("font-weight:600; width:250px;")
-                with ui.column().classes("flex-1"):
-                    knn_algo = ui.radio(
-                        options={
-                            "auto": "Auto - Sélection automatique",
-                            "ball_tree": "Ball Tree - Rapide, haute dimension",
-                            "kd_tree": "KD Tree - Rapide, basse dimension (<20)",
-                            "brute": "Brute Force - Exhaustif (petit dataset)"
-                        },
-                        value=knn_config["algorithm"]
-                    )
-                    knn_algo.on_value_change(lambda e: state["algo_configs"]["knn"].update({"algorithm": e.value}))
-            
-            # Estimation
-            with ui.card().classes("w-full p-4 mt-4").style("background:#fff3cd;"):
-                ui.label("⏱️ Estimation :").style("font-weight:700; margin-bottom:8px;")
-                ui.label(f"• Temps training : ~0.1s (lazy learner)").style("font-size:14px;")
-                ui.label(f"• Temps prédiction : ~{compat['n_samples']*compat['n_features']/1000:.1f}s").style("font-size:14px;")
-                ui.label(f"• Mémoire : ~{compat['n_samples']*compat['n_features']*8/1024:.0f} KB").style("font-size:14px;")
-            
-            # Boutons
-            with ui.row().classes("w-full justify-end gap-2 mt-4"):
-                ui.button("🔄 Réinitialiser", on_click=lambda: reset_config("knn")).props("flat")
-                ui.button("💡 Appliquer Recommandation", on_click=lambda: apply_recommended_config("knn")).style(
-                    "background:#3498db; color:white;"
+                def update_selected_algos():
+                    algos = []
+                    if algo_knn_cb.value:
+                        algos.append("KNN")
+                    if algo_dt_cb.value:
+                        algos.append("Decision Tree")
+                    if algo_nb_cb.value:
+                        algos.append("Naive Bayes")
+                    state["selected_algos"] = algos
+                    
+                    # Afficher warning si aucun algo sélectionné
+                    if not algos:
+                        ui.notify("⚠️ Sélectionnez au moins un algorithme", color="warning")
+                
+                algo_knn_cb.on_value_change(lambda: update_selected_algos())
+                algo_dt_cb.on_value_change(lambda: update_selected_algos())
+                algo_nb_cb.on_value_change(lambda: update_selected_algos())
+                
+                # Compteur d'algos sélectionnés
+                algo_count = ui.label(f" {len(state.get('selected_algos', []))} algorithme(s) sélectionné(s)").style(
+                    "font-weight:700; font-size:16px; color:#27ae60; margin-top:16px; text-align:center; width:100%;"
                 )
+                
+                def update_count():
+                    count = len(state.get("selected_algos", []))
+                    algo_count.set_text(f" {count} algorithme(s) sélectionné(s)")
+                    algo_count.style(f"color:{'#27ae60' if count > 0 else '#e74c3c'};")
+                
+                algo_knn_cb.on_value_change(lambda: update_count())
+                algo_dt_cb.on_value_change(lambda: update_count())
+                algo_nb_cb.on_value_change(lambda: update_count())
+        
+        # ==================== CARTE 1: KNN ====================
+        knn_card = ui.column().classes("w-full max-w-6xl")
+        
+        if "KNN" in state.get("selected_algos", []):
+            with knn_card:
+                with ui.card().classes("w-full p-6 mb-6"):
+                    ui.label(" K-Nearest Neighbors (KNN)").style(
+                        "font-weight:700; font-size:24px; color:#2c3e50; margin-bottom:16px;"
+                    )
+                    
+                    # Description
+                    with ui.expansion("📖 Principe & Compatibilité", icon="info").classes("w-full mb-4"):
+                        with ui.column().classes("p-4"):
+                            ui.label("Principe :").style("font-weight:700; margin-bottom:8px;")
+                            ui.label("Classification basée sur les K voisins les plus proches dans l'espace des features").style("font-size:14px; margin-bottom:16px;")
+                            
+                            with ui.row().classes("w-full gap-8"):
+                                with ui.column().classes("flex-1"):
+                                    ui.label(" Avantages").style("font-weight:700; color:#27ae60; margin-bottom:8px;")
+                                    ui.label("• Simple et intuitif").style("font-size:14px;")
+                                    ui.label("• Non-paramétrique").style("font-size:14px;")
+                                    ui.label("• Adapté frontières non-linéaires").style("font-size:14px;")
+                                    ui.label("• Pas de phase d'entraînement").style("font-size:14px;")
+                                
+                                with ui.column().classes("flex-1"):
+                                    ui.label("❌ Inconvénients").style("font-weight:700; color:#e74c3c; margin-bottom:8px;")
+                                    ui.label("• Sensible au scaling").style("font-size:14px;")
+                                    ui.label("• Coût computationnel élevé").style("font-size:14px;")
+                                    ui.label("• Curse of dimensionality").style("font-size:14px;")
+                                    ui.label("• Sensible au bruit").style("font-size:14px;")
+                            
+                            ui.label("📊 Compatibilité").style("font-weight:700; margin-top:16px; margin-bottom:8px;")
+                            ui.label(f"• Scaling : {' Appliqué' if compat['scaling'] else '🔴 CRITIQUE - Non appliqué'}").style("font-size:14px;")
+                            ui.label(f"• Dimension : {' Réduite' if compat['reduction'] else '⚠️ Peut affecter performance'}").style("font-size:14px;")
+                            ui.label(f"• Missing : {' Aucune' if compat['missing'] == 0 else '❌ Présentes'}").style("font-size:14px;")
+                    
+                    ui.label("⚙️ HYPERPARAMÈTRES").style("font-weight:700; font-size:18px; margin-top:16px; margin-bottom:12px;")
+                    
+                    knn_config = state["algo_configs"]["knn"]
+                    
+                    # 1. n_neighbors
+                    with ui.row().classes("w-full items-center gap-4 mb-4"):
+                        ui.label("1. Nombre de voisins (K)").style("font-weight:600; width:250px;")
+                        knn_neighbors_slider = ui.slider(min=1, max=50, value=knn_config["n_neighbors"], step=1).classes("flex-1")
+                        knn_neighbors_label = ui.label(f"K = {knn_config['n_neighbors']}").style("font-weight:700; width:80px;")
+                        
+                        def update_knn_neighbors(e):
+                            state["algo_configs"]["knn"]["n_neighbors"] = int(e.value)
+                            knn_neighbors_label.set_text(f"K = {int(e.value)}")
+                        
+                        knn_neighbors_slider.on_value_change(update_knn_neighbors)
+                    
+                    ui.label(f"💡 Règle empirique : K = √n_samples ≈ {get_recommended_k()}").style("font-size:13px; color:#3498db; margin-left:250px; margin-bottom:8px;")
+                    ui.label("⚠️ K petit → Overfitting | K grand → Underfitting").style("font-size:13px; color:#01335A; margin-left:250px; margin-bottom:16px;")
+                    
+                    # 2. metric
+                    with ui.row().classes("w-full items-start gap-4 mb-4"):
+                        ui.label("2. Métrique de distance").style("font-weight:600; width:250px;")
+                        with ui.column().classes("flex-1"):
+                            knn_metric = ui.radio(
+                                options={
+                                    "euclidean": "Euclidean (L2) - Distance standard",
+                                    "manhattan": "Manhattan (L1) - Robuste aux outliers",
+                                    "minkowski": "Minkowski - Généralisation",
+                                    "chebyshev": "Chebyshev - Distance max"
+                                },
+                                value=knn_config["metric"]
+                            )
+                            knn_metric.on_value_change(lambda e: state["algo_configs"]["knn"].update({"metric": e.value}))
+                    
+                    # 3. weights
+                    with ui.row().classes("w-full items-start gap-4 mb-4"):
+                        ui.label("3. Pondération").style("font-weight:600; width:250px;")
+                        with ui.column().classes("flex-1"):
+                            knn_weights = ui.radio(
+                                options={
+                                    "uniform": "Uniform - Tous voisins poids égal",
+                                    "distance": "Distance - Poids = 1/distance (favorise proches) [Recommandé]"
+                                },
+                                value=knn_config["weights"]
+                            )
+                            knn_weights.on_value_change(lambda e: state["algo_configs"]["knn"].update({"weights": e.value}))
+                    
+                    # 4. algorithm
+                    with ui.row().classes("w-full items-start gap-4 mb-4"):
+                        ui.label("4. Algorithme recherche").style("font-weight:600; width:250px;")
+                        with ui.column().classes("flex-1"):
+                            knn_algo = ui.radio(
+                                options={
+                                    "auto": "Auto - Sélection automatique [Recommandé]",
+                                    "ball_tree": "Ball Tree - Rapide, haute dimension",
+                                    "kd_tree": "KD Tree - Rapide, basse dimension (<20)",
+                                    "brute": "Brute Force - Exhaustif (petit dataset)"
+                                },
+                                value=knn_config["algorithm"]
+                            )
+                            knn_algo.on_value_change(lambda e: state["algo_configs"]["knn"].update({"algorithm": e.value}))
+                    
+                    # Estimation performances
+                    with ui.card().classes("w-full p-4 mt-4").style("background:#fff3cd;"):
+                        ui.label("⏱️ Estimation Performances").style("font-weight:700; margin-bottom:8px;")
+                        ui.label(f"• Temps training : < 0.1s (lazy learner - pas d'entraînement réel)").style("font-size:14px;")
+                        pred_time = (compat['n_samples'] * compat['n_features']) / 100000
+                        ui.label(f"• Temps prédiction : ~{pred_time:.2f}s par échantillon").style("font-size:14px;")
+                        mem = (compat['n_samples'] * compat['n_features'] * 8) / 1024
+                        ui.label(f"• Mémoire : ~{mem:.0f} KB").style("font-size:14px;")
+                    
+                    # Boutons
+                    with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                        ui.button("🔄 Réinitialiser", on_click=lambda: reset_config("knn")).props("flat")
+                        ui.button("💡 Appliquer Recommandation", on_click=lambda: apply_recommended_config("knn")).style(
+                            "background:#3498db; color:white;"
+                        )
         
         # ==================== CARTE 2: DECISION TREE ====================
-        with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
-            ui.label("🌳 C4.5 Decision Tree").style(
-                "font-weight:700; font-size:24px; color:#2c3e50; margin-bottom:16px;"
-            )
-            
-            # Description
-            with ui.expansion("📖 Principe & Compatibilité", icon="info").classes("w-full mb-4"):
-                with ui.column().classes("p-4"):
-                    ui.label("Principe :").style("font-weight:700; margin-bottom:8px;")
-                    ui.label("Arbre de décision basé sur Information Gain (entropie)").style("font-size:14px; margin-bottom:16px;")
-                    
-                    ui.label("✅ Avantages :").style("font-weight:700; margin-bottom:8px;")
-                    ui.label("• Interprétable (structure arbre)").style("font-size:14px;")
-                    ui.label("• Gère features numériques et catégorielles").style("font-size:14px;")
-                    ui.label("• Peu sensible au scaling").style("font-size:14px;")
-                    ui.label("• Robuste aux outliers").style("font-size:14px; margin-bottom:16px;")
-                    
-                    ui.label("❌ Inconvénients :").style("font-weight:700; margin-bottom:8px;")
-                    ui.label("• Tendance à l'overfitting").style("font-size:14px;")
-                    ui.label("• Instable (petites variations → arbres différents)").style("font-size:14px;")
-                    ui.label("• Biais vers features multi-valeurs").style("font-size:14px; margin-bottom:16px;")
-                    
-                    ui.label("📊 Compatibilité :").style("font-weight:700; margin-bottom:8px;")
-                    ui.label("• Scaling : ⚠️ Non nécessaire (mais déjà fait)").style("font-size:14px;")
-                    ui.label(f"• Missing : {'✅ OK' if compat['missing'] == 0 else '⚠️ sklearn ne gère pas nativement'}").style("font-size:14px;")
-                    ui.label("• Outliers : ✅ Robuste").style("font-size:14px;")
-            
-            ui.label("⚙️ CONFIGURATION").style("font-weight:700; font-size:18px; margin-top:16px; margin-bottom:12px;")
-            
-            dt_config = state["algo_configs"]["decision_tree"]
-            
-            # 1. criterion
-            with ui.row().classes("w-full items-start gap-4 mb-4"):
-                ui.label("1. Critère de split").style("font-weight:600; width:250px;")
-                with ui.column().classes("flex-1"):
-                    dt_criterion = ui.radio(
-                        options={
-                            "gini": "Gini - Gini impurity (default sklearn)",
-                            "entropy": "Entropy - Information Gain (~ C4.5 original)",
-                            "log_loss": "Log Loss - Log loss"
-                        },
-                        value=dt_config["criterion"]
-                    )
-                    dt_criterion.on_value_change(lambda e: state["algo_configs"]["decision_tree"].update({"criterion": e.value}))
-                    ui.label("💡 Recommandation : Entropy (plus proche C4.5)").style("font-size:13px; color:#3498db; margin-top:4px;")
-            
-            # 2. max_depth
-            with ui.row().classes("w-full items-center gap-4 mb-4"):
-                ui.label("2. Profondeur maximale").style("font-weight:600; width:250px;")
-                
-                with ui.column().classes("flex-1"):
-                    dt_depth_checkbox = ui.checkbox("Limiter la profondeur", value=dt_config["max_depth"] is not None)
-                    dt_depth_slider = ui.slider(min=1, max=30, value=15 if dt_config["max_depth"] is None else dt_config["max_depth"], step=1).classes("w-full")
-                    dt_depth_label = ui.label(f"max_depth = {dt_config['max_depth'] if dt_config['max_depth'] is not None else 'None (illimité)'}").style("font-weight:700;")
-                    
-                    if dt_config["max_depth"] is None:
-                        dt_depth_slider.disable()
-                    
-                    def update_dt_depth_checkbox(e):
-                        if e.value:
-                            state["algo_configs"]["decision_tree"]["max_depth"] = int(dt_depth_slider.value)
-                            dt_depth_slider.enable()
-                            dt_depth_label.set_text(f"max_depth = {int(dt_depth_slider.value)}")
-                        else:
-                            state["algo_configs"]["decision_tree"]["max_depth"] = None
-                            dt_depth_slider.disable()
-                            dt_depth_label.set_text("max_depth = None (illimité)")
-                    
-                    def update_dt_depth_slider(e):
-                        if dt_depth_checkbox.value:
-                            state["algo_configs"]["decision_tree"]["max_depth"] = int(e.value)
-                            dt_depth_label.set_text(f"max_depth = {int(e.value)}")
-                    
-                    dt_depth_checkbox.on_value_change(update_dt_depth_checkbox)
-                    dt_depth_slider.on_value_change(update_dt_depth_slider)
-                    
-                    ui.label("⚠️ None = Pas de limite (risque overfitting)").style("font-size:13px; color:#e67e22; margin-top:4px;")
-            
-            # 3. min_samples_split
-            with ui.row().classes("w-full items-center gap-4 mb-4"):
-                ui.label("3. Min samples split").style("font-weight:600; width:250px;")
-                dt_split_slider = ui.slider(min=2, max=100, value=dt_config["min_samples_split"], step=1).classes("flex-1")
-                dt_split_label = ui.label(f"{dt_config['min_samples_split']}").style("font-weight:700; width:80px;")
-                
-                def update_dt_split(e):
-                    state["algo_configs"]["decision_tree"]["min_samples_split"] = int(e.value)
-                    dt_split_label.set_text(f"{int(e.value)}")
-                
-                dt_split_slider.on_value_change(update_dt_split)
-            
-            ui.label("Minimum d'échantillons pour splitter un nœud").style("font-size:13px; color:#7f8c8d; margin-left:250px; margin-bottom:16px;")
-            
-            # 4. min_samples_leaf
-            with ui.row().classes("w-full items-center gap-4 mb-4"):
-                ui.label("4. Min samples leaf").style("font-weight:600; width:250px;")
-                dt_leaf_slider = ui.slider(min=1, max=50, value=dt_config["min_samples_leaf"], step=1).classes("flex-1")
-                dt_leaf_label = ui.label(f"{dt_config['min_samples_leaf']}").style("font-weight:700; width:80px;")
-                
-                def update_dt_leaf(e):
-                    state["algo_configs"]["decision_tree"]["min_samples_leaf"] = int(e.value)
-                    dt_leaf_label.set_text(f"{int(e.value)}")
-                
-                dt_leaf_slider.on_value_change(update_dt_leaf)
-            
-            ui.label("Minimum d'échantillons dans une feuille").style("font-size:13px; color:#7f8c8d; margin-left:250px; margin-bottom:16px;")
-            
-            # 5. max_features
-            with ui.row().classes("w-full items-start gap-4 mb-4"):
-                ui.label("5. Max features").style("font-weight:600; width:250px;")
-                with ui.column().classes("flex-1"):
-                    dt_features = ui.radio(
-                        options={
-                            "None": f"None - Toutes features ({compat['n_features']})",
-                            "sqrt": f"Sqrt - √features ≈ {int(np.sqrt(compat['n_features']))}",
-                            "log2": f"Log2 - log₂(features) ≈ {int(np.log2(compat['n_features']))}",
-                        },
-                        value="None" if dt_config["max_features"] is None else dt_config["max_features"]
-                    )
-                    
-                    def update_dt_features(e):
-                        state["algo_configs"]["decision_tree"]["max_features"] = None if e.value == "None" else e.value
-                    
-                    dt_features.on_value_change(update_dt_features)
-            
-            # Boutons
-            with ui.row().classes("w-full justify-end gap-2 mt-4"):
-                ui.button("🔄 Réinitialiser", on_click=lambda: reset_config("decision_tree")).props("flat")
-                ui.button("💡 Appliquer Recommandation", on_click=lambda: apply_recommended_config("decision_tree")).style(
-                    "background:#3498db; color:white;"
-                )
+        dt_card = ui.column().classes("w-full max-w-6xl")
         
-        # ==================== CARTE 3: RANDOM FOREST ====================
-        with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
-            ui.label("🌲 Random Forest").style(
-                "font-weight:700; font-size:24px; color:#2c3e50; margin-bottom:16px;"
-            )
-            
-            # Description
-            with ui.expansion("📖 Principe & Compatibilité", icon="info").classes("w-full mb-4"):
-                with ui.column().classes("p-4"):
-                    ui.label("Principe :").style("font-weight:700; margin-bottom:8px;")
-                    ui.label("Ensemble d'arbres de décision avec bagging et feature sampling").style("font-size:14px; margin-bottom:16px;")
-                    
-                    ui.label("✅ Avantages :").style("font-weight:700; margin-bottom:8px;")
-                    ui.label("• Très performant (souvent meilleur que single tree)").style("font-size:14px;")
-                    ui.label("• Réduit l'overfitting vs Decision Tree").style("font-size:14px;")
-                    ui.label("• Robuste au bruit et outliers").style("font-size:14px;")
-                    ui.label("• Fournit feature importance").style("font-size:14px; margin-bottom:16px;")
-                    
-                    ui.label("❌ Inconvénients :").style("font-weight:700; margin-bottom:8px;")
-                    ui.label("• Moins interprétable qu'un seul arbre").style("font-size:14px;")
-                    ui.label("• Plus lent à entraîner et prédire").style("font-size:14px;")
-                    ui.label("• Plus de mémoire requise").style("font-size:14px; margin-bottom:16px;")
-                    
-                    ui.label("📊 Compatibilité :").style("font-weight:700; margin-bottom:8px;")
-                    ui.label("• Scaling : ⚠️ Non nécessaire").style("font-size:14px;")
-                    ui.label("• Dimension : ✅ Gère bien").style("font-size:14px;")
-                    ui.label(f"• Missing : {'✅ OK' if compat['missing'] == 0 else '⚠️ À gérer avant'}").style("font-size:14px;")
-            
-            ui.label("⚙️ CONFIGURATION").style("font-weight:700; font-size:18px; margin-top:16px; margin-bottom:12px;")
-            
-            rf_config = state["algo_configs"]["random_forest"]
-            
-            # 1. n_estimators
-            with ui.row().classes("w-full items-center gap-4 mb-4"):
-                ui.label("1. Nombre d'arbres").style("font-weight:600; width:250px;")
-                rf_estimators_slider = ui.slider(min=10, max=500, value=rf_config["n_estimators"], step=10).classes("flex-1")
-                rf_estimators_label = ui.label(f"n_estimators = {rf_config['n_estimators']}").style("font-weight:700; width:150px;")
-                
-                def update_rf_estimators(e):
-                    state["algo_configs"]["random_forest"]["n_estimators"] = int(e.value)
-                    rf_estimators_label.set_text(f"n_estimators = {int(e.value)}")
-                
-                rf_estimators_slider.on_value_change(update_rf_estimators)
-            
-            ui.label("💡 Plus d'arbres = meilleure performance (mais plus lent)").style("font-size:13px; color:#3498db; margin-left:250px; margin-bottom:16px;")
-            
-            # 2. criterion
-            with ui.row().classes("w-full items-start gap-4 mb-4"):
-                ui.label("2. Critère de split").style("font-weight:600; width:250px;")
-                with ui.column().classes("flex-1"):
-                    rf_criterion = ui.radio(
-                        options={
-                            "gini": "Gini - Gini impurity (plus rapide)",
-                            "entropy": "Entropy - Information Gain",
-                            "log_loss": "Log Loss - Log loss"
-                        },
-                        value=rf_config["criterion"]
-                    )
-                    rf_criterion.on_value_change(lambda e: state["algo_configs"]["random_forest"].update({"criterion": e.value}))
-            
-            # 3. max_depth
-            with ui.row().classes("w-full items-center gap-4 mb-4"):
-                ui.label("3. Profondeur maximale").style("font-weight:600; width:250px;")
-                
-                with ui.column().classes("flex-1"):
-                    rf_depth_checkbox = ui.checkbox("Limiter la profondeur", value=rf_config["max_depth"] is not None)
-                    rf_depth_slider = ui.slider(min=1, max=30, value=20 if rf_config["max_depth"] is None else rf_config["max_depth"], step=1).classes("w-full")
-                    rf_depth_label = ui.label(f"max_depth = {rf_config['max_depth'] if rf_config['max_depth'] is not None else 'None (illimité)'}").style("font-weight:700;")
-                    
-                    if rf_config["max_depth"] is None:
-                        rf_depth_slider.disable()
-                    
-                    def update_rf_depth_checkbox(e):
-                        if e.value:
-                            state["algo_configs"]["random_forest"]["max_depth"] = int(rf_depth_slider.value)
-                            rf_depth_slider.enable()
-                            rf_depth_label.set_text(f"max_depth = {int(rf_depth_slider.value)}")
-                        else:
-                            state["algo_configs"]["random_forest"]["max_depth"] = None
-                            rf_depth_slider.disable()
-                            rf_depth_label.set_text("max_depth = None (illimité)")
-                    
-                    def update_rf_depth_slider(e):
-                        if rf_depth_checkbox.value:
-                            state["algo_configs"]["random_forest"]["max_depth"] = int(e.value)
-                            rf_depth_label.set_text(f"max_depth = {int(e.value)}")
-                    
-                    rf_depth_checkbox.on_value_change(update_rf_depth_checkbox)
-                    rf_depth_slider.on_value_change(update_rf_depth_slider)
-            
-            # 4. min_samples_split
-            with ui.row().classes("w-full items-center gap-4 mb-4"):
-                ui.label("4. Min samples split").style("font-weight:600; width:250px;")
-                rf_split_slider = ui.slider(min=2, max=100, value=rf_config["min_samples_split"], step=1).classes("flex-1")
-                rf_split_label = ui.label(f"{rf_config['min_samples_split']}").style("font-weight:700; width:80px;")
-                
-                def update_rf_split(e):
-                    state["algo_configs"]["random_forest"]["min_samples_split"] = int(e.value)
-                    rf_split_label.set_text(f"{int(e.value)}")
-                
-                rf_split_slider.on_value_change(update_rf_split)
-            
-            # 5. min_samples_leaf
-            with ui.row().classes("w-full items-center gap-4 mb-4"):
-                ui.label("5. Min samples leaf").style("font-weight:600; width:250px;")
-                rf_leaf_slider = ui.slider(min=1, max=50, value=rf_config["min_samples_leaf"], step=1).classes("flex-1")
-                rf_leaf_label = ui.label(f"{rf_config['min_samples_leaf']}").style("font-weight:700; width:80px;")
-                
-                def update_rf_leaf(e):
-                    state["algo_configs"]["random_forest"]["min_samples_leaf"] = int(e.value)
-                    rf_leaf_label.set_text(f"{int(e.value)}")
-                
-                rf_leaf_slider.on_value_change(update_rf_leaf)
-            
-            # 6. max_features
-            with ui.row().classes("w-full items-start gap-4 mb-4"):
-                ui.label("6. Max features").style("font-weight:600; width:250px;")
-                with ui.column().classes("flex-1"):
-                    rf_features = ui.radio(
-                        options={
-                            "sqrt": f"Sqrt - √features ≈ {int(np.sqrt(compat['n_features']))} (recommandé)",
-                            "log2": f"Log2 - log₂(features) ≈ {int(np.log2(compat['n_features']))}",
-                            "None": f"None - Toutes features ({compat['n_features']})"
-                        },
-                        value="None" if rf_config["max_features"] is None else rf_config["max_features"]
+        if "Decision Tree" in state.get("selected_algos", []):
+            with dt_card:
+                with ui.card().classes("w-full p-6 mb-6"):
+                    ui.label("🌳 C4.5 Decision Tree").style(
+                        "font-weight:700; font-size:24px; color:#2c3e50; margin-bottom:16px;"
                     )
                     
-                    def update_rf_features(e):
-                        state["algo_configs"]["random_forest"]["max_features"] = None if e.value == "None" else e.value
+                    # Description
+                    with ui.expansion("📖 Principe & Compatibilité", icon="info").classes("w-full mb-4"):
+                        with ui.column().classes("p-4"):
+                            ui.label("Principe :").style("font-weight:700; margin-bottom:8px;")
+                            ui.label("Arbre de décision basé sur Information Gain (entropie) - Implémentation sklearn proche de C4.5").style("font-size:14px; margin-bottom:16px;")
+                            
+                            with ui.row().classes("w-full gap-8"):
+                                with ui.column().classes("flex-1"):
+                                    ui.label(" Avantages").style("font-weight:700; color:#27ae60; margin-bottom:8px;")
+                                    ui.label("• Très interprétable (structure arbre)").style("font-size:14px;")
+                                    ui.label("• Gère num + catégorielles").style("font-size:14px;")
+                                    ui.label("• Peu sensible au scaling").style("font-size:14px;")
+                                    ui.label("• Robuste aux outliers").style("font-size:14px;")
+                                
+                                with ui.column().classes("flex-1"):
+                                    ui.label("❌ Inconvénients").style("font-weight:700; color:#e74c3c; margin-bottom:8px;")
+                                    ui.label("• Tendance overfitting").style("font-size:14px;")
+                                    ui.label("• Instable (petites variations)").style("font-size:14px;")
+                                    ui.label("• Biais vers features multi-valeurs").style("font-size:14px;")
+                            
+                            ui.label("📊 Compatibilité").style("font-weight:700; margin-top:16px; margin-bottom:8px;")
+                            ui.label("• Scaling : ⚠️ Non nécessaire").style("font-size:14px;")
+                            ui.label(f"• Missing : {' OK' if compat['missing'] == 0 else '⚠️ sklearn ne gère pas nativement'}").style("font-size:14px;")
+                            ui.label("• Outliers :  Robuste").style("font-size:14px;")
                     
-                    rf_features.on_value_change(update_rf_features)
-                    ui.label("💡 Sqrt est généralement optimal pour classification").style("font-size:13px; color:#3498db; margin-top:4px;")
-            
-            # Estimation
-            with ui.card().classes("w-full p-4 mt-4").style("background:#fff3cd;"):
-                ui.label("⏱️ Estimation :").style("font-weight:700; margin-bottom:8px;")
-                n_est = rf_config["n_estimators"]
-                ui.label(f"• Temps training : ~{n_est * 0.05:.1f}s ({n_est} arbres)").style("font-size:14px;")
-                ui.label(f"• Temps prédiction : ~{n_est * 0.002:.2f}s").style("font-size:14px;")
-                ui.label(f"• Mémoire : ~{n_est * 100}KB - {n_est * 500}KB").style("font-size:14px;")
-            
-            # Boutons
-            with ui.row().classes("w-full justify-end gap-2 mt-4"):
-                ui.button("🔄 Réinitialiser", on_click=lambda: reset_config("random_forest")).props("flat")
-                ui.button("💡 Appliquer Recommandation", on_click=lambda: apply_recommended_config("random_forest")).style(
-                    "background:#3498db; color:white;"
-                )
+                    ui.label("⚙️ HYPERPARAMÈTRES").style("font-weight:700; font-size:18px; margin-top:16px; margin-bottom:12px;")
+                    
+                    dt_config = state["algo_configs"]["decision_tree"]
+                    
+                    # 1. criterion
+                    with ui.row().classes("w-full items-start gap-4 mb-4"):
+                        ui.label("1. Critère de split").style("font-weight:600; width:250px;")
+                        with ui.column().classes("flex-1"):
+                            dt_criterion = ui.radio(
+                                options={
+                                    "entropy": "Entropy - Information Gain (~ C4.5 original) [Recommandé]",
+                                    "gini": "Gini - Gini impurity (default sklearn)",
+                                    "log_loss": "Log Loss - Log loss"
+                                },
+                                value=dt_config["criterion"]
+                            )
+                            dt_criterion.on_value_change(lambda e: state["algo_configs"]["decision_tree"].update({"criterion": e.value}))
+                    
+                    # 2. max_depth
+                    with ui.row().classes("w-full items-center gap-4 mb-4"):
+                        ui.label("2. Profondeur maximale").style("font-weight:600; width:250px;")
+                        
+                        with ui.column().classes("flex-1"):
+                            dt_depth_checkbox = ui.checkbox("Limiter la profondeur (recommandé)", value=dt_config["max_depth"] is not None)
+                            dt_depth_slider = ui.slider(min=1, max=30, value=15 if dt_config["max_depth"] is None else dt_config["max_depth"], step=1).classes("w-full")
+                            dt_depth_label = ui.label(f"max_depth = {dt_config['max_depth'] if dt_config['max_depth'] is not None else 'None (illimité)'}").style("font-weight:700;")
+                            
+                            if dt_config["max_depth"] is None:
+                                dt_depth_slider.disable()
+                            
+                            def update_dt_depth_checkbox(e):
+                                if e.value:
+                                    state["algo_configs"]["decision_tree"]["max_depth"] = int(dt_depth_slider.value)
+                                    dt_depth_slider.enable()
+                                    dt_depth_label.set_text(f"max_depth = {int(dt_depth_slider.value)}")
+                                else:
+                                    state["algo_configs"]["decision_tree"]["max_depth"] = None
+                                    dt_depth_slider.disable()
+                                    dt_depth_label.set_text("max_depth = None (illimité)")
+                            
+                            def update_dt_depth_slider(e):
+                                if dt_depth_checkbox.value:
+                                    state["algo_configs"]["decision_tree"]["max_depth"] = int(e.value)
+                                    dt_depth_label.set_text(f"max_depth = {int(e.value)}")
+                            
+                            dt_depth_checkbox.on_value_change(update_dt_depth_checkbox)
+                            dt_depth_slider.on_value_change(update_dt_depth_slider)
+                            
+                            ui.label("⚠️ None = Pas de limite (fort risque overfitting)").style("font-size:13px; color:#01335A; margin-top:4px;")
+                    
+                    # 3. min_samples_split
+                    with ui.row().classes("w-full items-center gap-4 mb-4"):
+                        ui.label("3. Min samples split").style("font-weight:600; width:250px;")
+                        dt_split_slider = ui.slider(min=2, max=100, value=dt_config["min_samples_split"], step=1).classes("flex-1")
+                        dt_split_label = ui.label(f"{dt_config['min_samples_split']}").style("font-weight:700; width:80px;")
+                        
+                        def update_dt_split(e):
+                            state["algo_configs"]["decision_tree"]["min_samples_split"] = int(e.value)
+                            dt_split_label.set_text(f"{int(e.value)}")
+                        
+                        dt_split_slider.on_value_change(update_dt_split)
+                    
+                    ui.label("Minimum d'échantillons pour splitter un nœud").style("font-size:13px; color:#7f8c8d; margin-left:250px; margin-bottom:16px;")
+                    
+                    # 4. min_samples_leaf
+                    with ui.row().classes("w-full items-center gap-4 mb-4"):
+                        ui.label("4. Min samples leaf").style("font-weight:600; width:250px;")
+                        dt_leaf_slider = ui.slider(min=1, max=50, value=dt_config["min_samples_leaf"], step=1).classes("flex-1")
+                        dt_leaf_label = ui.label(f"{dt_config['min_samples_leaf']}").style("font-weight:700; width:80px;")
+                        
+                        def update_dt_leaf(e):
+                            state["algo_configs"]["decision_tree"]["min_samples_leaf"] = int(e.value)
+                            dt_leaf_label.set_text(f"{int(e.value)}")
+                        
+                        dt_leaf_slider.on_value_change(update_dt_leaf)
+                    
+                    ui.label("Minimum d'échantillons dans une feuille").style("font-size:13px; color:#7f8c8d; margin-left:250px; margin-bottom:16px;")
+                    
+                    # 5. max_features
+                    with ui.row().classes("w-full items-start gap-4 mb-4"):
+                        ui.label("5. Max features").style("font-weight:600; width:250px;")
+                        with ui.column().classes("flex-1"):
+                            dt_features = ui.radio(
+                                options={
+                                    "None": f"None - Toutes features ({compat['n_features']})",
+                                    "sqrt": f"Sqrt - √features ≈ {int(np.sqrt(compat['n_features']))}",
+                                    "log2": f"Log2 - log₂(features) ≈ {int(np.log2(compat['n_features']))}",
+                                },
+                                value="None" if dt_config["max_features"] is None else dt_config["max_features"]
+                            )
+                            
+                            def update_dt_features(e):
+                                state["algo_configs"]["decision_tree"]["max_features"] = None if e.value == "None" else e.value
+                            
+                            dt_features.on_value_change(update_dt_features)
+                    
+                    # Boutons
+                    with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                        ui.button("🔄 Réinitialiser", on_click=lambda: reset_config("decision_tree")).props("flat")
+                        ui.button("💡 Appliquer Recommandation", on_click=lambda: apply_recommended_config("decision_tree")).style(
+                            "background:#3498db; color:white;"
+                        )
         
-        # ==================== SECTION GLOBALE: VALIDATION STRATEGY ====================
+        
+        # ==================== CARTE 4: NAIVE BAYES ====================
+        nb_card = ui.column().classes("w-full max-w-6xl")
+        
+        if "Naive Bayes" in state.get("selected_algos", []):
+            with nb_card:
+                with ui.card().classes("w-full p-6 mb-6"):
+                    ui.label("📊 Naive Bayes").style(
+                        "font-weight:700; font-size:24px; color:#2c3e50; margin-bottom:16px;"
+                    )
+                    
+                    # Description
+                    with ui.expansion("📖 Principe & Compatibilité", icon="info").classes("w-full mb-4"):
+                        with ui.column().classes("p-4"):
+                            ui.label("Principe :").style("font-weight:700; margin-bottom:8px;")
+                            ui.label("Classifieur probabiliste simple basé sur le théorème de Bayes avec hypothèse d'indépendance des features").style("font-size:14px; margin-bottom:16px;")
+
+                            with ui.row().classes("w-full gap-8"):
+                                with ui.column().classes("flex-1"):
+                                    ui.label(" Avantages").style("font-weight:700; color:#27ae60; margin-bottom:8px;")
+                                    ui.label("• Très rapide (training + prédiction)").style("font-size:14px;")
+                                    ui.label("• Nécessite peu de données").style("font-size:14px;")
+                                    ui.label("• Robuste au bruit").style("font-size:14px;")
+                                    ui.label("• Donne des probabilités").style("font-size:14px;")
+                                    ui.label("• Performant texte/spam").style("font-size:14px;")
+                                
+                                with ui.column().classes("flex-1"):
+                                    ui.label("❌ Inconvénients").style("font-weight:700; color:#e74c3c; margin-bottom:8px;")
+                                    ui.label("• Hypothèse indépendance rarement vraie").style("font-size:14px;")
+                                    ui.label("• Assume distribution gaussienne").style("font-size:14px;")
+                                    ui.label("• Sensible features corrélées").style("font-size:14px;")
+                                    ui.label("• Moins performant que RF/Tree").style("font-size:14px;")
+                            
+                            ui.label("📊 Compatibilité").style("font-weight:700; margin-top:16px; margin-bottom:8px;")
+                            ui.label("• Transformations : 🔴 CRITIQUE (Log, Box-Cox pour normaliser)").style("font-size:14px;")
+                            ui.label(f"• Scaling : {' Appliqué' if compat['scaling'] else '🟡 Recommandé'}").style("font-size:14px;")
+                            ui.label("• Corrélations : ⚠️ Viole hypothèse d'indépendance").style("font-size:14px;")
+                            ui.label(f"• Missing : {' OK' if compat['missing'] == 0 else '❌ À gérer avant'}").style("font-size:14px;")
+                    
+                    ui.label("⚙️ HYPERPARAMÈTRES").style("font-weight:700; font-size:18px; margin-top:16px; margin-bottom:12px;")
+                    
+                    nb_config = state["algo_configs"]["naive_bayes"]
+                    
+                    # 1. var_smoothing
+                    with ui.row().classes("w-full items-start gap-4 mb-4"):
+                        ui.label("1. Var Smoothing").style("font-weight:600; width:250px;")
+                        with ui.column().classes("flex-1"):
+                            ui.label("Portion de variance ajoutée pour stabilité numérique").style("font-size:14px; color:#7f8c8d; margin-bottom:8px;")
+                            
+                            # Radio pour choisir entre valeurs prédéfinies ou custom
+                            nb_smoothing_radio = ui.radio(
+                                options={
+                                    "1e-9": "1e-9 (défaut sklearn) [Recommandé]",
+                                    "1e-10": "1e-10 (plus sensible)",
+                                    "1e-8": "1e-8 (plus stable)",
+                                    "custom": "Custom"
+                                },
+                                value="1e-9" if nb_config["var_smoothing"] == 1e-9 else "custom"
+                            )
+                            
+                            nb_custom_input = ui.number(
+                                label="Valeur custom (format: 1e-9)",
+                                value=nb_config["var_smoothing"],
+                                format="%.1e",
+                                min=1e-12,
+                                max=1e-6
+                            ).classes("w-full mt-2")
+                            
+                            if nb_smoothing_radio.value != "custom":
+                                nb_custom_input.disable()
+                            
+                            def update_nb_smoothing_radio(e):
+                                if e.value == "custom":
+                                    nb_custom_input.enable()
+                                    state["algo_configs"]["naive_bayes"]["var_smoothing"] = float(nb_custom_input.value)
+                                else:
+                                    nb_custom_input.disable()
+                                    state["algo_configs"]["naive_bayes"]["var_smoothing"] = float(e.value)
+                            
+                            def update_nb_custom_input(e):
+                                if nb_smoothing_radio.value == "custom":
+                                    state["algo_configs"]["naive_bayes"]["var_smoothing"] = float(e.value)
+                            
+                            nb_smoothing_radio.on_value_change(update_nb_smoothing_radio)
+                            nb_custom_input.on_value_change(update_nb_custom_input)
+                            
+                            ui.label("💡 Augmenter si underfitting, diminuer si overfitting (mais 1e-9 optimal généralement)").style(
+                                "font-size:13px; color:#3498db; margin-top:8px;"
+                            )
+                    
+                    # Info sur les hypothèses
+                    with ui.card().classes("w-full p-4 mt-4").style("background:#ffe5e5; border-left:4px solid #e74c3c;"):
+                        ui.label("⚠️ HYPOTHÈSES CRITIQUES").style("font-weight:700; color:#c0392b; margin-bottom:8px;")
+                        ui.label("1. Features indépendantes conditionnellement à la classe").style("font-size:14px; margin-bottom:4px;")
+                        ui.label("2. Distribution gaussienne de chaque feature").style("font-size:14px; margin-bottom:12px;")
+                        ui.label("💡 Si vos données violent ces hypothèses (features corrélées, distributions skewed), les performances seront limitées.").style(
+                            "font-size:13px; color:#01335A; font-style:italic;"
+                        )
+                    
+                    # Estimation performances
+                    with ui.card().classes("w-full p-4 mt-4").style("background:#e8f5e9;"):
+                        ui.label("⚡ Performances").style("font-weight:700; margin-bottom:8px;")
+                        ui.label("• Temps training : < 0.1s (le plus rapide de tous)").style("font-size:14px;")
+                        ui.label("• Temps prédiction : < 0.01s (très rapide)").style("font-size:14px;")
+                        ui.label("• Mémoire : Très faible (~quelques KB)").style("font-size:14px;")
+                        ui.label("• Idéal pour : Baseline rapide, données textuelles, peu de données").style("font-size:14px; margin-top:8px; font-weight:600; color:#27ae60;")
+                    
+                    # Boutons
+                    with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                        ui.button("🔄 Réinitialiser", on_click=lambda: reset_config("naive_bayes")).props("flat")
+                        ui.button("💡 Config par défaut", on_click=lambda: apply_recommended_config("naive_bayes")).style(
+                            "background:#3498db; color:white;"
+                        )
+        
+        # ==================== SECTION: STRATÉGIE DE VALIDATION ====================
         with ui.card().classes("w-full max-w-6xl p-6 mb-6").style("background:#e8f5e9; border:2px solid #4caf50;"):
-            ui.label("🎯 STRATÉGIE DE VALIDATION").style(
+            ui.label(" STRATÉGIE DE VALIDATION").style(
                 "font-weight:700; font-size:24px; color:#2c3e50; margin-bottom:16px;"
             )
             
             # Info splits
             with ui.card().classes("w-full p-4 mb-4").style("background:white;"):
                 ui.label("📊 Vos données :").style("font-weight:700; margin-bottom:8px;")
-                ui.label(f"• Train : {len(split.get('X_train', []))} samples").style("font-size:14px;")
-                ui.label(f"• Validation : {len(split.get('X_val', []))} samples").style("font-size:14px;")
-                ui.label(f"• Test : {len(split.get('X_test', []))} samples (réservé pour évaluation finale)").style("font-size:14px;")
+                ui.label(f"• Train : {len(split.get('X_train', [])):,} samples").style("font-size:14px;")
+                ui.label(f"• Validation : {len(split.get('X_val', [])):,} samples").style("font-size:14px;")
+                ui.label(f"• Test : {len(split.get('X_test', [])):,} samples (réservé pour évaluation finale)").style("font-size:14px;")
             
             # Méthode validation
             ui.label("Méthode de validation :").style("font-weight:600; font-size:16px; margin-bottom:8px;")
             
             validation_strategy = ui.radio(
                 options={
-                    "holdout": "Hold-out (Train → Val) - Rapide, déjà splitté ✅",
+                    "holdout": "Hold-out (Train → Val) - Rapide, déjà splitté  [Recommandé]",
                     "cv": "Cross-Validation K-Fold sur Train - Plus robuste mais plus lent"
                 },
                 value=state.get("validation_strategy", "holdout")
@@ -6125,11 +6312,11 @@ def algorithm_config_page():
                                 
                                 cv_folds_slider.on_value_change(update_cv_folds)
                             
-                            ui.label(f"💡 Chaque fold : ~{len(split.get('X_train', []))//state.get('cv_folds', 5)} samples").style(
+                            ui.label(f"💡 Chaque fold : ~{len(split.get('X_train', []))//state.get('cv_folds', 5):,} samples").style(
                                 "font-size:13px; color:#7f8c8d; margin-top:8px;"
                             )
                             ui.label("⚠️ Le temps d'entraînement sera multiplié par K").style(
-                                "font-size:13px; color:#e67e22; margin-top:4px;"
+                                "font-size:13px; color:#01335A; margin-top:4px;"
                             )
             
             update_cv_display()
@@ -6178,45 +6365,51 @@ def algorithm_config_page():
                 "font-weight:700; font-size:24px; color:white; margin-bottom:16px; text-align:center;"
             )
             
-            with ui.column().classes("w-full gap-4"):
-                # KNN
-                with ui.card().classes("p-4"):
-                    ui.label("🎯 KNN").style("font-weight:700; font-size:16px; margin-bottom:8px;")
-                    knn_cfg = state["algo_configs"]["knn"]
-                    ui.label(f"• n_neighbors: {knn_cfg['n_neighbors']}").style("font-size:14px;")
-                    ui.label(f"• metric: {knn_cfg['metric']}").style("font-size:14px;")
-                    ui.label(f"• weights: {knn_cfg['weights']}").style("font-size:14px;")
-                    ui.label(f"• algorithm: {knn_cfg['algorithm']}").style("font-size:14px;")
-                
-                # Decision Tree
-                with ui.card().classes("p-4"):
-                    ui.label("🌳 Decision Tree").style("font-weight:700; font-size:16px; margin-bottom:8px;")
-                    dt_cfg = state["algo_configs"]["decision_tree"]
-                    ui.label(f"• criterion: {dt_cfg['criterion']}").style("font-size:14px;")
-                    ui.label(f"• max_depth: {dt_cfg['max_depth'] if dt_cfg['max_depth'] is not None else 'None'}").style("font-size:14px;")
-                    ui.label(f"• min_samples_split: {dt_cfg['min_samples_split']}").style("font-size:14px;")
-                    ui.label(f"• min_samples_leaf: {dt_cfg['min_samples_leaf']}").style("font-size:14px;")
-                    ui.label(f"• max_features: {dt_cfg['max_features'] if dt_cfg['max_features'] is not None else 'None'}").style("font-size:14px;")
-                
-                # Random Forest
-                with ui.card().classes("p-4"):
-                    ui.label("🌲 Random Forest").style("font-weight:700; font-size:16px; margin-bottom:8px;")
-                    rf_cfg = state["algo_configs"]["random_forest"]
-                    ui.label(f"• n_estimators: {rf_cfg['n_estimators']}").style("font-size:14px;")
-                    ui.label(f"• criterion: {rf_cfg['criterion']}").style("font-size:14px;")
-                    ui.label(f"• max_depth: {rf_cfg['max_depth'] if rf_cfg['max_depth'] is not None else 'None'}").style("font-size:14px;")
-                    ui.label(f"• min_samples_split: {rf_cfg['min_samples_split']}").style("font-size:14px;")
-                    ui.label(f"• min_samples_leaf: {rf_cfg['min_samples_leaf']}").style("font-size:14px;")
-                    ui.label(f"• max_features: {rf_cfg['max_features'] if rf_cfg['max_features'] is not None else 'None'}").style("font-size:14px;")
-                
-                # Validation
-                with ui.card().classes("p-4"):
-                    ui.label("🎯 Validation").style("font-weight:700; font-size:16px; margin-bottom:8px;")
-                    ui.label(f"• Stratégie: {state.get('validation_strategy', 'holdout').upper()}").style("font-size:14px;")
-                    if state.get("validation_strategy") == "cv":
-                        ui.label(f"• K-Folds: {state.get('cv_folds', 5)}").style("font-size:14px;")
-                    metrics_str = ", ".join(state.get("metrics_to_track", []))
-                    ui.label(f"• Métriques: {metrics_str}").style("font-size:14px;")
+            selected = state.get("selected_algos", [])
+            
+            if not selected:
+                ui.label("⚠️ Aucun algorithme sélectionné").style(
+                    "font-size:18px; color:#fff3cd; text-align:center;"
+                )
+            else:
+                with ui.column().classes("w-full gap-4"):
+                    # KNN
+                    if "KNN" in selected:
+                        with ui.card().classes("p-4"):
+                            ui.label(" KNN").style("font-weight:700; font-size:16px; margin-bottom:8px;")
+                            knn_cfg = state["algo_configs"]["knn"]
+                            ui.label(f"• n_neighbors: {knn_cfg['n_neighbors']}").style("font-size:14px;")
+                            ui.label(f"• metric: {knn_cfg['metric']}").style("font-size:14px;")
+                            ui.label(f"• weights: {knn_cfg['weights']}").style("font-size:14px;")
+                            ui.label(f"• algorithm: {knn_cfg['algorithm']}").style("font-size:14px;")
+                    
+                    # Decision Tree
+                    if "Decision Tree" in selected:
+                        with ui.card().classes("p-4"):
+                            ui.label("🌳 Decision Tree").style("font-weight:700; font-size:16px; margin-bottom:8px;")
+                            dt_cfg = state["algo_configs"]["decision_tree"]
+                            ui.label(f"• criterion: {dt_cfg['criterion']}").style("font-size:14px;")
+                            ui.label(f"• max_depth: {dt_cfg['max_depth'] if dt_cfg['max_depth'] is not None else 'None'}").style("font-size:14px;")
+                            ui.label(f"• min_samples_split: {dt_cfg['min_samples_split']}").style("font-size:14px;")
+                            ui.label(f"• min_samples_leaf: {dt_cfg['min_samples_leaf']}").style("font-size:14px;")
+                            ui.label(f"• max_features: {dt_cfg['max_features'] if dt_cfg['max_features'] is not None else 'None'}").style("font-size:14px;")
+                    
+                    
+                    # Naive Bayes
+                    if "Naive Bayes" in selected:
+                        with ui.card().classes("p-4"):
+                            ui.label("📊 Naive Bayes").style("font-weight:700; font-size:16px; margin-bottom:8px;")
+                            nb_cfg = state["algo_configs"]["naive_bayes"]
+                            ui.label(f"• var_smoothing: {nb_cfg['var_smoothing']:.1e}").style("font-size:14px;")
+                    
+                    # Validation
+                    with ui.card().classes("p-4"):
+                        ui.label(" Validation").style("font-weight:700; font-size:16px; margin-bottom:8px;")
+                        ui.label(f"• Stratégie: {state.get('validation_strategy', 'holdout').upper()}").style("font-size:14px;")
+                        if state.get("validation_strategy") == "cv":
+                            ui.label(f"• K-Folds: {state.get('cv_folds', 5)}").style("font-size:14px;")
+                        metrics_str = ", ".join(state.get("metrics_to_track", []))
+                        ui.label(f"• Métriques: {metrics_str}").style("font-size:14px;")
         
         # ==================== BOUTONS FINAUX ====================
         with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
@@ -6228,12 +6421,1881 @@ def algorithm_config_page():
             )
             
             ui.button(
-                "✅ Valider et Lancer l'Entraînement",
+                " Valider et Lancer l'Entraînement",
                 on_click=validate_and_continue
             ).style(
                 "background:linear-gradient(135deg, #27ae60 0%, #229954 100%); "
                 "color:white; font-weight:700; height:56px; padding:0 40px; border-radius:12px; font-size:16px;"
             )
+
+
+
+
+@ui.page('/supervised/feature_importance')
+def feature_importance_page():
+    """
+    Page d'analyse de l'importance des features AVANT training complet
+    - Analyse univariée (corrélation + tests statistiques adaptés au type)
+    - Analyse multivariée (Mutual Information)
+    - Recommandations de sélection de features
+    - Visualisations interactives
+    
+     CORRECTION : Gère correctement variables catégorielles/binaires
+    """
+    import pandas as pd
+    import numpy as np
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    from scipy.stats import chi2_contingency, f_oneway, pearsonr
+    from sklearn.feature_selection import mutual_info_classif, mutual_info_regression
+    from sklearn.preprocessing import LabelEncoder
+    
+    # ---------- CONTEXTE ----------
+    df = state.get("raw_df", None)
+    split = state.get("split", None)
+    target_col = state.get("target_column", None)
+    columns_exclude = state.get("columns_exclude", {}) or {}
+    
+    if df is None or split is None or target_col is None:
+        with ui.column().classes("items-center justify-center w-full h-screen"):
+            ui.label("❌ Données non disponibles. Complétez d'abord les étapes précédentes.").style(
+                "font-size:18px; color:#c0392b; font-weight:600;"
+            )
+            ui.button("⬅ Retour", on_click=lambda: ui.run_javascript("window.location.href='/supervised/algorithm_config'"))
+        return
+    
+    # Préparer données
+    X_train = split.get("X_train")
+    y_train = split.get("y_train")
+    
+    if X_train is None or y_train is None:
+        with ui.column().classes("items-center justify-center w-full h-screen"):
+            ui.label("❌ Split non disponible.").style("font-size:18px; color:#c0392b; font-weight:600;")
+        return
+    
+    active_features = [c for c in X_train.columns if not columns_exclude.get(c, False)]
+    
+    # Déterminer si classification ou régression
+    is_classification = y_train.nunique() <= 20
+    task_type = "Classification" if is_classification else "Régression"
+    
+    # ---------- FONCTIONS D'ANALYSE (CORRIGÉES) ----------
+    def calculate_univariate_importance():
+        """
+         CORRIGÉ : Calcule importance univariée avec tests adaptés au type de feature
+        - Chi² + Cramér's V pour features catégorielles/binaires
+        - ANOVA F + Eta² pour features continues (classification)
+        - Pearson pour régression
+        """
+        results = []
+        
+        for feature in active_features:
+            try:
+                X_feature = X_train[feature].dropna()
+                y_aligned = y_train.loc[X_feature.index]
+                
+                if len(X_feature) == 0 or len(y_aligned) == 0:
+                    results.append({
+                        "feature": feature,
+                        "corr": 0,
+                        "test_name": "N/A",
+                        "test_stat": 0,
+                        "p_value": 1,
+                        "signif": "",
+                        "signif_color": "#95a5a6"
+                    })
+                    continue
+                
+                # Détecter le type de feature
+                n_unique = X_feature.nunique()
+                is_binary = n_unique == 2
+                is_categorical = n_unique <= 10 and n_unique > 0
+                
+                # Choisir la bonne méthode selon le type
+                if is_classification:
+                    # CLASSIFICATION
+                    if is_binary or is_categorical:
+                        #  Test Chi² pour features catégorielles
+                        try:
+                            contingency_table = pd.crosstab(X_feature, y_aligned)
+                            
+                            # Vérifier que la table n'est pas vide
+                            if contingency_table.size == 0 or contingency_table.sum().sum() == 0:
+                                raise ValueError("Contingency table vide")
+                            
+                            chi2_stat, p_val_test, dof, expected = chi2_contingency(contingency_table)
+                            
+                            # Cramér's V (mesure force association 0-1)
+                            n = contingency_table.sum().sum()
+                            min_dim = min(contingency_table.shape[0] - 1, contingency_table.shape[1] - 1)
+                            
+                            if min_dim > 0 and n > 0:
+                                cramers_v = np.sqrt(chi2_stat / (n * min_dim))
+                            else:
+                                cramers_v = 0
+                            
+                            corr = cramers_v  # Utiliser Cramér's V comme "corrélation"
+                            test_stat = chi2_stat
+                            test_name = "Chi²"
+                            
+                        except Exception as e:
+                            print(f"⚠️ Erreur Chi² pour {feature}: {e}")
+                            corr, test_stat, p_val_test = 0, 0, 1
+                            test_name = "Chi²"
+                    
+                    else:
+                        #  ANOVA F-test pour features continues
+                        try:
+                            groups = [X_feature[y_aligned == c].dropna() for c in y_aligned.unique()]
+                            groups = [g for g in groups if len(g) > 0]
+                            
+                            if len(groups) > 1:
+                                f_stat, p_val_test = f_oneway(*groups)
+                                test_stat = f_stat
+                                
+                                # Eta squared (effect size)
+                                overall_mean = X_feature.mean()
+                                ss_between = sum(len(g) * (g.mean() - overall_mean)**2 for g in groups)
+                                ss_total = ((X_feature - overall_mean)**2).sum()
+                                
+                                if ss_total > 0:
+                                    eta_squared = ss_between / ss_total
+                                    corr = np.sqrt(eta_squared)  # Correlation ratio
+                                else:
+                                    corr = 0
+                            else:
+                                f_stat, p_val_test = 0, 1
+                                corr = 0
+                            
+                            test_name = "ANOVA F"
+                            
+                        except Exception as e:
+                            print(f"⚠️ Erreur ANOVA pour {feature}: {e}")
+                            corr, test_stat, p_val_test = 0, 0, 1
+                            test_name = "ANOVA F"
+                
+                else:
+                    # RÉGRESSION
+                    try:
+                        # Pearson correlation pour toutes features
+                        corr, p_val_test = pearsonr(X_feature, y_aligned)
+                        corr = abs(corr)
+                        test_stat = corr
+                        test_name = "Pearson"
+                        
+                    except Exception as e:
+                        print(f"⚠️ Erreur corrélation pour {feature}: {e}")
+                        corr, test_stat, p_val_test = 0, 0, 1
+                        test_name = "Pearson"
+                
+                # Significativité
+                if p_val_test < 0.001:
+                    signif = "***"
+                    signif_color = "#27ae60"
+                elif p_val_test < 0.01:
+                    signif = "**"
+                    signif_color = "#f39c12"
+                elif p_val_test < 0.05:
+                    signif = "*"
+                    signif_color = "#01335A"
+                else:
+                    signif = ""
+                    signif_color = "#95a5a6"
+                
+                results.append({
+                    "feature": feature,
+                    "corr": float(corr) if not np.isnan(corr) else 0,
+                    "test_name": test_name,
+                    "test_stat": float(test_stat) if not np.isnan(test_stat) else 0,
+                    "p_value": float(p_val_test) if not np.isnan(p_val_test) else 1,
+                    "signif": signif,
+                    "signif_color": signif_color
+                })
+            
+            except Exception as e:
+                print(f"❌ Erreur globale pour {feature}: {e}")
+                results.append({
+                    "feature": feature,
+                    "corr": 0,
+                    "test_name": "ERROR",
+                    "test_stat": 0,
+                    "p_value": 1,
+                    "signif": "",
+                    "signif_color": "#95a5a6"
+                })
+        
+        # Normaliser importance relative (0-100%)
+        df_results = pd.DataFrame(results)
+        
+        if len(df_results) > 0:
+            max_corr = df_results["corr"].max()
+            if max_corr > 0:
+                df_results["importance"] = (df_results["corr"] / max_corr * 100).round(0).astype(int)
+            else:
+                df_results["importance"] = 0
+        else:
+            df_results["importance"] = 0
+        
+        return df_results.sort_values("importance", ascending=False)
+    
+    def calculate_mutual_information():
+        """Calcule Mutual Information (capture relations non-linéaires)"""
+        try:
+            if is_classification:
+                mi_scores = mutual_info_classif(X_train[active_features], y_train, random_state=42)
+            else:
+                mi_scores = mutual_info_regression(X_train[active_features], y_train, random_state=42)
+            
+            df_mi = pd.DataFrame({
+                "feature": active_features,
+                "mi_score": mi_scores
+            }).sort_values("mi_score", ascending=False)
+            
+            # Importance relative
+            max_mi = df_mi["mi_score"].max()
+            if max_mi > 0:
+                df_mi["importance"] = (df_mi["mi_score"] / max_mi * 100).round(0).astype(int)
+            else:
+                df_mi["importance"] = 0
+            
+            return df_mi
+        
+        except Exception as e:
+            print(f"❌ Erreur MI: {e}")
+            return pd.DataFrame()
+    
+    def create_importance_barplot(df_importance, title="Feature Importance"):
+        """Crée un barplot horizontal des importances"""
+        if len(df_importance) == 0:
+            return go.Figure()
+        
+        fig = go.Figure()
+        
+        colors = ['#27ae60' if imp > 60 else '#f39c12' if imp > 30 else '#e74c3c' 
+                  for imp in df_importance["importance"]]
+        
+        fig.add_trace(go.Bar(
+            y=df_importance["feature"],
+            x=df_importance["importance"],
+            orientation='h',
+            marker=dict(color=colors),
+            text=df_importance["importance"].astype(str) + "%",
+            textposition='outside',
+            hovertemplate='<b>%{y}</b><br>Importance: %{x}%<extra></extra>'
+        ))
+        
+        fig.update_layout(
+            title=title,
+            xaxis_title="Importance Relative (%)",
+            yaxis_title="",
+            height=max(400, len(df_importance) * 30),
+            yaxis={'categoryorder': 'total ascending'},
+            showlegend=False,
+            paper_bgcolor='#f8f9fa',
+            plot_bgcolor='white'
+        )
+        
+        return fig
+    
+    def create_scatter_feature_vs_target(feature_name):
+        """Crée scatter plot feature vs target"""
+        fig = go.Figure()
+        
+        X_feature = X_train[feature_name]
+        
+        if is_classification:
+            # Pour classification : boxplot par classe
+            for class_val in sorted(y_train.unique()):
+                mask = y_train == class_val
+                fig.add_trace(go.Box(
+                    y=X_feature[mask],
+                    name=f"Classe {class_val}",
+                    boxmean='sd'
+                ))
+            
+            fig.update_layout(
+                title=f"{feature_name} par Classe",
+                yaxis_title=feature_name,
+                xaxis_title="Classe",
+                height=400,
+                paper_bgcolor='#f8f9fa',
+                plot_bgcolor='white'
+            )
+        else:
+            # Pour régression : scatter plot
+            fig.add_trace(go.Scatter(
+                x=X_feature,
+                y=y_train,
+                mode='markers',
+                marker=dict(size=5, opacity=0.6, color='#3498db')
+            ))
+            
+            fig.update_layout(
+                title=f"{feature_name} vs Target",
+                xaxis_title=feature_name,
+                yaxis_title=target_col,
+                height=400,
+                paper_bgcolor='#f8f9fa',
+                plot_bgcolor='white'
+            )
+        
+        return fig
+    
+    def get_feature_icon(importance):
+        """Retourne icône selon importance"""
+        if importance > 60:
+            return "🟢"
+        elif importance > 30:
+            return "🟡"
+        else:
+            return "🔴"
+    
+    def create_progress_bar_text(importance):
+        """Crée barre de progression ASCII"""
+        filled = int(importance / 10)
+        empty = 10 - filled
+        return "█" * filled + "▌" * min(1, empty)
+    
+    def skip_to_training():
+        """Passer directement au training sans modifier features"""
+        state["feature_selection_applied"] = False
+        ui.notify(" Passage au training avec toutes les features", color="info")
+        ui.run_javascript("setTimeout(() => window.location.href='/supervised/training', 1000);")
+    
+    def apply_feature_selection(top_n):
+        """Applique sélection de features et continue"""
+        univariate_results = calculate_univariate_importance()
+        selected_features = univariate_results.head(top_n)["feature"].tolist()
+        
+        if len(selected_features) == 0:
+            ui.notify("❌ Aucune feature à sélectionner", color="negative")
+            return
+        
+        # Sauvegarder dans state
+        state["selected_features_importance"] = selected_features
+        state["feature_selection_applied"] = True
+        state["n_features_selected"] = top_n
+        
+        # Appliquer sur les splits
+        split = state.get("split", {})
+        for key in ["X_train", "X_val", "X_test"]:
+            if key in split and isinstance(split[key], pd.DataFrame):
+                # Garder seulement les features sélectionnées qui existent
+                valid_features = [f for f in selected_features if f in split[key].columns]
+                split[key] = split[key][valid_features]
+        
+        state["split"] = split
+        
+        ui.notify(f" Sélection appliquée : {len(selected_features)} features conservées", color="positive")
+        ui.run_javascript("setTimeout(() => window.location.href='/supervised/training', 1500);")
+    
+    # ---------- CALCULS ----------
+    ui.notify("🔄 Calcul des importances en cours...", color="info", timeout=2000)
+    
+    univariate_results = calculate_univariate_importance()
+    mi_results = calculate_mutual_information()
+    
+    # ---------- INTERFACE ----------
+    with ui.column().classes("w-full items-center p-8").style("background-color:#f8f9fa; min-height:100vh;"):
+        
+        # ==================== HEADER ====================
+        ui.label(" ANALYSE D'IMPORTANCE DES FEATURES").style(
+            "font-weight:700; font-size:32px; color:#2c3e50; margin-bottom:8px; text-align:center;"
+        )
+        ui.label(f"Analyse préliminaire pour guider la modélisation ({task_type})").style(
+            "font-size:18px; color:#7f8c8d; margin-bottom:32px; text-align:center;"
+        )
+        
+        # Info dataset
+        with ui.card().classes("w-full max-w-6xl p-4 mb-6").style("background:#e3f2fd; border-left:5px solid #2196f3;"):
+            with ui.row().classes("w-full gap-8 items-center"):
+                ui.label("📊 Dataset :").style("font-weight:700; font-size:16px;")
+                ui.label(f"Features: {len(active_features)}").style("font-size:14px;")
+                ui.label(f"Samples: {len(X_train):,}").style("font-size:14px;")
+                ui.label(f"Target: {target_col}").style("font-size:14px;")
+                ui.label(f"Type: {task_type}").style("font-size:14px;")
+        
+        # ==================== SECTION A : IMPORTANCE UNIVARIÉE ====================
+        with ui.card().classes("w-full max-w-6xl p-6 mb-8"):
+            ui.label("📊 SECTION A : IMPORTANCE UNIVARIÉE").style(
+                "font-weight:700; font-size:24px; color:#2c3e50; margin-bottom:16px;"
+            )
+            
+            ui.label("Méthode : Tests Statistiques Adaptés au Type de Feature").style(
+                "font-size:16px; color:#7f8c8d; margin-bottom:12px;"
+            )
+            
+            # Info méthode
+            with ui.card().classes("w-full p-3 mb-4").style("background:#e8f5e9; border-left:3px solid #4caf50;"):
+                ui.label(" Méthodes utilisées :").style("font-weight:600; margin-bottom:6px;")
+                ui.label("• Chi² + Cramér's V : Variables catégorielles/binaires").style("font-size:13px;")
+                ui.label("• ANOVA F + Eta² : Variables continues (classification)").style("font-size:13px;")
+                ui.label("• Pearson : Variables continues (régression)").style("font-size:13px;")
+            
+            # Tableau détaillé
+            if len(univariate_results) > 0:
+                # Créer tableau HTML stylisé
+                table_html = """
+                <div style="background:#1a1a1a; border-radius:12px; padding:20px; overflow-x:auto; margin-bottom:24px;">
+                <table style="width:100%; color:#00ff88; font-family:monospace; font-size:13px; border-collapse:collapse;">
+                    <thead>
+                        <tr style="border-bottom:2px solid #00ff88;">
+                            <th style="text-align:left; padding:12px; color:#00ffff;">Feature</th>
+                            <th style="text-align:center; padding:12px;">Assoc. Target</th>
+                            <th style="text-align:center; padding:12px;">Test</th>
+                            <th style="text-align:center; padding:12px;">Test Stat</th>
+                            <th style="text-align:center; padding:12px;">Signif.</th>
+                            <th style="text-align:left; padding:12px;">Importance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                """
+                
+                for _, row in univariate_results.iterrows():
+                    icon = get_feature_icon(row["importance"])
+                    bar = create_progress_bar_text(row["importance"])
+                    
+                    # Tronquer nom feature si trop long
+                    feature_display = row['feature'][:25] + "..." if len(row['feature']) > 25 else row['feature']
+                    
+                    table_html += f"""
+                        <tr style="border-bottom:1px solid #333;">
+                            <td style="padding:10px; font-weight:600;">{feature_display}</td>
+                            <td style="text-align:center; padding:10px;">{row['corr']:.3f} {icon}</td>
+                            <td style="text-align:center; padding:10px; color:#ffa500;">{row['test_name']}</td>
+                            <td style="text-align:center; padding:10px;">{row['test_stat']:.2f}</td>
+                            <td style="text-align:center; padding:10px; color:{row['signif_color']}; font-weight:700;">{row['signif']}</td>
+                            <td style="padding:10px;">{bar} {row['importance']}%</td>
+                        </tr>
+                    """
+                
+                table_html += """
+                    </tbody>
+                </table>
+                </div>
+                """
+                
+                ui.html(table_html, sanitize=False)
+                
+                # Légende significativité
+                with ui.card().classes("w-full p-4 mb-4").style("background:#fff3cd;"):
+                    ui.label("📖 Légende Significativité (p-value) :").style("font-weight:700; margin-bottom:8px;")
+                    ui.label("*** p < 0.001 (Très significatif) - Forte évidence d'association").style("font-size:14px; color:#27ae60;")
+                    ui.label("** p < 0.01 (Significatif) - Bonne évidence d'association").style("font-size:14px; color:#f39c12;")
+                    ui.label("* p < 0.05 (Marginalement significatif) - Évidence modérée").style("font-size:14px; color:#01335A;")
+                    ui.label("(vide) p >= 0.05 (Non significatif) - Pas d'évidence d'association").style("font-size:14px; color:#95a5a6;")
+                
+                # Observations
+                high_importance = univariate_results[univariate_results["importance"] > 60]
+                medium_importance = univariate_results[(univariate_results["importance"] >= 30) & (univariate_results["importance"] <= 60)]
+                low_importance = univariate_results[univariate_results["importance"] < 20]
+                
+                with ui.card().classes("w-full p-4 mb-4").style("background:#e8f5e9; border-left:4px solid #4caf50;"):
+                    ui.label("💡 Observations :").style("font-weight:700; margin-bottom:8px;")
+                    
+                    if len(high_importance) > 0:
+                        features_str = ", ".join(high_importance["feature"].head(5).tolist())
+                        if len(high_importance) > 5:
+                            features_str += f" (+ {len(high_importance)-5} autres)"
+                        ui.label(f"• 🟢 {len(high_importance)} features très prédictives (importance > 60%) : {features_str}").style("font-size:14px; margin-bottom:4px;")
+                    
+                    if len(medium_importance) > 0:
+                        ui.label(f"• 🟡 {len(medium_importance)} features moyennement prédictives (30-60%)").style("font-size:14px; margin-bottom:4px;")
+                    
+                    if len(low_importance) > 0:
+                        ui.label(f"• 🔴 {len(low_importance)} features faiblement prédictives (< 20%)").style("font-size:14px; margin-bottom:4px;")
+                    
+                    # Recommandation nombre features
+                    recommended_n = len(univariate_results[univariate_results["importance"] >= 30])
+                    if recommended_n > 0:
+                        ui.label(f"• 💡 Recommandation : Conserver les {recommended_n} features (importance >= 30%) pour un bon compromis").style(
+                            "font-size:14px; font-weight:600; color:#2e7d32; margin-top:8px;"
+                        )
+                
+                # Barplot horizontal
+                ui.label("📈 Visualisation des Importances").style(
+                    "font-weight:700; font-size:20px; margin-top:20px; margin-bottom:12px;"
+                )
+                
+                barplot_fig = create_importance_barplot(univariate_results, "Importance Univariée des Features")
+                barplot_plot = ui.plotly(barplot_fig).classes("w-full")
+                
+                # Container pour scatter plot interactif
+                scatter_container = ui.column().classes("w-full mt-4")
+                
+                # Callback sur click barre
+                def handle_bar_click(e):
+                    try:
+                        if e and "points" in e and len(e["points"]) > 0:
+                            point = e["points"][0]
+                            feature_clicked = point["y"]
+                            
+                            scatter_container.clear()
+                            with scatter_container:
+                                ui.label(f"📊 Relation : {feature_clicked} vs {target_col}").style(
+                                    "font-weight:700; font-size:18px; margin-bottom:12px;"
+                                )
+                                
+                                scatter_fig = create_scatter_feature_vs_target(feature_clicked)
+                                ui.plotly(scatter_fig).classes("w-full")
+                    except Exception as exc:
+                        print(f"❌ Erreur click: {exc}")
+                
+                barplot_plot.on("plotly_click", handle_bar_click)
+                
+                ui.label("💡 Cliquez sur une barre pour voir la relation avec la target").style(
+                    "font-size:13px; color:#7f8c8d; margin-top:8px; text-align:center;"
+                )
+            
+            else:
+                ui.label("⚠️ Aucune feature disponible pour l'analyse").style("color:#01335A; font-size:16px;")
+        
+        # ==================== SECTION B : MUTUAL INFORMATION ====================
+        if len(mi_results) > 0:
+            with ui.card().classes("w-full max-w-6xl p-6 mb-8"):
+                ui.label("🔄 SECTION B : IMPORTANCE MULTIVARIÉE (MUTUAL INFORMATION)").style(
+                    "font-weight:700; font-size:24px; color:#2c3e50; margin-bottom:16px;"
+                )
+                
+                ui.label("Méthode : Mutual Information (capture relations non-linéaires)").style(
+                    "font-size:16px; color:#7f8c8d; margin-bottom:20px;"
+                )
+                
+                # Tableau MI
+                table_html_mi = """
+                <div style="background:#1a1a1a; border-radius:12px; padding:20px; overflow-x:auto; margin-bottom:24px;">
+                <table style="width:100%; color:#00ff88; font-family:monospace; font-size:13px; border-collapse:collapse;">
+                    <thead>
+                        <tr style="border-bottom:2px solid #00ff88;">
+                            <th style="text-align:left; padding:12px; color:#00ffff;">Feature</th>
+                            <th style="text-align:center; padding:12px;">MI Score</th>
+                            <th style="text-align:left; padding:12px;">Importance Relative</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                """
+                
+                for _, row in mi_results.iterrows():
+                    bar = create_progress_bar_text(row["importance"])
+                    feature_display = row['feature'][:25] + "..." if len(row['feature']) > 25 else row['feature']
+                    
+                    table_html_mi += f"""
+                        <tr style="border-bottom:1px solid #333;">
+                            <td style="padding:10px; font-weight:600;">{feature_display}</td>
+                            <td style="text-align:center; padding:10px;">{row['mi_score']:.4f}</td>
+                            <td style="padding:10px;">{bar} {row['importance']}%</td>
+                        </tr>
+                    """
+                
+                table_html_mi += """
+                    </tbody>
+                </table>
+                </div>
+                """
+                
+                ui.html(table_html_mi, sanitize=False)
+                
+                # Info MI
+                with ui.card().classes("w-full p-4").style("background:#e3f2fd;"):
+                    ui.label("💡 Mutual Information (Avantages)").style(
+                        "font-weight:700; margin-bottom:8px;"
+                    )
+                    ui.label("→ Capture relations non-linéaires (complète l'analyse univariée)").style("font-size:14px;")
+                    ui.label("→ Pas d'hypothèse sur la distribution des données").style("font-size:14px;")
+                    ui.label("→ Fonctionne avec variables continues ET catégorielles").style("font-size:14px;")
+                    ui.label("→ Détecte interactions complexes avec la target").style("font-size:14px;")
+                
+                # Barplot MI
+                ui.label("📈 Visualisation MI Scores").style(
+                    "font-weight:700; font-size:20px; margin-top:20px; margin-bottom:12px;"
+                )
+                
+                mi_barplot = create_importance_barplot(mi_results, "Mutual Information Scores")
+                ui.plotly(mi_barplot).classes("w-full")
+        
+        # ==================== SECTION C : RECOMMANDATIONS ====================
+        with ui.card().classes("w-full max-w-6xl p-6 mb-8").style(
+            "background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius:16px;"
+        ):
+            ui.label("💡 RECOMMANDATIONS AVANT TRAINING").style(
+                "font-weight:700; font-size:24px; color:white; margin-bottom:16px; text-align:center;"
+            )
+            
+            ui.label("Basé sur l'analyse d'importance :").style(
+                "font-size:16px; color:white; text-align:center; margin-bottom:20px;"
+            )
+            
+            if len(univariate_results) > 0:
+                # Options
+                with ui.column().classes("w-full gap-4"):
+                    # Option 1 : Garder toutes
+                    with ui.card().classes("p-6"):
+                        ui.label(f"Option 1 : Garder toutes les features ({len(active_features)})").style(
+                            "font-weight:700; font-size:18px; margin-bottom:12px;"
+                        )
+                        
+                        with ui.row().classes("gap-6 mb-4"):
+                            with ui.column().classes("flex-1"):
+                                ui.label(" Avantages").style("font-weight:600; color:#27ae60; margin-bottom:6px;")
+                                ui.label("• Maximise information disponible").style("font-size:14px;")
+                                ui.label("• Pas de risque de perte d'info").style("font-size:14px;")
+                                ui.label("• Laisse l'algo choisir").style("font-size:14px;")
+                            
+                            with ui.column().classes("flex-1"):
+                                ui.label("❌ Inconvénients").style("font-weight:600; color:#e74c3c; margin-bottom:6px;")
+                                ui.label("• Risque léger de bruit").style("font-size:14px;")
+                                ui.label("• Training plus lent").style("font-size:14px;")
+                                ui.label("• Overfitting possible").style("font-size:14px;")
+                        
+                        ui.button(
+                            "🚀 Continuer avec toutes les features",
+                            on_click=skip_to_training
+                        ).style(
+                            "background:#3498db; color:white; font-weight:600; height:48px; width:100%; border-radius:8px;"
+                        )
+                    
+                    # Option 2 : Réduire Top N
+                    recommended_n = len(univariate_results[univariate_results["importance"] >= 30])
+                    
+                    if recommended_n > 0 and recommended_n < len(active_features):
+                        with ui.card().classes("p-6"):
+                            ui.label(f"Option 2 : Réduire à Top {recommended_n} features (importance >= 30%)").style(
+                                "font-weight:700; font-size:18px; margin-bottom:12px;"
+                            )
+                            
+                            top_features = univariate_results[univariate_results["importance"] >= 30]["feature"].tolist()
+                            ui.label(f"Features conservées : {', '.join(top_features[:5])}{'...' if len(top_features) > 5 else ''}").style(
+                                "font-size:13px; color:#636e72; margin-bottom:12px;"
+                            )
+                            
+                            with ui.row().classes("gap-6 mb-4"):
+                                with ui.column().classes("flex-1"):
+                                    ui.label(" Avantages").style("font-weight:600; color:#27ae60; margin-bottom:6px;")
+                                    ui.label("• Élimine bruit potentiel").style("font-size:14px;")
+                                    ui.label("• Accélère training").style("font-size:14px;")
+                                    ui.label("• Réduit overfitting").style("font-size:14px;")
+                                
+                                with ui.column().classes("flex-1"):
+                                    ui.label("❌ Inconvénients").style("font-weight:600; color:#e74c3c; margin-bottom:6px;")
+                                    low_features = univariate_results[univariate_results["importance"] < 30]
+                                    n_removed = len(low_features)
+                                    ui.label(f"• Supprime {n_removed} features").style("font-size:14px;")
+                                    ui.label("• Risque léger de sous-apprentissage").style("font-size:14px;")
+                            
+                            ui.button(
+                                f"✂️ Réduire à Top {recommended_n} features [Recommandé]",
+                                on_click=lambda: apply_feature_selection(recommended_n)
+                            ).style(
+                                "background:#27ae60; color:white; font-weight:600; height:48px; width:100%; border-radius:8px;"
+                            )
+                    
+                    # Option 3 : Custom
+                    with ui.card().classes("p-6"):
+                        ui.label("Option 3 : Sélection personnalisée").style(
+                            "font-weight:700; font-size:18px; margin-bottom:12px;"
+                        )
+                        
+                        with ui.row().classes("w-full items-center gap-4 mb-4"):
+                            ui.label("Nombre de features à conserver :").style("font-weight:600; width:250px;")
+                            custom_n_slider = ui.slider(
+                                min=1, 
+                                max=len(active_features), 
+                                value=min(recommended_n if recommended_n > 0 else len(active_features), len(active_features)), 
+                                step=1
+                            ).classes("flex-1")
+                            custom_n_label = ui.label(f"{custom_n_slider.value}").style("font-weight:700; width:60px;")
+                            
+                            def update_custom_n(e):
+                                custom_n_label.set_text(f"{int(e.value)}")
+                            
+                            custom_n_slider.on_value_change(update_custom_n)
+                        
+                        ui.button(
+                            "✂️ Appliquer sélection personnalisée",
+                            on_click=lambda: apply_feature_selection(int(custom_n_slider.value))
+                        ).style(
+                            "background:#9b59b6; color:white; font-weight:600; height:48px; width:100%; border-radius:8px;"
+                        )
+        
+        # ==================== COMPARAISON MÉTHODES ====================
+        if len(mi_results) > 0 and len(univariate_results) > 0:
+            with ui.card().classes("w-full max-w-6xl p-6 mb-8"):
+                ui.label("📊 COMPARAISON DES MÉTHODES").style(
+                    "font-weight:700; font-size:24px; color:#2c3e50; margin-bottom:16px;"
+                )
+                
+                # Merge univariate et MI
+                comparison_df = univariate_results[["feature", "importance"]].copy()
+                comparison_df.columns = ["feature", "univariate"]
+                
+                mi_scores = mi_results[["feature", "importance"]].copy()
+                mi_scores.columns = ["feature", "multivariate"]
+                
+                comparison_df = comparison_df.merge(mi_scores, on="feature", how="left")
+                comparison_df["multivariate"] = comparison_df["multivariate"].fillna(0)
+                
+                # Graphique comparatif
+                fig = go.Figure()
+                
+                fig.add_trace(go.Bar(
+                    x=comparison_df["feature"],
+                    y=comparison_df["univariate"],
+                    name="Univariée (Chi²/ANOVA)",
+                    marker_color='#3498db'
+                ))
+                
+                fig.add_trace(go.Bar(
+                    x=comparison_df["feature"],
+                    y=comparison_df["multivariate"],
+                    name="Multivariée (MI)",
+                    marker_color='#e74c3c'
+                ))
+                
+                fig.update_layout(
+                    title="Comparaison Importance Univariée vs Multivariée",
+                    xaxis_title="Features",
+                    yaxis_title="Importance (%)",
+                    barmode='group',
+                    height=500,
+                    showlegend=True,
+                    paper_bgcolor='#f8f9fa',
+                    plot_bgcolor='white'
+                )
+                
+                ui.plotly(fig).classes("w-full")
+                
+                # Interprétation
+                with ui.card().classes("w-full p-4 mt-4").style("background:#e8f5e9;"):
+                    ui.label("💡 Interprétation :").style("font-weight:700; margin-bottom:8px;")
+                    ui.label("• Si les deux méthodes donnent des résultats similaires → Relations linéaires/monotones dominantes").style("font-size:14px;")
+                    ui.label("• Si MI > Analyse univariée → Relations non-linéaires importantes").style("font-size:14px;")
+                    ui.label("• Features avec MI élevé mais score univarié faible → Interactions complexes").style("font-size:14px;")
+                    ui.label("• Consensus entre les deux méthodes → Features robustement importantes").style("font-size:14px;")
+        
+        # ==================== NAVIGATION ====================
+        with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
+            ui.button(
+                "⬅ Retour Config Algos",
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/algorithm_config'")
+            ).style(
+                "background:#95a5a6; color:white; font-weight:600; height:56px; padding:0 32px; border-radius:12px; font-size:16px;"
+            )
+
+
+
+
+@ui.page('/supervised/training')
+def training_page():
+    """
+    ENTRAÎNEMENT INITIAL (BASELINE)
+    
+    - Entraînement des modèles sélectionnés
+    - Progress bars en temps réel
+    - Validation sur hold-out ou CV
+    - Métriques de performance
+    - Comparaison des modèles
+    - Sauvegarde des meilleurs modèles
+    """
+    
+    
+    # ---------- CONTEXTE ----------
+    split = state.get("split", None)
+    target_col = state.get("target_column", None)
+    algo_configs = state.get("algo_configs", {})
+    selected_algos = state.get("selected_algos", [])
+    validation_strategy = state.get("validation_strategy", "holdout")
+    cv_folds = state.get("cv_folds", 5)
+    metrics_to_track = state.get("metrics_to_track", ["accuracy", "precision", "recall", "f1"])
+    
+    if split is None or target_col is None:
+        with ui.column().classes("items-center justify-center w-full h-screen"):
+            ui.label("❌ Données non disponibles. Complétez les étapes précédentes.").style(
+                "font-size:18px; color:#c0392b; font-weight:600;"
+            )
+            ui.button("⬅ Retour", on_click=lambda: ui.run_javascript("window.location.href='/supervised/feature_importance'"))
+        return
+    
+    X_train = split.get("X_train")
+    y_train = split.get("y_train")
+    X_val = split.get("X_val")
+    y_val = split.get("y_val")
+    X_test = split.get("X_test")
+    y_test = split.get("y_test")
+    
+    if X_train is None or y_train is None:
+        with ui.column().classes("items-center justify-center w-full h-screen"):
+            ui.label("❌ Données d'entraînement introuvables.").style("font-size:18px; color:#c0392b; font-weight:600;")
+        return
+    
+    if not selected_algos:
+        selected_algos = ["KNN", "Decision Tree", "Naive Bayes"]
+    
+    # ---------- MAPPAGE ALGORITHMES ----------
+    algo_mapping = {
+        "KNN": {
+            "name": "K-Nearest Neighbors",
+            "class": KNeighborsClassifier,
+            "icon": "",
+            "color": "#3498db"
+        },
+        "Decision Tree": {
+            "name": "C4.5 Decision Tree",
+            "class": DecisionTreeClassifier,
+            "icon": "🌳",
+            "color": "#27ae60"
+        },
+        
+        "Naive Bayes": {
+            "name": "Naive Bayes",
+            "class": GaussianNB,
+            "icon": "📊",
+            "color": "#e74c3c"
+        }
+    }
+    
+    # ---------- FONCTIONS D'ENTRAÎNEMENT ----------
+    def create_model(algo_name):
+        """Crée une instance du modèle avec sa configuration"""
+        if algo_name == "KNN":
+            config = algo_configs.get("knn", {})
+            return KNeighborsClassifier(
+                n_neighbors=config.get("n_neighbors", 5),
+                metric=config.get("metric", "euclidean"),
+                weights=config.get("weights", "distance"),
+                algorithm=config.get("algorithm", "auto")
+            )
+        
+        elif algo_name == "Decision Tree":
+            config = algo_configs.get("decision_tree", {})
+            return DecisionTreeClassifier(
+                criterion=config.get("criterion", "entropy"),
+                max_depth=config.get("max_depth", None),
+                min_samples_split=config.get("min_samples_split", 2),
+                min_samples_leaf=config.get("min_samples_leaf", 1),
+                max_features=config.get("max_features", None),
+                random_state=42
+            )
+        
+        
+        elif algo_name == "Naive Bayes":
+            config = algo_configs.get("naive_bayes", {})
+            return GaussianNB(
+                var_smoothing=config.get("var_smoothing", 1e-9)
+            )
+        
+        return None
+    
+    def calculate_metrics(y_true, y_pred, y_pred_proba=None):
+        """
+         CORRIGÉ : Calcule toutes les métriques demandées
+        Gère correctement les labels catégoriels (ex: 'N', 'Y')
+        """
+        results = {}
+        
+        # Déterminer le nombre de classes uniques
+        classes_true = np.unique(y_true)
+        classes_pred = np.unique(y_pred)
+        all_classes = np.unique(np.concatenate([classes_true, classes_pred]))
+        n_classes = len(all_classes)
+        
+        #  CORRECTION : Déterminer la bonne méthode d'average
+        # Pour binaire : utiliser 'binary' seulement si labels sont numériques 0/1
+        # Sinon utiliser 'weighted' même pour binaire
+        is_numeric_binary = (
+            n_classes == 2 and 
+            all(isinstance(c, (int, np.integer)) for c in all_classes) and
+            set(all_classes).issubset({0, 1})
+        )
+        
+        if is_numeric_binary:
+            average_method = 'binary'
+            pos_label = 1
+        elif n_classes == 2:
+            # Binaire mais labels non-numériques (ex: 'N', 'Y')
+            average_method = 'binary'
+            pos_label = sorted(all_classes)[1]  # Prendre le 2ème label alphabétiquement
+        else:
+            # Multi-classe
+            average_method = 'weighted'
+            pos_label = None
+        
+        try:
+            if "accuracy" in metrics_to_track:
+                results["accuracy"] = accuracy_score(y_true, y_pred)
+            
+            if "precision" in metrics_to_track:
+                if pos_label is not None:
+                    results["precision"] = precision_score(
+                        y_true, y_pred, 
+                        average=average_method, 
+                        pos_label=pos_label,
+                        zero_division=0
+                    )
+                else:
+                    results["precision"] = precision_score(
+                        y_true, y_pred, 
+                        average=average_method,
+                        zero_division=0
+                    )
+            
+            if "recall" in metrics_to_track:
+                if pos_label is not None:
+                    results["recall"] = recall_score(
+                        y_true, y_pred, 
+                        average=average_method,
+                        pos_label=pos_label,
+                        zero_division=0
+                    )
+                else:
+                    results["recall"] = recall_score(
+                        y_true, y_pred, 
+                        average=average_method,
+                        zero_division=0
+                    )
+            
+            if "f1" in metrics_to_track:
+                if pos_label is not None:
+                    results["f1"] = f1_score(
+                        y_true, y_pred, 
+                        average=average_method,
+                        pos_label=pos_label,
+                        zero_division=0
+                    )
+                else:
+                    results["f1"] = f1_score(
+                        y_true, y_pred, 
+                        average=average_method,
+                        zero_division=0
+                    )
+            
+            # AUC-ROC (si probabilités disponibles et binaire)
+            if y_pred_proba is not None and n_classes == 2:
+                try:
+                    # Pour labels catégoriels, on doit mapper aux indices
+                    if not is_numeric_binary:
+                        # Créer mapping labels -> indices
+                        label_to_idx = {label: idx for idx, label in enumerate(sorted(all_classes))}
+                        y_true_numeric = np.array([label_to_idx[label] for label in y_true])
+                        
+                        # Prendre proba de la classe positive (2ème classe alphabétiquement)
+                        results["auc_roc"] = roc_auc_score(y_true_numeric, y_pred_proba[:, 1])
+                    else:
+                        results["auc_roc"] = roc_auc_score(y_true, y_pred_proba[:, 1])
+                except Exception as e:
+                    print(f"⚠️ Impossible de calculer AUC-ROC: {e}")
+                    results["auc_roc"] = None
+        
+        except Exception as e:
+            print(f"❌ Erreur calcul métriques: {e}")
+            # Retourner au moins accuracy si possible
+            try:
+                results["accuracy"] = accuracy_score(y_true, y_pred)
+            except:
+                results["accuracy"] = 0.0
+        
+        return results
+    
+    def train_single_model(algo_name, progress_callback=None, status_callback=None):
+        """Entraîne un seul modèle et retourne les résultats"""
+        try:
+            if status_callback:
+                status_callback(f"Initialisation {algo_name}...")
+            
+            # Créer le modèle
+            model = create_model(algo_name)
+            
+            if model is None:
+                return None
+            
+            if status_callback:
+                status_callback(f"Entraînement {algo_name}...")
+            
+            # Training
+            start_time = time.time()
+            model.fit(X_train, y_train)
+            train_time = time.time() - start_time
+            
+            if progress_callback:
+                progress_callback(0.5)
+            
+            if status_callback:
+                status_callback(f"Validation {algo_name}...")
+            
+            # Prédictions
+            if validation_strategy == "holdout" and X_val is not None and y_val is not None:
+                y_pred = model.predict(X_val)
+                y_pred_proba = model.predict_proba(X_val) if hasattr(model, 'predict_proba') else None
+                
+                # Métriques validation
+                val_metrics = calculate_metrics(y_val, y_pred, y_pred_proba)
+                
+                # Métriques train (pour détecter overfitting)
+                y_train_pred = model.predict(X_train)
+                train_metrics = calculate_metrics(y_train, y_train_pred)
+            
+            elif validation_strategy == "cv":
+                # Cross-validation
+                cv_scores = {}
+                for metric in metrics_to_track:
+                    scores = cross_val_score(model, X_train, y_train, cv=cv_folds, scoring=metric)
+                    cv_scores[metric] = scores.mean()
+                
+                val_metrics = cv_scores
+                train_metrics = {}
+                
+                # Re-fit sur tout le train pour avoir le modèle final
+                model.fit(X_train, y_train)
+                y_train_pred = model.predict(X_train)
+                train_metrics = calculate_metrics(y_train, y_train_pred)
+            
+            else:
+                # Pas de validation séparée
+                y_train_pred = model.predict(X_train)
+                train_metrics = calculate_metrics(y_train, y_train_pred)
+                val_metrics = train_metrics
+            
+            if progress_callback:
+                progress_callback(1.0)
+            
+            if status_callback:
+                status_callback(f" {algo_name} terminé")
+            
+            # Confusion matrix
+            if validation_strategy == "holdout" and X_val is not None:
+                cm = confusion_matrix(y_val, y_pred)
+            else:
+                cm = confusion_matrix(y_train, y_train_pred)
+            
+            return {
+                "model": model,
+                "algo_name": algo_name,
+                "train_time": train_time,
+                "train_metrics": train_metrics,
+                "val_metrics": val_metrics,
+                "confusion_matrix": cm,
+                "y_pred": y_pred if validation_strategy == "holdout" else y_train_pred,
+                "y_true": y_val if validation_strategy == "holdout" else y_train,
+                "y_pred_proba": y_pred_proba if validation_strategy == "holdout" else None
+            }
+        
+        except Exception as e:
+            print(f"❌ Erreur training {algo_name}: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            if status_callback:
+                status_callback(f"❌ Erreur {algo_name}")
+            
+            return None
+    
+    async def run_training():
+        """Lance l'entraînement de tous les modèles sélectionnés"""
+        results = {}
+        total_algos = len(selected_algos)
+        
+        for idx, algo in enumerate(selected_algos):
+            # Update global progress
+            global_progress.set_value((idx) / total_algos)
+            global_status.set_text(f"Entraînement {idx+1}/{total_algos} : {algo}")
+            
+            # Progress bar et status pour cet algo
+            algo_info = algo_mapping.get(algo, {})
+            algo_icon = algo_info.get("icon", "")
+            algo_color = algo_info.get("color", "#95a5a6")
+            
+            # Créer carte de training
+            with training_cards_container:
+                with ui.card().classes("w-full p-4 mb-3").style(f"border-left:5px solid {algo_color};"):
+                    with ui.row().classes("w-full items-center gap-3"):
+                        ui.label(f"{algo_icon} {algo}").style("font-weight:700; font-size:16px; width:200px;")
+                        
+                        algo_progress = ui.linear_progress(value=0, show_value=False).classes("flex-1")
+                        algo_status = ui.label("En attente...").style("font-size:13px; color:#7f8c8d; width:150px;")
+            
+            # Callbacks pour update
+            def update_progress(value):
+                algo_progress.set_value(value)
+            
+            def update_status(text):
+                algo_status.set_text(text)
+            
+            # Lancer training
+            await asyncio.sleep(0.1)  # Pour que l'UI s'update
+            
+            result = train_single_model(algo, update_progress, update_status)
+            
+            if result:
+                results[algo] = result
+                algo_status.set_text(f" Terminé ({result['train_time']:.2f}s)")
+                algo_status.style("color:#27ae60;")
+            else:
+                algo_status.set_text("❌ Erreur")
+                algo_status.style("color:#e74c3c;")
+            
+            algo_progress.set_value(1.0)
+        
+        # Update global
+        global_progress.set_value(1.0)
+        total_time = sum(r["train_time"] for r in results.values())
+        global_status.set_text(f" Training Baseline Complété ({total_time:.2f}s total)")
+        
+        # Sauvegarder résultats
+        state["training_results"] = results
+        state["training_timestamp"] = datetime.now().isoformat()
+        
+        # Afficher boutons résultats
+        await asyncio.sleep(0.5)
+        show_results_section()
+    
+    def show_results_section():
+        """Affiche la section des résultats après training"""
+        results_section.clear()
+        
+        with results_section:
+            with ui.row().classes("w-full justify-center gap-4 mt-6"):
+                ui.button(
+                    "📊 Voir les Résultats Détaillés",
+                    on_click=lambda: ui.run_javascript("window.location.href='/supervised/results'")
+                ).style(
+                    "background:linear-gradient(135deg, #27ae60 0%, #229954 100%); "
+                    "color:white; font-weight:700; height:56px; padding:0 40px; border-radius:12px; font-size:16px;"
+                )
+                
+                ui.button(
+                    "🔄 Relancer avec autres paramètres",
+                    on_click=lambda: ui.run_javascript("window.location.href='/supervised/algorithm_config'")
+                ).style(
+                    "background:#3498db; color:white; font-weight:600; height:56px; padding:0 32px; border-radius:12px; font-size:16px;"
+                )
+    
+    # ---------- INTERFACE ----------
+    with ui.column().classes("w-full items-center p-8").style("background-color:#f8f9fa; min-height:100vh;"):
+        
+        # ==================== HEADER ====================
+        ui.label(" ENTRAÎNEMENT BASELINE").style(
+            "font-weight:700; font-size:32px; color:#2c3e50; margin-bottom:8px; text-align:center;"
+        )
+        ui.label("Établir une baseline avec configurations initiales").style(
+            "font-size:18px; color:#7f8c8d; margin-bottom:32px; text-align:center;"
+        )
+        
+        # ==================== CONFIGURATION ====================
+        with ui.card().classes("w-full max-w-6xl p-6 mb-6").style("background:#e3f2fd; border-left:5px solid #2196f3;"):
+            ui.label("📋 Configuration").style("font-weight:700; font-size:20px; margin-bottom:12px;")
+            
+            with ui.column().classes("gap-2"):
+                ui.label(f"• Dataset : Train ({len(X_train):,} samples, {X_train.shape[1]} features)").style("font-size:14px;")
+                
+                if validation_strategy == "holdout" and X_val is not None:
+                    ui.label(f"• Validation : Hold-out ({len(X_val):,} samples)").style("font-size:14px;")
+                elif validation_strategy == "cv":
+                    ui.label(f"• Validation : {cv_folds}-Fold Cross-Validation").style("font-size:14px;")
+                
+                ui.label("• Random State : 42 (reproductibilité)").style("font-size:14px;")
+                ui.label(f"• Métriques : {', '.join(metrics_to_track)}").style("font-size:14px;")
+        
+        # ==================== MODÈLES À ENTRAÎNER ====================
+        with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
+            ui.label("🤖 Modèles à Entraîner").style("font-weight:700; font-size:20px; margin-bottom:12px;")
+            
+            for algo in selected_algos:
+                algo_info = algo_mapping.get(algo, {})
+                icon = algo_info.get("icon", "")
+                name = algo_info.get("name", algo)
+                
+                # Afficher config
+                if algo == "KNN":
+                    config = algo_configs.get("knn", {})
+                    config_str = f"K={config.get('n_neighbors', 5)}, metric={config.get('metric', 'euclidean')}, weights={config.get('weights', 'distance')}"
+                elif algo == "Decision Tree":
+                    config = algo_configs.get("decision_tree", {})
+                    config_str = f"criterion={config.get('criterion', 'entropy')}, max_depth={config.get('max_depth', 'None')}"
+                elif algo == "Naive Bayes":
+                    config = algo_configs.get("naive_bayes", {})
+                    config_str = f"var_smoothing={config.get('var_smoothing', 1e-9):.1e}"
+                else:
+                    config_str = ""
+                
+                ui.label(f"  {icon} {name}").style("font-size:15px; font-weight:600; margin-bottom:2px;")
+                ui.label(f"     → {config_str}").style("font-size:13px; color:#7f8c8d; margin-bottom:8px;")
+        
+        # ==================== PROGRESS SECTION ====================
+        with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
+            ui.label("🔄 Progression").style("font-weight:700; font-size:20px; margin-bottom:12px;")
+            
+            # Progress global
+            global_status = ui.label("En attente du lancement...").style("font-size:14px; color:#7f8c8d; margin-bottom:8px;")
+            global_progress = ui.linear_progress(value=0, show_value=False).classes("w-full mb-4")
+            
+            # Container pour les cartes de training individuelles
+            training_cards_container = ui.column().classes("w-full")
+        
+        # ==================== BOUTON LANCER ====================
+        launch_button = ui.button(
+            "🚀 Lancer l'Entraînement",
+            on_click=lambda: (launch_button.disable(), ui.timer(0.1, run_training, once=True))
+        ).style(
+            "background:linear-gradient(135deg, #27ae60 0%, #229954 100%); "
+            "color:white; font-weight:700; height:56px; padding:0 40px; border-radius:12px; font-size:18px; "
+            "margin:20px auto; display:block;"
+        )
+        
+        # ==================== RÉSULTATS (caché au début) ====================
+        results_section = ui.column().classes("w-full max-w-6xl")
+        
+        # ==================== NAVIGATION ====================
+        with ui.row().classes("w-full max-w-6xl justify-start gap-4 mt-8"):
+            ui.button(
+                "⬅ Retour Feature Importance",
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/feature_importance'")
+            ).style(
+                "background:#95a5a6; color:white; font-weight:600; height:50px; padding:0 24px; border-radius:10px;"
+            )
+
+
+
+@ui.page('/supervised/results')
+def results_page():
+    """
+     VALIDATION & MÉTRIQUES
+    
+    - Tableau comparatif de performance
+    - Métriques détaillées par classe
+    - Matrices de confusion interactives
+    - Courbes ROC
+    - Courbes Precision-Recall
+    - Feature importance (pour modèles compatibles)
+    - Analyse d'erreurs
+    """
+  
+    
+    # ---------- CONTEXTE ----------
+    training_results = state.get("training_results", {})
+    split = state.get("split", {})
+    target_col = state.get("target_column", None)
+    
+    if not training_results:
+        with ui.column().classes("items-center justify-center w-full h-screen"):
+            ui.label("❌ Aucun résultat d'entraînement disponible.").style(
+                "font-size:18px; color:#c0392b; font-weight:600;"
+            )
+            ui.button("⬅ Retour au Training", on_click=lambda: ui.run_javascript("window.location.href='/supervised/training'"))
+        return
+    
+    # Déterminer classes
+    y_val = split.get("y_val")
+    if y_val is not None:
+        all_classes = sorted(np.unique(y_val))
+    else:
+        # Fallback
+        first_result = list(training_results.values())[0]
+        all_classes = sorted(np.unique(first_result["y_true"]))
+    
+    n_classes = len(all_classes)
+    
+    # ---------- FONCTIONS HELPERS ----------
+    def get_medal(rank):
+        """Retourne médaille selon rang"""
+        if rank == 1:
+            return "🥇"
+        elif rank == 2:
+            return "🥈"
+        elif rank == 3:
+            return "🥉"
+        else:
+            return ""
+    
+    def create_comparison_table():
+        """Crée tableau comparatif des performances"""
+        rows = []
+        
+        for algo_name, result in training_results.items():
+            val_metrics = result.get("val_metrics", {})
+            train_time = result.get("train_time", 0)
+            
+            rows.append({
+                "Modèle": algo_name,
+                "Accuracy": val_metrics.get("accuracy", 0),
+                "Precision": val_metrics.get("precision", 0),
+                "Recall": val_metrics.get("recall", 0),
+                "F1-Score": val_metrics.get("f1", 0),
+                "AUC-ROC": val_metrics.get("auc_roc", 0) if val_metrics.get("auc_roc") is not None else 0,
+                "Time": train_time
+            })
+        
+        df = pd.DataFrame(rows)
+        
+        # Trier par Accuracy
+        df = df.sort_values("Accuracy", ascending=False).reset_index(drop=True)
+        
+        # Ajouter rangs
+        df["Rank"] = range(1, len(df) + 1)
+        
+        return df
+    
+    def create_confusion_matrix_plot(algo_name):
+        """Crée heatmap de la matrice de confusion"""
+        result = training_results.get(algo_name)
+        if not result:
+            return None
+        
+        cm = result.get("confusion_matrix")
+        if cm is None:
+            return None
+        
+        # Normaliser
+        cm_normalized = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+        
+        fig = go.Figure(data=go.Heatmap(
+            z=cm_normalized,
+            x=[f"Pred {c}" for c in all_classes],
+            y=[f"Actual {c}" for c in all_classes],
+            colorscale='Blues',
+            text=cm,
+            texttemplate='%{text}',
+            textfont={"size": 16},
+            hovertemplate='Actual: %{y}<br>Predicted: %{x}<br>Count: %{text}<br>Normalized: %{z:.2%}<extra></extra>'
+        ))
+        
+        fig.update_layout(
+            title=f"{algo_name} - Confusion Matrix",
+            xaxis_title="Predicted",
+            yaxis_title="Actual",
+            height=400,
+            paper_bgcolor='#f8f9fa',
+            plot_bgcolor='white'
+        )
+        
+        return fig
+    
+    def create_roc_curves():
+        """Crée graphique avec toutes les courbes ROC"""
+        if n_classes != 2:
+            return None
+        
+        fig = go.Figure()
+        
+        # Ligne diagonale (random classifier)
+        fig.add_trace(go.Scatter(
+            x=[0, 1],
+            y=[0, 1],
+            mode='lines',
+            line=dict(dash='dash', color='gray'),
+            name='Random (AUC=0.5)',
+            showlegend=True
+        ))
+        
+        colors = ['#3498db', '#27ae60', '#e74c3c', '#f39c12', '#9b59b6']
+        
+        for idx, (algo_name, result) in enumerate(training_results.items()):
+            y_true = result.get("y_true")
+            y_pred_proba = result.get("y_pred_proba")
+            
+            if y_pred_proba is None:
+                continue
+            
+            # Convertir labels catégoriels en numériques si nécessaire
+            if not all(isinstance(c, (int, np.integer)) for c in all_classes):
+                label_to_idx = {label: idx for idx, label in enumerate(sorted(all_classes))}
+                y_true_numeric = np.array([label_to_idx[label] for label in y_true])
+            else:
+                y_true_numeric = y_true
+            
+            try:
+                fpr, tpr, _ = roc_curve(y_true_numeric, y_pred_proba[:, 1])
+                roc_auc = auc(fpr, tpr)
+                
+                fig.add_trace(go.Scatter(
+                    x=fpr,
+                    y=tpr,
+                    mode='lines',
+                    name=f'{algo_name} (AUC={roc_auc:.3f})',
+                    line=dict(color=colors[idx % len(colors)], width=2)
+                ))
+            except Exception as e:
+                print(f"Erreur ROC pour {algo_name}: {e}")
+        
+        fig.update_layout(
+            title='📈 Courbes ROC (Receiver Operating Characteristic)',
+            xaxis_title='False Positive Rate',
+            yaxis_title='True Positive Rate',
+            height=500,
+            paper_bgcolor='#f8f9fa',
+            plot_bgcolor='white',
+            hovermode='x unified'
+        )
+        
+        return fig
+    
+    def create_precision_recall_curves():
+        """Crée graphique Precision-Recall"""
+        if n_classes != 2:
+            return None
+        
+        fig = go.Figure()
+        
+        colors = ['#3498db', '#27ae60', '#e74c3c', '#f39c12', '#9b59b6']
+        
+        for idx, (algo_name, result) in enumerate(training_results.items()):
+            y_true = result.get("y_true")
+            y_pred_proba = result.get("y_pred_proba")
+            
+            if y_pred_proba is None:
+                continue
+            
+            # Convertir labels catégoriels
+            if not all(isinstance(c, (int, np.integer)) for c in all_classes):
+                label_to_idx = {label: idx for idx, label in enumerate(sorted(all_classes))}
+                y_true_numeric = np.array([label_to_idx[label] for label in y_true])
+            else:
+                y_true_numeric = y_true
+            
+            try:
+                precision, recall, _ = precision_recall_curve(y_true_numeric, y_pred_proba[:, 1])
+                ap = average_precision_score(y_true_numeric, y_pred_proba[:, 1])
+                
+                fig.add_trace(go.Scatter(
+                    x=recall,
+                    y=precision,
+                    mode='lines',
+                    name=f'{algo_name} (AP={ap:.3f})',
+                    line=dict(color=colors[idx % len(colors)], width=2)
+                ))
+            except Exception as e:
+                print(f"Erreur PR pour {algo_name}: {e}")
+        
+        fig.update_layout(
+            title='📊 Courbes Precision-Recall',
+            xaxis_title='Recall',
+            yaxis_title='Precision',
+            height=500,
+            paper_bgcolor='#f8f9fa',
+            plot_bgcolor='white',
+            hovermode='x unified'
+        )
+        
+        return fig
+    
+    def create_metrics_comparison_chart():
+        """Crée graphique radar de comparaison"""
+        df_comparison = create_comparison_table()
+        
+        metrics = ['Accuracy', 'Precision', 'Recall', 'F1-Score']
+        
+        fig = go.Figure()
+        
+        colors = ['#3498db', '#27ae60', '#e74c3c', '#f39c12', '#9b59b6']
+        
+        for idx, row in df_comparison.iterrows():
+            values = [row[m] for m in metrics]
+            values.append(values[0])  # Fermer le radar
+            
+            fig.add_trace(go.Scatterpolar(
+                r=values,
+                theta=metrics + [metrics[0]],
+                fill='toself',
+                name=row['Modèle'],
+                line=dict(color=colors[idx % len(colors)])
+            ))
+        
+        fig.update_layout(
+            polar=dict(
+                radialaxis=dict(
+                    visible=True,
+                    range=[0, 1]
+                )
+            ),
+            title=' Comparaison Multi-Métriques (Radar Chart)',
+            height=500,
+            paper_bgcolor='#f8f9fa',
+            showlegend=True
+        )
+        
+        return fig
+    
+    def get_classification_report_df(algo_name):
+        """Récupère le classification report sous forme de DataFrame"""
+        result = training_results.get(algo_name)
+        if not result:
+            return None
+        
+        y_true = result.get("y_true")
+        y_pred = result.get("y_pred")
+        
+        if y_true is None or y_pred is None:
+            return None
+        
+        # Générer report
+        report = classification_report(y_true, y_pred, output_dict=True, zero_division=0)
+        
+        # Convertir en DataFrame
+        df = pd.DataFrame(report).transpose()
+        
+        return df
+    
+    # ---------- INTERFACE ----------
+    with ui.column().classes("w-full items-center p-8").style("background-color:#f8f9fa; min-height:100vh;"):
+        
+        # ==================== HEADER ====================
+        ui.label("📈 RÉSULTATS BASELINE (VALIDATION)").style(
+            "font-weight:700; font-size:32px; color:#2c3e50; margin-bottom:8px; text-align:center;"
+        )
+        ui.label("Analyse comparative des performances").style(
+            "font-size:18px; color:#7f8c8d; margin-bottom:32px; text-align:center;"
+        )
+        
+        # ==================== SECTION A : TABLEAU COMPARATIF ====================
+        with ui.card().classes("w-full max-w-6xl p-6 mb-8"):
+            ui.label("📊 SECTION A : TABLEAU COMPARATIF DE PERFORMANCE").style(
+                "font-weight:700; font-size:24px; color:#2c3e50; margin-bottom:16px;"
+            )
+            
+            df_comparison = create_comparison_table()
+            
+            # Créer tableau HTML stylisé
+            table_html = """
+            <div style="background:#1a1a1a; border-radius:12px; padding:20px; overflow-x:auto; margin-bottom:24px;">
+            <table style="width:100%; color:#00ff88; font-family:monospace; font-size:14px; border-collapse:collapse;">
+                <thead>
+                    <tr style="border-bottom:2px solid #00ff88;">
+                        <th style="text-align:left; padding:12px; color:#00ffff;">Modèle</th>
+                        <th style="text-align:center; padding:12px;">Accuracy</th>
+                        <th style="text-align:center; padding:12px;">Precision</th>
+                        <th style="text-align:center; padding:12px;">Recall</th>
+                        <th style="text-align:center; padding:12px;">F1-Score</th>
+                        <th style="text-align:center; padding:12px;">AUC-ROC</th>
+                        <th style="text-align:center; padding:12px;">Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+            """
+            
+            for idx, row in df_comparison.iterrows():
+                medal = get_medal(row["Rank"])
+                
+                # Couleur selon rang
+                if row["Rank"] == 1:
+                    row_color = "#ffd700"
+                elif row["Rank"] == 2:
+                    row_color = "#c0c0c0"
+                elif row["Rank"] == 3:
+                    row_color = "#cd7f32"
+                else:
+                    row_color = "#00ff88"
+                
+                # Formatter AUC-ROC (éviter erreur si 0 ou None)
+                auc_value = row['AUC-ROC']
+                if auc_value is None or auc_value == 0:
+                    auc_display = 'N/A'
+                else:
+                    auc_display = f"{auc_value:.3f}"
+                
+                table_html += f"""
+                    <tr style="border-bottom:1px solid #333;">
+                        <td style="padding:10px; font-weight:600; color:{row_color};">{medal} {row['Modèle']}</td>
+                        <td style="text-align:center; padding:10px;">{row['Accuracy']:.3f}</td>
+                        <td style="text-align:center; padding:10px;">{row['Precision']:.3f}</td>
+                        <td style="text-align:center; padding:10px;">{row['Recall']:.3f}</td>
+                        <td style="text-align:center; padding:10px;">{row['F1-Score']:.3f}</td>
+                        <td style="text-align:center; padding:10px;">{auc_display}</td>
+                        <td style="text-align:center; padding:10px;">{row['Time']:.2f}s</td>
+                    </tr>
+                """
+            
+            table_html += """
+                </tbody>
+            </table>
+            </div>
+            """
+            
+            ui.html(table_html, sanitize=False)
+            
+            # Meilleur modèle
+            best_model = df_comparison.iloc[0]
+            with ui.card().classes("w-full p-4").style("background:linear-gradient(135deg, #27ae60 0%, #229954 100%);"):
+                ui.label(f"🥇 Meilleur modèle baseline : {best_model['Modèle']}").style(
+                    "font-weight:700; font-size:18px; color:white; margin-bottom:4px;"
+                )
+                ui.label(f"Accuracy: {best_model['Accuracy']:.1%} | F1-Score: {best_model['F1-Score']:.3f} | Time: {best_model['Time']:.2f}s").style(
+                    "font-size:14px; color:white;"
+                )
+            
+            # Légende
+            with ui.card().classes("w-full p-3 mt-4").style("background:#fff3cd;"):
+                ui.label("📖 Légende :").style("font-weight:700; margin-bottom:6px;")
+                ui.label("🥇 Meilleur  🥈 Second  🥉 Troisième").style("font-size:14px;")
+        
+        # ==================== SECTION B : MÉTRIQUES DÉTAILLÉES ====================
+        with ui.card().classes("w-full max-w-6xl p-6 mb-8"):
+            ui.label("📋 SECTION B : MÉTRIQUES DÉTAILLÉES PAR CLASSE").style(
+                "font-weight:700; font-size:24px; color:#2c3e50; margin-bottom:16px;"
+            )
+            
+            # Onglets pour chaque modèle
+            with ui.tabs().classes('w-full') as tabs:
+                for algo_name in training_results.keys():
+                    ui.tab(algo_name)
+            
+            with ui.tab_panels(tabs, value=list(training_results.keys())[0]).classes('w-full'):
+                for algo_name in training_results.keys():
+                    with ui.tab_panel(algo_name):
+                        result = training_results[algo_name]
+                        
+                        # Icon selon algo
+                        if "KNN" in algo_name:
+                            icon = ""
+                        elif "Tree" in algo_name:
+                            icon = "🌳"
+                        elif "Forest" in algo_name:
+                            icon = "🌲"
+                        elif "Bayes" in algo_name:
+                            icon = "📊"
+                        else:
+                            icon = "🤖"
+                        
+                        ui.label(f"{icon} {algo_name.upper()} - MÉTRIQUES DÉTAILLÉES").style(
+                            "font-weight:700; font-size:20px; margin-bottom:16px;"
+                        )
+                        
+                        # Classification Report
+                        report_df = get_classification_report_df(algo_name)
+                        
+                        if report_df is not None:
+                            # Formater et afficher
+                            report_html = """
+                            <div style="background:#1a1a1a; border-radius:12px; padding:20px; overflow-x:auto; margin-bottom:24px;">
+                            <div style="color:#00ffff; font-family:monospace; font-size:14px; margin-bottom:12px; font-weight:700;">
+                                Classification Report :
+                            </div>
+                            <table style="width:100%; color:#00ff88; font-family:monospace; font-size:13px; border-collapse:collapse;">
+                                <thead>
+                                    <tr style="border-bottom:2px solid #00ff88;">
+                                        <th style="text-align:left; padding:10px; color:#00ffff;">Class</th>
+                                        <th style="text-align:center; padding:10px;">Precision</th>
+                                        <th style="text-align:center; padding:10px;">Recall</th>
+                                        <th style="text-align:center; padding:10px;">F1-Score</th>
+                                        <th style="text-align:center; padding:10px;">Support</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                            """
+                            
+                            for class_name in all_classes:
+                                if str(class_name) in report_df.index:
+                                    row = report_df.loc[str(class_name)]
+                                    report_html += f"""
+                                        <tr style="border-bottom:1px solid #333;">
+                                            <td style="padding:10px; font-weight:600;">Class {class_name}</td>
+                                            <td style="text-align:center; padding:10px;">{row['precision']:.2f}</td>
+                                            <td style="text-align:center; padding:10px;">{row['recall']:.2f}</td>
+                                            <td style="text-align:center; padding:10px;">{row['f1-score']:.2f}</td>
+                                            <td style="text-align:center; padding:10px;">{int(row['support'])}</td>
+                                        </tr>
+                                    """
+                            
+                            # Ajouter moyennes
+                            if 'accuracy' in report_df.index:
+                                acc_row = report_df.loc['accuracy']
+                                report_html += f"""
+                                    <tr style="border-top:2px solid #00ff88; border-bottom:1px solid #333;">
+                                        <td style="padding:10px; font-weight:700; color:#ffd700;">Accuracy</td>
+                                        <td style="text-align:center; padding:10px;" colspan="3">{acc_row['precision']:.2f}</td>
+                                        <td style="text-align:center; padding:10px;">{int(acc_row['support'])}</td>
+                                    </tr>
+                                """
+                            
+                            for avg_type in ['macro avg', 'weighted avg']:
+                                if avg_type in report_df.index:
+                                    avg_row = report_df.loc[avg_type]
+                                    report_html += f"""
+                                        <tr style="border-bottom:1px solid #333;">
+                                            <td style="padding:10px; font-weight:600; color:#ffff00;">{avg_type.title()}</td>
+                                            <td style="text-align:center; padding:10px;">{avg_row['precision']:.2f}</td>
+                                            <td style="text-align:center; padding:10px;">{avg_row['recall']:.2f}</td>
+                                            <td style="text-align:center; padding:10px;">{avg_row['f1-score']:.2f}</td>
+                                            <td style="text-align:center; padding:10px;">{int(avg_row['support'])}</td>
+                                        </tr>
+                                    """
+                            
+                            report_html += """
+                                </tbody>
+                            </table>
+                            </div>
+                            """
+                            
+                            ui.html(report_html, sanitize=False)
+                        
+                        # Observations
+                        y_true = result.get("y_true")
+                        if y_true is not None:
+                            class_counts = pd.Series(y_true).value_counts()
+                            minority_class = class_counts.idxmin()
+                            minority_pct = (class_counts.min() / class_counts.sum() * 100)
+                            
+                            with ui.card().classes("w-full p-4").style("background:#fff3cd;"):
+                                ui.label("⚠️ Observations :").style("font-weight:700; margin-bottom:8px;")
+                                
+                                if minority_pct < 30:
+                                    ui.label(f"• Classe minoritaire ({minority_class}) : {minority_pct:.1f}% des données").style("font-size:14px;")
+                                    ui.label("• Dataset déséquilibré - Considérer class_weight='balanced' ou SMOTE").style("font-size:14px;")
+                                
+                                if report_df is not None and str(minority_class) in report_df.index:
+                                    minority_recall = report_df.loc[str(minority_class), 'recall']
+                                    if minority_recall < 0.7:
+                                        ui.label(f"• Recall faible pour classe {minority_class} ({minority_recall:.2f}) - Modèle peine à détecter cette classe").style("font-size:14px; color:#01335A;")
+        
+        # ==================== SECTION C : MATRICES DE CONFUSION ====================
+        with ui.card().classes("w-full max-w-6xl p-6 mb-8"):
+            ui.label(" SECTION C : MATRICES DE CONFUSION").style(
+                "font-weight:700; font-size:24px; color:#2c3e50; margin-bottom:16px;"
+            )
+            
+            ui.label("💡 Cliquez sur une cellule pour analyser les erreurs").style(
+                "font-size:14px; color:#7f8c8d; margin-bottom:16px;"
+            )
+            
+            # Grid de matrices
+            n_models = len(training_results)
+            cols_per_row = 3
+            
+            with ui.column().classes("w-full gap-4"):
+                row_container = None
+                
+                for idx, algo_name in enumerate(training_results.keys()):
+                    if idx % cols_per_row == 0:
+                        row_container = ui.row().classes("w-full gap-4")
+                    
+                    with row_container:
+                        with ui.column().classes("flex-1"):
+                            cm_fig = create_confusion_matrix_plot(algo_name)
+                            if cm_fig:
+                                ui.plotly(cm_fig).classes("w-full")
+        
+        # ==================== SECTION D : COURBES ROC ====================
+        if n_classes == 2:
+            with ui.card().classes("w-full max-w-6xl p-6 mb-8"):
+                ui.label("📈 SECTION D : COURBES ROC").style(
+                    "font-weight:700; font-size:24px; color:#2c3e50; margin-bottom:16px;"
+                )
+                
+                roc_fig = create_roc_curves()
+                if roc_fig:
+                    ui.plotly(roc_fig).classes("w-full")
+                    
+                    with ui.card().classes("w-full p-4 mt-4").style("background:#e3f2fd;"):
+                        ui.label("💡 Interprétation ROC :").style("font-weight:700; margin-bottom:8px;")
+                        ui.label("• AUC = 1.0 : Classificateur parfait").style("font-size:14px;")
+                        ui.label("• AUC = 0.5 : Classificateur aléatoire (pas mieux que le hasard)").style("font-size:14px;")
+                        ui.label("• AUC > 0.8 : Bonne performance").style("font-size:14px;")
+                        ui.label("• Courbe plus proche du coin supérieur gauche = meilleur modèle").style("font-size:14px;")
+        
+        # ==================== SECTION E : COURBES PRECISION-RECALL ====================
+        if n_classes == 2:
+            with ui.card().classes("w-full max-w-6xl p-6 mb-8"):
+                ui.label("📊 SECTION E : COURBES PRECISION-RECALL").style(
+                    "font-weight:700; font-size:24px; color:#2c3e50; margin-bottom:16px;"
+                )
+                
+                ui.label("Important pour classes déséquilibrées").style(
+                    "font-size:16px; color:#7f8c8d; margin-bottom:16px;"
+                )
+                
+                pr_fig = create_precision_recall_curves()
+                if pr_fig:
+                    ui.plotly(pr_fig).classes("w-full")
+                    
+                    # Calculer % classe minoritaire
+                    first_result = list(training_results.values())[0]
+                    y_true = first_result.get("y_true")
+                    if y_true is not None:
+                        class_counts = pd.Series(y_true).value_counts()
+                        minority_pct = (class_counts.min() / class_counts.sum() * 100)
+                        
+                        with ui.card().classes("w-full p-4 mt-4").style("background:#fff3cd;"):
+                            ui.label("💡 Rappel :").style("font-weight:700; margin-bottom:8px;")
+                            ui.label(f"• Classe minoritaire représente {minority_pct:.1f}% des données").style("font-size:14px;")
+                            ui.label("• Precision-Recall plus informative que ROC pour classes déséquilibrées").style("font-size:14px;")
+                            ui.label("• AP (Average Precision) résume la courbe en un seul score").style("font-size:14px;")
+        
+        # ==================== SECTION F : COMPARAISON RADAR ====================
+        with ui.card().classes("w-full max-w-6xl p-6 mb-8"):
+            ui.label(" SECTION F : COMPARAISON MULTI-MÉTRIQUES").style(
+                "font-weight:700; font-size:24px; color:#2c3e50; margin-bottom:16px;"
+            )
+            
+            radar_fig = create_metrics_comparison_chart()
+            if radar_fig:
+                ui.plotly(radar_fig).classes("w-full")
+        
+        # ==================== RECOMMANDATIONS ====================
+        with ui.card().classes("w-full max-w-6xl p-6 mb-8").style(
+            "background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);"
+        ):
+            ui.label("💡 RECOMMANDATIONS POUR AMÉLIORER").style(
+                "font-weight:700; font-size:24px; color:white; margin-bottom:16px; text-align:center;"
+            )
+            
+            with ui.column().classes("w-full gap-4"):
+                # Analyser résultats pour recommandations
+                best_model = df_comparison.iloc[0]
+                best_acc = best_model["Accuracy"]
+                
+                with ui.card().classes("p-4"):
+                    ui.label("📈 Pistes d'Amélioration").style("font-weight:700; font-size:18px; margin-bottom:12px;")
+                    
+                    if best_acc < 0.85:
+                        ui.label("🔴 Performance modérée (< 85%)").style("font-weight:600; color:#e74c3c; margin-bottom:8px;")
+                        ui.label("→ Essayer Grid Search pour optimiser hyperparamètres").style("font-size:14px;")
+                        ui.label("→ Ajouter plus de features engineering").style("font-size:14px;")
+                        ui.label("→ Collecter plus de données si possible").style("font-size:14px;")
+                    
+                    elif best_acc < 0.92:
+                        ui.label("🟡 Bonne performance (85-92%)").style("font-weight:600; color:#f39c12; margin-bottom:8px;")
+                        ui.label("→ Hyperparameter tuning peut encore améliorer").style("font-size:14px;")
+                        ui.label("→ Tester ensemble methods (stacking/blending)").style("font-size:14px;")
+                    
+                    else:
+                        ui.label("🟢 Excellente performance (> 92%)").style("font-weight:600; color:#27ae60; margin-bottom:8px;")
+                        ui.label("→ Valider sur test set pour confirmer").style("font-size:14px;")
+                        ui.label("→ Surveiller overfitting (comparer train vs val)").style("font-size:14px;")
+                
+                with ui.card().classes("p-4"):
+                    ui.label(" Prochaines Étapes").style("font-weight:700; font-size:18px; margin-bottom:12px;")
+                    ui.label("1. Hyperparameter Tuning (Grid Search / Random Search)").style("font-size:14px;")
+                    ui.label("2. Validation sur Test Set (évaluation finale)").style("font-size:14px;")
+                    ui.label("3. Analyse d'Erreurs (comprendre les faux positifs/négatifs)").style("font-size:14px;")
+                    ui.label("4. Déploiement du meilleur modèle").style("font-size:14px;")
+        
+        # ==================== NAVIGATION ====================
+        with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
+            ui.button(
+                "⬅ Retour au Training",
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/training'")
+            ).style(
+                "background:#95a5a6; color:white; font-weight:600; height:56px; padding:0 32px; border-radius:12px; font-size:16px;"
+            )
+            
+            ui.button(
+                "🔬 Hyperparameter Tuning",
+                on_click=lambda: ui.notify("🚧 Fonctionnalité en développement", color="info")
+            ).style(
+                "background:#3498db; color:white; font-weight:600; height:56px; padding:0 32px; border-radius:12px; font-size:16px;"
+            )
+            
+            ui.button(
+                " Évaluation Finale (Test Set)",
+                on_click=lambda: ui.notify("🚧 Fonctionnalité en développement", color="info")
+            ).style(
+                "background:linear-gradient(135deg, #27ae60 0%, #229954 100%); "
+                "color:white; font-weight:700; height:56px; padding:0 40px; border-radius:12px; font-size:16px;"
+            )
+
+
+
+
+
+
+
 
 
 
