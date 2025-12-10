@@ -4031,6 +4031,27 @@ def encoding_page():
             )
         return
     
+    # ✅ CORRECTION : Synchroniser le split avec raw_df
+    if split and "X_train" in split:
+        try:
+            new_cols = [c for c in df.columns if c not in split["X_train"].columns and c != target_col]
+            
+            if new_cols:
+                print(f"🔄 Synchronisation des nouvelles features : {new_cols}")
+                
+                for key in ["X_train", "X_val", "X_test"]:
+                    if key in split and isinstance(split[key], pd.DataFrame):
+                        indices = split[key].index
+                        for col in new_cols:
+                            if col in df.columns:
+                                split[key][col] = df.loc[indices, col]
+                
+                state["split"] = split
+                print(f"✅ {len(new_cols)} nouvelles features synchronisées")
+        
+        except Exception as e:
+            print(f"⚠️ Erreur synchronisation : {e}")
+    
     # Préparer df_train
     df_train = None
     if split:
@@ -4039,10 +4060,12 @@ def encoding_page():
         if isinstance(Xtr, pd.DataFrame) and ytr is not None:
             try:
                 df_train = Xtr.copy()
-                if target_col is not None:
+                if target_col is not None and target_col not in df_train.columns:
                     df_train[target_col] = ytr
-            except Exception:
+            except Exception as e:
+                print(f"⚠️ Erreur création df_train : {e}")
                 df_train = None
+    
     if df_train is None:
         df_train = df.copy()
     
@@ -4070,6 +4093,9 @@ def encoding_page():
     
     def get_recommended_encoding(col):
         """Recommande une méthode d'encodage"""
+        if col not in df.columns:
+            return "Label Encoding", "Colonne introuvable", "⚠️"
+        
         n_unique = df[col].nunique()
         
         if n_unique == 2:
@@ -4102,6 +4128,9 @@ def encoding_page():
     
     def create_distribution_plot(col):
         """Crée un graphique de distribution pour une variable catégorielle"""
+        if col not in df.columns:
+            return None
+        
         counts = df[col].value_counts().head(15)
         
         fig = go.Figure()
@@ -4110,7 +4139,8 @@ def encoding_page():
             y=counts.values,
             marker_color='#01335A',
             text=counts.values,
-            textposition='outside'
+            textposition='outside',
+            opacity=0.8
         ))
         
         fig.update_layout(
@@ -4128,35 +4158,27 @@ def encoding_page():
         return fig
     
     def apply_encoding(df_target, strategies, params, fit_on_train=True, fitted_encoders=None):
-        """
-        Applique les encodages selon les stratégies définies
-        
-        Args:
-            df_target: DataFrame à encoder
-            strategies: Dict {col: method}
-            params: Dict {col: params}
-            fit_on_train: Si True, fit les encoders. Si False, utilise fitted_encoders
-            fitted_encoders: Dict des encoders déjà fitted (obligatoire si fit_on_train=False)
-        """
+        """Applique les encodages selon les stratégies définies"""
         df_result = df_target.copy()
         encoders = {} if fit_on_train else fitted_encoders
         
         for col, method in strategies.items():
             if col not in df_result.columns:
+                print(f"⚠️ Colonne {col} introuvable dans df_target")
                 continue
             
             try:
                 if method == "Label Encoding":
                     if fit_on_train:
                         le = LabelEncoder()
-                        le.fit(df_train[col].dropna())
-                        df_result[col] = le.transform(df_result[col])
+                        le.fit(df_train[col].dropna().astype(str))
+                        df_result[col] = le.transform(df_result[col].astype(str))
                         encoders[col] = {"encoder": le, "method": method}
                     else:
                         if fitted_encoders and col in fitted_encoders:
                             le = fitted_encoders[col]["encoder"]
                             known_classes = set(le.classes_)
-                            df_result[col] = df_result[col].apply(
+                            df_result[col] = df_result[col].astype(str).apply(
                                 lambda x: le.transform([x])[0] if x in known_classes else -1
                             )
                 
@@ -4188,7 +4210,7 @@ def encoding_page():
                     order = params.get(col, {}).get("order", [])
                     if order:
                         mapping = {val: idx for idx, val in enumerate(order)}
-                        df_result[col] = df_result[col].map(mapping).fillna(-1)
+                        df_result[col] = df_result[col].map(mapping).fillna(-1).astype(int)
                         if fit_on_train:
                             encoders[col] = {"method": method, "order": order, "mapping": mapping}
                 
@@ -4237,6 +4259,10 @@ def encoding_page():
     
     def open_encoding_modal(col_name):
         """Ouvre un modal pour configurer l'encodage d'une colonne"""
+        if col_name not in df.columns:
+            ui.notify(f"⚠️ Colonne {col_name} introuvable", color="warning")
+            return
+        
         current_method = state.get("encoding_strategy", {}).get(col_name, "")
         current_params = state.get("encoding_params", {}).get(col_name, {})
         
@@ -4247,7 +4273,8 @@ def encoding_page():
         
         with ui.dialog() as dialog, ui.card().classes("w-full max-w-4xl").style(
             "padding:0 !important; border-radius:16px !important; "
-            "box-shadow:0 10px 40px rgba(0,0,0,0.15) !important;"
+            "box-shadow:0 10px 40px rgba(0,0,0,0.15) !important; max-height:90vh !important; "
+            "overflow-y:auto !important;"
         ):
             # Header
             with ui.column().classes("w-full").style(
@@ -4296,7 +4323,8 @@ def encoding_page():
                     # Graphique
                     with ui.column().classes("flex-1"):
                         dist_plot = create_distribution_plot(col_name)
-                        ui.plotly(dist_plot).style("width:100% !important;")
+                        if dist_plot:
+                            ui.plotly(dist_plot).style("width:100% !important;")
                 
                 # Recommandation
                 with ui.card().classes("w-full mb-6").style(
@@ -4357,8 +4385,8 @@ def encoding_page():
 - Pas d'explosion dimensionnelle
 
 ⚠️ **Attention** :
-- Impose un ordre arbitraire (peut biaiser les modèles basés sur la distance)
-- Déconseillé pour les modèles linéaires avec >2 catégories
+- Impose un ordre arbitraire
+- Peut biaiser les modèles basés sur la distance
                                 """).style("color:#2c3e50 !important; font-size:13px !important;")
                         
                         elif method == "One-Hot Encoding":
@@ -4373,22 +4401,15 @@ def encoding_page():
 ✅ **Avantages** :
 - Pas d'ordre imposé
 - Très interprétable
-- Idéal pour modèles linéaires
 
 ❌ **Inconvénients** :
 - Explosion dimensionnelle si haute cardinalité
-- Augmente la sparsité
                                 """).style("color:#2c3e50 !important; font-size:13px !important;")
                             
                             drop_first_checkbox = ui.checkbox(
                                 "Drop first (éviter multicolinéarité)",
                                 value=current_params.get("drop_first", True)
                             ).style("margin-top:8px !important;")
-                            
-                            ui.label("💡 Recommandé pour éviter la redondance dans les modèles linéaires").style(
-                                "font-size:12px !important; color:#636e72 !important; "
-                                "margin-left:28px !important; font-style:italic !important;"
-                            )
                         
                         elif method == "Ordinal Encoding":
                             with ui.card().classes("w-full p-4 mb-4").style(
@@ -4397,13 +4418,11 @@ def encoding_page():
                                 ui.markdown("""
 **📌 Ordinal Encoding**
 
-**Principe** : Assigne des entiers selon un ordre naturel défini
+**Principe** : Assigne des entiers selon un ordre naturel
 
-✅ **Avantages** :
-- Capture l'ordre naturel (ex: Low < Medium < High)
-- Pas d'explosion dimensionnelle
+✅ Capture l'ordre naturel (ex: Low < Medium < High)
 
-⚠️ **Applicable uniquement si ordre naturel existe**
+⚠️ Applicable uniquement si ordre naturel existe
                                 """).style("color:#2c3e50 !important; font-size:13px !important;")
                             
                             ui.label("Définir l'ordre (du plus bas au plus haut) :").style(
@@ -4421,7 +4440,7 @@ def encoding_page():
                                             "display:flex !important; align-items:center !important; "
                                             "justify-content:center !important; border-radius:6px !important;"
                                         ):
-                                            ui.label(str(idx)).style("font-weight:600 !important; font-size:13px !important;")
+                                            ui.label(str(idx)).style("font-weight:600 !important;")
                                         
                                         inp = ui.input(value=str(val)).props("outlined dense").classes("flex-1")
                                         order_inputs.append(inp)
@@ -4433,16 +4452,12 @@ def encoding_page():
                                 ui.markdown("""
 **📌 Frequency Encoding**
 
-**Principe** : Remplace chaque modalité par sa fréquence d'apparition
+**Principe** : Remplace chaque modalité par sa fréquence
 
 ✅ **Avantages** :
 - Simple et efficace
 - Pas de data leakage
 - Une seule colonne générée
-
-❌ **Limites** :
-- Perd l'information sémantique
-- Plusieurs modalités peuvent avoir la même fréquence
                                 """).style("color:#2c3e50 !important; font-size:13px !important;")
                         
                         elif method == "Target Encoding":
@@ -4455,14 +4470,9 @@ def encoding_page():
 
 **Principe** : Remplace chaque modalité par la moyenne de la target
 
-✅ **Avantages** :
-- Capture directement la relation avec la target
-- Une seule colonne générée
-- Très efficace pour haute cardinalité
+✅ Capture directement la relation avec la target
 
-⚠️ **Risques** :
-- **Overfitting** : mémorisation des patterns du train
-- **Data leakage** : doit être fait avec cross-validation en prod
+⚠️ **Risques** : Overfitting et data leakage possibles
                                 """).style("color:#856404 !important; font-size:13px !important;")
                             
                             smoothing_input = ui.number(
@@ -4471,14 +4481,6 @@ def encoding_page():
                                 min=0,
                                 max=100
                             ).props("outlined").classes("w-full")
-                            
-                            ui.label(
-                                "💡 Plus le smoothing est élevé, plus on régularise vers la moyenne globale "
-                                "(réduit l'overfitting)"
-                            ).style(
-                                "font-size:12px !important; color:#636e72 !important; "
-                                "margin-top:8px !important; font-style:italic !important;"
-                            )
                 
                 method_select.on_value_change(lambda: update_params_ui())
                 update_params_ui()
@@ -4506,6 +4508,7 @@ def encoding_page():
                         
                         ui.notify(f"✅ Encodage configuré pour {col_name}", color="positive")
                         dialog.close()
+                        ui.run_javascript("setTimeout(() => window.location.reload(), 500);")
                     
                     ui.button("Sauvegarder", on_click=save_encoding).style(
                         "background:#01335A !important; color:white !important; border-radius:8px !important; "
@@ -4517,7 +4520,7 @@ def encoding_page():
     def apply_all_encodings():
         """Applique tous les encodages et passe à l'étape suivante"""
         strategies = state.get("encoding_strategy", {})
-        split = state.get("split", {})
+        split_data = state.get("split", {})
 
         if not strategies:
             ui.notify("⚠️ Aucun encodage configuré", color="warning")
@@ -4531,11 +4534,11 @@ def encoding_page():
                 "font-weight:700 !important; font-size:20px !important; color:#01335A !important; "
                 "margin-bottom:16px !important;"
             )
-            ui.label("Voulez-vous appliquer les encodages sur tous les datasets (train/val/test) ?").style(
+            ui.label("Voulez-vous appliquer les encodages sur tous les datasets ?").style(
                 "margin-bottom:8px !important; color:#2c3e50 !important; font-size:14px !important;"
             )
-            ui.label("Cette action est irréversible.").style(
-                "color:#e74c3c !important; font-size:13px !important; font-style:italic !important;"
+            ui.label(f"{len(strategies)} encodage(s) configuré(s)").style(
+                "color:#636e72 !important; font-size:13px !important;"
             )
             
             with ui.row().classes("w-full justify-end gap-3 mt-6"):
@@ -4548,10 +4551,10 @@ def encoding_page():
                         params = state.get("encoding_params", {})
                         
                         # FIT sur X_train uniquement
-                        if split and "X_train" in split:
-                            df_train_for_fit = split["X_train"].copy()
-                            if target_col and "y_train" in split:
-                                df_train_for_fit[target_col] = split["y_train"]
+                        if split_data and "X_train" in split_data:
+                            df_train_for_fit = split_data["X_train"].copy()
+                            if target_col and "y_train" in split_data and target_col not in df_train_for_fit.columns:
+                                df_train_for_fit[target_col] = split_data["y_train"]
                         else:
                             df_train_for_fit = df_train.copy()
                     
@@ -4563,19 +4566,29 @@ def encoding_page():
                             fit_on_train=True
                         )
                         state["fitted_encoders"] = encoders
+                        
+                        # TRANSFORM sur raw_df
+                        df_result, _ = apply_encoding(
+                            df.copy(),
+                            strategies,
+                            params,
+                            fit_on_train=False,
+                            fitted_encoders=encoders
+                        )
+                        state["raw_df"] = df_result
                     
-                        # TRANSFORM sur chaque split
-                        if split:
+                        # TRANSFORM sur les splits
+                        if split_data:
                             for key in ["X_train", "X_val", "X_test"]:
-                                if key in split and isinstance(split[key], pd.DataFrame):
-                                    split[key], _ = apply_encoding(
-                                        split[key], 
+                                if key in split_data and isinstance(split_data[key], pd.DataFrame):
+                                    split_data[key], _ = apply_encoding(
+                                        split_data[key], 
                                         strategies, 
                                         params, 
                                         fit_on_train=False,
                                         fitted_encoders=encoders
                                     )
-                            state["split"] = split
+                            state["split"] = split_data
                         
                         ui.notify("✅ Encodages appliqués avec succès!", color="positive")
                         dialog.close()
@@ -4587,7 +4600,7 @@ def encoding_page():
                         import traceback
                         traceback.print_exc()
                 
-                ui.button("Confirmer", on_click=confirm_and_next).style(
+                ui.button("Confirmer & Continuer", on_click=confirm_and_next).style(
                     "background:#01335A !important; color:white !important; border-radius:8px !important; "
                     "padding:10px 24px !important; text-transform:none !important; font-weight:600 !important;"
                 )
@@ -4596,6 +4609,7 @@ def encoding_page():
     
     def apply_recommended():
         """Applique automatiquement les recommandations"""
+        count = 0
         for col in cat_cols:
             recommended, _, _ = get_recommended_encoding(col)
             state.setdefault("encoding_strategy", {})[col] = recommended
@@ -4614,9 +4628,10 @@ def encoding_page():
                     params["order"] = list(df[col].unique())[:10]
             
             state.setdefault("encoding_params", {})[col] = params
+            count += 1
         
-        ui.notify("✅ Recommandations appliquées à toutes les variables", color="positive")
-        ui.run_javascript("setTimeout(() => window.location.reload(), 800);")
+        ui.notify(f"✅ {count} recommandations appliquées", color="positive")
+        ui.run_javascript("setTimeout(() => window.location.reload(), 500);")
     
     # ---------- UI PRINCIPALE ----------
     with ui.column().classes("w-full items-center").style(
@@ -4628,7 +4643,7 @@ def encoding_page():
             "font-weight:700 !important; font-size:36px !important; color:#01335A !important; "
             "margin-bottom:8px !important; text-align:center !important; letter-spacing:-0.5px !important;"
         )
-        ui.label("Conversion des variables catégorielles en format numérique pour le machine learning").style(
+        ui.label("Conversion des variables catégorielles en format numérique").style(
             "font-size:16px !important; color:#636e72 !important; margin-bottom:48px !important; "
             "text-align:center !important; font-weight:400 !important;"
         )
@@ -4653,7 +4668,7 @@ def encoding_page():
                         "font-weight:600 !important; font-size:18px !important; color:#155724 !important; "
                         "margin-bottom:8px !important;"
                     )
-                    ui.label("Toutes vos features sont déjà au format numérique - vous pouvez passer à l'étape suivante").style(
+                    ui.label("Toutes vos features sont déjà au format numérique").style(
                         "font-size:14px !important; color:#155724 !important; opacity:0.8 !important;"
                     )
             else:
@@ -4672,7 +4687,6 @@ def encoding_page():
                                     "font-size:12px !important; color:#7f8c8d !important; margin-top:2px !important;"
                                 )
                     
-                    # Métriques
                     pct_cat = round(n_categorical / total_features * 100) if total_features > 0 else 0
                     n_configured = len([c for c in cat_cols if c in state.get("encoding_strategy", {})])
                     
@@ -4680,59 +4694,11 @@ def encoding_page():
                     medium_card = len([c for c in cat_cols if 10 < df[c].nunique() <= 50])
                     high_card = len([c for c in cat_cols if df[c].nunique() > 50])
                     
-                    metric_card("🏷️", "Variables catégorielles", str(n_categorical), f"{pct_cat}% du total")
-                    metric_card("✅", "Configurées", f"{n_configured}/{n_categorical}", "stratégies définies")
-                    metric_card("🟢", "Faible cardinalité", str(low_card), "≤10 modalités")
-                    metric_card("🟡", "Cardinalité moyenne", str(medium_card), "11-50 modalités", "#f39c12")
-                    metric_card("🔴", "Haute cardinalité", str(high_card), ">50 modalités", "#e74c3c")
-        
-        # --- LÉGENDE ---
-        if n_categorical > 0:
-            with ui.card().classes("w-full max-w-6xl mb-6").style(
-                "background:white !important; border-radius:16px !important; padding:24px !important; "
-                "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
-            ):
-                ui.label("📖 Guide de cardinalité").style(
-                    "font-weight:700 !important; font-size:18px !important; color:#01335A !important; "
-                    "margin-bottom:16px !important;"
-                )
-                
-                with ui.row().classes("w-full gap-6"):
-                    with ui.column().classes("flex-1"):
-                        with ui.card().classes("p-4").style(
-                            "background:#d4edda !important; border-radius:8px !important; "
-                            "border-left:3px solid #27ae60 !important; box-shadow:none !important;"
-                        ):
-                            ui.label("🟢 Faible (≤10)").style(
-                                "font-weight:600 !important; color:#155724 !important; margin-bottom:8px !important;"
-                            )
-                            ui.label("One-Hot Encoding safe et recommandé").style(
-                                "font-size:13px !important; color:#155724 !important;"
-                            )
-                    
-                    with ui.column().classes("flex-1"):
-                        with ui.card().classes("p-4").style(
-                            "background:#fff3cd !important; border-radius:8px !important; "
-                            "border-left:3px solid #f39c12 !important; box-shadow:none !important;"
-                        ):
-                            ui.label("🟡 Moyenne (11-50)").style(
-                                "font-weight:600 !important; color:#856404 !important; margin-bottom:8px !important;"
-                            )
-                            ui.label("Frequency ou Target Encoding préférables").style(
-                                "font-size:13px !important; color:#856404 !important;"
-                            )
-                    
-                    with ui.column().classes("flex-1"):
-                        with ui.card().classes("p-4").style(
-                            "background:#f8d7da !important; border-radius:8px !important; "
-                            "border-left:3px solid #e74c3c !important; box-shadow:none !important;"
-                        ):
-                            ui.label("🔴 Élevée (>50)").style(
-                                "font-weight:600 !important; color:#721c24 !important; margin-bottom:8px !important;"
-                            )
-                            ui.label("Target Encoding fortement recommandé").style(
-                                "font-size:13px !important; color:#721c24 !important;"
-                            )
+                    metric_card("🏷️", "Catégorielles", str(n_categorical), f"{pct_cat}% du total")
+                    metric_card("✅", "Configurées", f"{n_configured}/{n_categorical}", "")
+                    metric_card("🟢", "Low", str(low_card), "≤10")
+                    metric_card("🟡", "Medium", str(medium_card), "11-50", "#f39c12")
+                    metric_card("🔴", "High", str(high_card), ">50", "#e74c3c")
         
         # --- TABLE DES FEATURES ---
         if n_categorical > 0:
@@ -4745,8 +4711,9 @@ def encoding_page():
                     "margin-bottom:16px !important;"
                 )
                 
-                ui.label("Cliquez sur une ligne pour configurer l'encodage en détail").style(
-                    "font-size:14px !important; color:#636e72 !important; margin-bottom:20px !important;"
+                ui.label("💡 Cliquez sur une ligne pour configurer l'encodage").style(
+                    "font-size:14px !important; color:#636e72 !important; margin-bottom:20px !important; "
+                    "font-style:italic !important;"
                 )
                 
                 rows = []
@@ -4756,8 +4723,7 @@ def encoding_page():
                     recommended, _, rec_icon = get_recommended_encoding(col)
                     current = state.get("encoding_strategy", {}).get(col, "")
                     
-                    status = "✅ Configuré" if current else "⚪ Non configuré"
-                    status_color = "positive" if current else "grey"
+                    status = "✅" if current else "⚪"
                     
                     rows.append({
                         "Feature": col,
@@ -4771,21 +4737,25 @@ def encoding_page():
                 table = ui.table(
                     columns=[
                         {"name": "Feature", "label": "Feature", "field": "Feature", "align": "left"},
-                        {"name": "Cardinalité", "label": "Cardinalité", "field": "Cardinalité", "align": "center"},
+                        {"name": "Cardinalité", "label": "Card.", "field": "Cardinalité", "align": "center"},
                         {"name": "Niveau", "label": "Niveau", "field": "Niveau", "align": "center"},
-                        {"name": "Recommandé", "label": "Méthode Recommandée", "field": "Recommandé", "align": "left"},
-                        {"name": "Configuré", "label": "Méthode Configurée", "field": "Configuré", "align": "left"},
-                        {"name": "Status", "label": "Statut", "field": "Status", "align": "center"}
+                        {"name": "Recommandé", "label": "Recommandé", "field": "Recommandé", "align": "left"},
+                        {"name": "Configuré", "label": "Configuré", "field": "Configuré", "align": "left"},
+                        {"name": "Status", "label": "✓", "field": "Status", "align": "center"}
                     ],
                     rows=rows,
                     row_key="Feature"
                 ).props("flat bordered").style("width:100% !important; cursor:pointer !important;")
                 
+                # ✅ CORRECTION : Utiliser "row:click" avec deux-points
                 def handle_row_click(e):
-                    if e and "row" in e and "Feature" in e["row"]:
-                        open_encoding_modal(e["row"]["Feature"])
+                    try:
+                        if e and "row" in e and "Feature" in e["row"]:
+                            open_encoding_modal(e["row"]["Feature"])
+                    except Exception as ex:
+                        print(f"Erreur click: {ex}")
                 
-                table.on("row-click", handle_row_click)
+                table.on("row-click", handle_row_click)  # ← Correction ici
                 
                 # Actions rapides
                 with ui.row().classes("w-full gap-3 mt-6"):
@@ -4818,15 +4788,13 @@ def encoding_page():
             )
             
             ui.button(
-                "Transformation des Distributions →",
+                "Suivant →",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/distribution_transform'")
             ).style(
                 "background:#01335A !important; color:white !important; font-weight:600 !important; "
-                "border-radius:8px !important; height:48px !important; min-width:240px !important; "
+                "border-radius:8px !important; height:48px !important; min-width:140px !important; "
                 "font-size:14px !important; text-transform:none !important;"
             )
-
-
 
 
 # ----------------- PAGE 3.8 : TRANSFORMATIONS DE DISTRIBUTIONS -----------------
@@ -5765,15 +5733,18 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
 def feature_scaling_page():
     """
     Page complète pour le Feature Scaling avec détection intelligente des variables continues
+    Style: Nuances de bleu élégantes
     """
    
     
     # ---------- CONTEXTE ----------
     df = state.get("raw_df", None)
     if df is None:
-        with ui.column().classes("items-center justify-center w-full h-screen"):
-            ui.label("❌ Aucun dataset chargé.").style("font-size:18px; color:#c0392b; font-weight:600;")
-            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'"))
+        with ui.column().classes("items-center justify-center w-full h-screen").style("background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);"):
+            ui.label("❌ Aucun dataset chargé.").style("font-size:18px; color:#01579b; font-weight:600;")
+            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")).style(
+                "background:#0277bd; color:white; font-weight:600; padding:12px 24px; border-radius:8px;"
+            )
         return
     
     df_train = df.copy()
@@ -5908,7 +5879,7 @@ def feature_scaling_page():
                     go.Box(
                         y=original_data,
                         name="Original",
-                        marker_color='#e74c3c',
+                        marker_color='#42a5f5',
                         showlegend=(idx == 0)
                     ),
                     row=1, col=idx+1
@@ -5919,7 +5890,7 @@ def feature_scaling_page():
                     go.Box(
                         y=scaled_data,
                         name="Scaled",
-                        marker_color='#01335A',
+                        marker_color='#01579b',
                         showlegend=(idx == 0)
                     ),
                     row=2, col=idx+1
@@ -5935,7 +5906,7 @@ def feature_scaling_page():
             title_text=f"📊 Comparaison AVANT/APRÈS - {method.upper()}",
             title_font_size=20,
             title_x=0.5,
-            paper_bgcolor='#f8f9fa',
+            paper_bgcolor='#e3f2fd',
             plot_bgcolor='white'
         )
         
@@ -5951,7 +5922,7 @@ def feature_scaling_page():
         else:
             plot_container.clear()
             with plot_container:
-                ui.label("⚠️ Aucune visualisation disponible").style("color:#01335A; font-size:16px;")
+                ui.label("⚠️ Aucune visualisation disponible").style("color:#01579b; font-size:16px;")
     
     def apply_scaling(method):
         ensure_original_saved()
@@ -5964,18 +5935,20 @@ def feature_scaling_page():
         
         if method == "none":
             state["scaling_method"] = "none"
-            ui.notify(" Aucun scaling appliqué", color="positive")
+            ui.notify("✓ Aucun scaling appliqué", color="positive")
             ui.run_javascript("setTimeout(() => window.location.href='/supervised/dimension_reduction', 1000);")
             return
         
         split = state.get("split", {})
 
-        with ui.dialog() as dialog, ui.card().classes("p-6"):
-            ui.label("⚠️ Confirmer l'application").style("font-weight:700; font-size:18px;")
-            ui.label(f"Appliquer **{method.upper()}** sur {len(num_cols)} features continues ?").style("margin-top:8px;")
+        with ui.dialog() as dialog, ui.card().classes("p-6").style("background:white; border-radius:16px;"):
+            ui.label("⚠️ Confirmer l'application").style("font-weight:700; font-size:18px; color:#01579b;")
+            ui.label(f"Appliquer **{method.upper()}** sur {len(num_cols)} features continues ?").style("margin-top:8px; color:#0277bd;")
         
             with ui.row().classes("w-full justify-end gap-2 mt-4"):
-                ui.button("❌ Annuler", on_click=dialog.close).props("flat")
+                ui.button("Annuler", on_click=dialog.close).style(
+                    "background:#90caf9; color:#01579b; font-weight:600; padding:8px 20px; border-radius:8px;"
+                )
             
                 def do_apply():
                     try:
@@ -6000,14 +5973,17 @@ def feature_scaling_page():
                         state["fitted_scaler"] = scaler  # Sauvegarder le scaler fitté
                         state["scaled_columns"] = num_cols
                     
-                        ui.notify(f" Scaling appliqué sans data leakage!", color="positive")
+                        ui.notify(f"✓ Scaling appliqué sans data leakage!", color="positive")
                         dialog.close()
                         ui.run_javascript("setTimeout(() => window.location.href='/supervised/dimension_reduction', 1000);")
                 
                     except Exception as e:
                         ui.notify(f"❌ Erreur: {str(e)}", color="negative")
             
-                ui.button(" Confirmer", on_click=do_apply).style("background:#01335A; color:white; font-weight:600;")
+                ui.button("✓ Confirmer", on_click=do_apply).style(
+                    "background:linear-gradient(135deg, #0277bd 0%, #01579b 100%); "
+                    "color:white; font-weight:600; padding:8px 24px; border-radius:8px;"
+                )
     
         dialog.open()
 
@@ -6017,69 +5993,78 @@ def feature_scaling_page():
     recommended = get_recommendation()
     
     # ---------- INTERFACE ----------
-    with ui.column().classes("w-full items-center p-8").style("background-color:#f8f9fa; min-height:100vh;"):
+    with ui.column().classes("w-full items-center p-8").style(
+        "background: white; min-height:100vh;"
+    ):
         # Header
-        ui.label(" FEATURE SCALING").style(
-            "font-weight:700; font-size:32px; color:#2c3e50; margin-bottom:8px; text-align:center;"
+        ui.label("🔵 FEATURE SCALING").style(
+            "font-weight:700; font-size:32px; color:#01579b; margin-bottom:8px; text-align:center;"
         )
         ui.label("Normalisation/Standardisation des features continues").style(
-            "font-size:18px; color:#7f8c8d; margin-bottom:32px; text-align:center;"
+            "font-size:18px; color:#0277bd; margin-bottom:32px; text-align:center;"
         )
         
         # Info détection intelligente
-        with ui.card().classes("w-full max-w-6xl p-6 mb-8").style("background:#fff3cd; border-left:5px solid #ffc107;"):
-            ui.label(" Détection Intelligente").style("font-weight:700; font-size:18px; color:#856404; margin-bottom:12px;")
+        with ui.card().classes("w-full max-w-6xl p-6 mb-8").style(
+            "background:white; border-left:5px solid #2196f3; border-radius:12px; box-shadow: 0 4px 12px rgba(33, 150, 243, 0.15);"
+        ):
+            ui.label("🔍 Détection Intelligente").style("font-weight:700; font-size:18px; color:#01579b; margin-bottom:12px;")
             with ui.row().classes("w-full gap-8"):
                 with ui.column().classes("flex-1"):
-                    ui.label(f" **{len(num_cols)} features continues** détectées").style("font-size:15px; margin-bottom:4px;")
+                    ui.label(f"📊 **{len(num_cols)} features continues** détectées").style("font-size:15px; margin-bottom:4px; color:#0277bd;")
                     if num_cols:
                         ui.label(f"→ {', '.join(num_cols[:5])}{'...' if len(num_cols) > 5 else ''}").style(
-                            "font-size:13px; color:#666;"
+                            "font-size:13px; color:#42a5f5;"
                         )
                 
                 with ui.column().classes("flex-1"):
-                    ui.label(f"⚠️ **{len(cat_encoded)} variables catégorielles** encodées").style("font-size:15px; margin-bottom:4px;")
+                    ui.label(f"⚙️ **{len(cat_encoded)} variables catégorielles** encodées").style("font-size:15px; margin-bottom:4px; color:#0277bd;")
                     if cat_encoded:
                         ui.label(f"→ {', '.join(cat_encoded[:5])}{'...' if len(cat_encoded) > 5 else ''}").style(
-                            "font-size:13px; color:#666;"
+                            "font-size:13px; color:#42a5f5;"
                         )
-                        ui.label("→ Seront préservées (pas de scaling)").style("font-size:12px; color:#856404; font-style:italic;")
+                        ui.label("→ Seront préservées (pas de scaling)").style("font-size:12px; color:#0288d1; font-style:italic;")
         
         # Objectif
-        with ui.card().classes("w-full max-w-6xl p-6 mb-8").style("background:#e3f2fd; border-left:5px solid #2196f3;"):
-            ui.label(" Objectif principal").style("font-weight:700; font-size:18px; color:#1976d2; margin-bottom:12px;")
+        with ui.card().classes("w-full max-w-6xl p-6 mb-8").style(
+            "background:linear-gradient(135deg, #e1f5fe 0%, #b3e5fc 100%); "
+            "border-left:5px solid #0288d1; border-radius:12px; box-shadow: 0 4px 12px rgba(2, 136, 209, 0.15);"
+        ):
+            ui.label("🎯 Objectif principal").style("font-weight:700; font-size:18px; color:#01579b; margin-bottom:12px;")
             with ui.row().classes("w-full gap-8"):
                 with ui.column().classes("flex-1"):
-                    ui.label("🔴 **CRITIQUE** pour KNN").style("font-size:15px; font-weight:600; margin-bottom:4px;")
-                    ui.label("→ Les distances sont biaisées par les échelles différentes").style("font-size:13px; color:#666;")
+                    ui.label("🔴 **CRITIQUE** pour KNN").style("font-size:15px; font-weight:600; margin-bottom:4px; color:#0277bd;")
+                    ui.label("→ Les distances sont biaisées par les échelles différentes").style("font-size:13px; color:#0288d1;")
                 
                 with ui.column().classes("flex-1"):
-                    ui.label(" **INUTILE** pour C4.5").style("font-size:15px; font-weight:600; margin-bottom:4px;")
-                    ui.label("→ Arbres de décision insensibles aux échelles").style("font-size:13px; color:#666;")
+                    ui.label("🟢 **INUTILE** pour C4.5").style("font-size:15px; font-weight:600; margin-bottom:4px; color:#0277bd;")
+                    ui.label("→ Arbres de décision insensibles aux échelles").style("font-size:13px; color:#0288d1;")
                 
                 with ui.column().classes("flex-1"):
-                    ui.label("🟡 **OPTIONNEL** pour Naive Bayes").style("font-size:15px; font-weight:600; margin-bottom:4px;")
-                    ui.label("→ Dépend de la distribution des données").style("font-size:13px; color:#666;")
+                    ui.label("🔵 **OPTIONNEL** pour Naive Bayes").style("font-size:15px; font-weight:600; margin-bottom:4px; color:#0277bd;")
+                    ui.label("→ Dépend de la distribution des données").style("font-size:13px; color:#0288d1;")
         
         # Analyse des features continues
-        with ui.card().classes("w-full max-w-6xl p-6 mb-8"):
+        with ui.card().classes("w-full max-w-6xl p-6 mb-8").style(
+            "background:white; border-radius:12px; box-shadow: 0 4px 12px rgba(1, 87, 155, 0.1);"
+        ):
             ui.label("📊 Analyse des features continues").style(
-                "font-weight:700; font-size:20px; color:#2c3e50; margin-bottom:16px;"
+                "font-weight:700; font-size:20px; color:#01579b; margin-bottom:16px;"
             )
             
             if features_info:
-                # Tableau amélioré
-                table_html = """<div style="background:#1a1a1a; border-radius:12px; padding:20px; overflow-x:auto;">
-                <table style="width:100%; color:#00ff88; font-family:monospace; font-size:13px; border-collapse:collapse;">
+                # Tableau amélioré avec nuances de bleu
+                table_html = """<div style="background:linear-gradient(135deg, #01579b 0%, #0277bd 100%); border-radius:12px; padding:20px; overflow-x:auto; box-shadow: 0 4px 12px rgba(1, 87, 155, 0.3);">
+                <table style="width:100%; color:#e3f2fd; font-family:'Segoe UI', sans-serif; font-size:13px; border-collapse:collapse;">
                     <thead>
-                        <tr style="border-bottom:2px solid #00ff88;">
-                            <th style="text-align:left; padding:12px; color:#00ffff;">Feature</th>
-                            <th style="text-align:right; padding:12px;">Min</th>
-                            <th style="text-align:right; padding:12px;">Max</th>
-                            <th style="text-align:right; padding:12px;">Range</th>
-                            <th style="text-align:right; padding:12px;">Mean</th>
-                            <th style="text-align:right; padding:12px;">Std</th>
-                            <th style="text-align:center; padding:12px;">Outliers</th>
+                        <tr style="border-bottom:2px solid #42a5f5;">
+                            <th style="text-align:left; padding:12px; color:#90caf9; font-weight:600;">Feature</th>
+                            <th style="text-align:right; padding:12px; color:#90caf9;">Min</th>
+                            <th style="text-align:right; padding:12px; color:#90caf9;">Max</th>
+                            <th style="text-align:right; padding:12px; color:#90caf9;">Range</th>
+                            <th style="text-align:right; padding:12px; color:#90caf9;">Mean</th>
+                            <th style="text-align:right; padding:12px; color:#90caf9;">Std</th>
+                            <th style="text-align:center; padding:12px; color:#90caf9;">Outliers</th>
                         </tr>
                     </thead>
                     <tbody>"""
@@ -6087,10 +6072,10 @@ def feature_scaling_page():
                 for f in features_info:
                     out = "🔴" if f["outliers"] else "🟢"
                     # Highlight pour range > 1000
-                    range_color = "#ffff00" if f["range"] > 1000 else "#00ff88"
+                    range_color = "#64b5f6" if f["range"] > 1000 else "#e3f2fd"
                     table_html += f"""
-                        <tr style="border-bottom:1px solid #333;">
-                            <td style="padding:10px; font-weight:600;">{f['name'][:20]}</td>
+                        <tr style="border-bottom:1px solid #1565c0;">
+                            <td style="padding:10px; font-weight:600; color:#bbdefb;">{f['name'][:20]}</td>
                             <td style="text-align:right; padding:10px;">{f['min']:.2f}</td>
                             <td style="text-align:right; padding:10px;">{f['max']:.2f}</td>
                             <td style="text-align:right; padding:10px; color:{range_color}; font-weight:700;">{f['range']:.2f}</td>
@@ -6106,13 +6091,16 @@ def feature_scaling_page():
                 ui.html(table_html, sanitize=False)
             else:
                 with ui.column().classes("items-center p-8"):
-                    ui.label("❌ Aucune feature continue détectée").style("color:#e74c3c; font-size:16px; font-weight:600;")
-                    ui.label("Toutes les features sont catégorielles ou binaires").style("color:#7f8c8d; font-size:14px;")
+                    ui.label("❌ Aucune feature continue détectée").style("color:#0277bd; font-size:16px; font-weight:600;")
+                    ui.label("Toutes les features sont catégorielles ou binaires").style("color:#42a5f5; font-size:14px;")
         
         # Sélecteur de méthode
-        with ui.card().classes("w-full max-w-5xl p-8 mb-8").style("border:3px solid #e0e0e0; border-radius:16px;"):
+        with ui.card().classes("w-full max-w-5xl p-8 mb-8").style(
+            "background:white; border:3px solid #64b5f6; border-radius:16px; "
+            "box-shadow: 0 6px 16px rgba(33, 150, 243, 0.2);"
+        ):
             ui.label("⚙️ Choisir la méthode de scaling").style(
-                "font-weight:700; font-size:22px; color:#2c3e50; margin-bottom:24px; text-align:center;"
+                "font-weight:700; font-size:22px; color:#01579b; margin-bottom:24px; text-align:center;"
             )
             
             # Select avec options
@@ -6135,8 +6123,9 @@ def feature_scaling_page():
                 "👁️ Prévisualiser",
                 on_click=lambda: preview_scaling(method_select.value)
             ).style(
-                "background:#3498db; color:white; font-weight:600; "
-                "height:48px; width:200px; border-radius:10px; margin:0 auto; display:block;"
+                "background:linear-gradient(135deg, #42a5f5 0%, #2196f3 100%); color:white; font-weight:600; "
+                "height:48px; width:200px; border-radius:10px; margin:0 auto; display:block; "
+                "box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);"
             )
             
             method_select.on_value_change(lambda e: state.update({"scaling_method": e.value}))
@@ -6146,8 +6135,9 @@ def feature_scaling_page():
         
         # Recommandation intelligente
         with ui.card().classes("w-full max-w-5xl p-8 mb-12").style(
-            "background:linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%); "
-            "border:4px solid #1c365c; border-radius:20px; box-shadow:0 8px 24px rgba(76,175,80,0.3);"
+            "background:linear-gradient(135deg, #e1f5fe 0%, #b3e5fc 100%); "
+            "border:4px solid #0288d1; border-radius:20px; "
+            "box-shadow:0 8px 24px rgba(2, 136, 209, 0.3);"
         ):
             method_names = {
                 "standard": "StandardScaler",
@@ -6158,11 +6148,11 @@ def feature_scaling_page():
             }
             
             ui.label("🤖 RECOMMANDATION INTELLIGENTE").style(
-                "font-weight:800; font-size:24px; color:#1c365c; text-align:center; margin-bottom:20px;"
+                "font-weight:800; font-size:24px; color:#01579b; text-align:center; margin-bottom:20px;"
             )
             
             ui.label(f"**{method_names[recommended]}**").style(
-                "font-weight:700; font-size:28px; color:#2e7d32; text-align:center; margin-bottom:16px;"
+                "font-weight:700; font-size:28px; color:#0277bd; text-align:center; margin-bottom:16px;"
             )
             
             # Explication de la recommandation
@@ -6173,7 +6163,7 @@ def feature_scaling_page():
             }
             
             ui.label(explanations.get(recommended, "")).style(
-                "font-size:15px; color:#2e7d32; text-align:center; white-space:pre-line; margin-bottom:20px;"
+                "font-size:15px; color:#0288d1; text-align:center; white-space:pre-line; margin-bottom:20px;"
             )
             
             with ui.row().classes("w-full justify-center gap-6"):
@@ -6184,8 +6174,9 @@ def feature_scaling_page():
                         apply_scaling(recommended)
                     )
                 ).style(
-                    "background:linear-gradient(135deg, #1c365c 0%, #45a049 100%); "
-                    "color:white; font-weight:700; height:56px; padding:0 40px; border-radius:12px;"
+                    "background:linear-gradient(135deg, #0277bd 0%, #01579b 100%); "
+                    "color:white; font-weight:700; height:56px; padding:0 40px; border-radius:12px; "
+                    "box-shadow: 0 6px 16px rgba(1, 87, 155, 0.4);"
                 )
         
         # Navigation
@@ -6194,19 +6185,20 @@ def feature_scaling_page():
                 "⬅ Étape précédente",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/distribution_transform'")
             ).style(
-                "background:#95a5a6; color:white; font-weight:600; "
-                "height:60px; width:260px; border-radius:16px; font-size:16px;"
+                "background:#90caf9; color:#01579b; font-weight:600; "
+                "height:60px; width:260px; border-radius:16px; font-size:16px; "
+                "box-shadow: 0 4px 12px rgba(144, 202, 249, 0.3);"
             )
             
             ui.button(
-                " Appliquer & Continuer",
+                "✓ Appliquer & Continuer",
                 on_click=lambda: apply_scaling(method_select.value)
             ).style(
-                "background:linear-gradient(135deg, #2c3e50 0%, #34495e 100%); "
+                "background:linear-gradient(135deg, #0277bd 0%, #01579b 100%); "
                 "color:white; font-weight:700; height:60px; width:320px; "
-                "border-radius:16px; font-size:16px;"
+                "border-radius:16px; font-size:16px; "
+                "box-shadow: 0 6px 16px rgba(1, 87, 155, 0.4);"
             )
-
 
 
 
