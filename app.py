@@ -15,6 +15,11 @@ import pickle
 import asyncio
 from datetime import datetime
 
+import pandas as pd
+import numpy as np
+import plotly.graph_objects as go
+from scipy.stats import skew, iqr
+    
 # === Manipulation de données ===
 import pandas as pd
 import numpy as np
@@ -533,7 +538,7 @@ def supervised_upload_page():
                 )
 
                 ui.button(
-                    "⬅ Retour",
+                    " Retour",
                     on_click=lambda: ui.run_javascript("window.location.href='/'")
                 ).style(
                     """
@@ -564,7 +569,7 @@ def supervised_preprocessing_page():
             ui.label("❌ Aucun dataset chargé. Veuillez importer un fichier avant de continuer.").style(
                 "font-size:18px !important; color:#c0392b !important; font-weight:600 !important;"
             )
-            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")).style(
+            ui.button(" Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")).style(
                 "margin-top:20px !important; background:#01335A !important; color:white !important; font-weight:600 !important;"
             )
         return
@@ -665,7 +670,7 @@ def supervised_preprocessing_page():
 
         # ---------- BOUTONS NAVIGATION ----------
         with ui.row().classes("justify-between w-full max-w-6xl mt-8"):
-            ui.button("⬅ Retour", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")).style(
+            ui.button(" Retour", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
             )
 
@@ -1185,7 +1190,7 @@ def preprocessing2_page():
             ui.label("❌ Dataset ou target manquants.").style(
                 "font-size:18px; color:#c0392b; font-weight:600;"
             )
-            ui.button("⬅ Retour", on_click=lambda: ui.run_javascript(
+            ui.button(" Retour", on_click=lambda: ui.run_javascript(
                 "window.location.href='/supervised/user_decisions'"
             )).style("margin-top:20px; background:#01335A; color:white; font-weight:600;")
         return
@@ -1413,15 +1418,7 @@ def preprocessing2_page():
 
 @ui.page('/supervised/univariate_analysis')
 def univariate_analysis_page():
-    """
-    Analyse univariée avec design moderne et visualisations interactives
-    Style unifié avec #01335A et layout optimisé
-    """
-    import pandas as pd
-    import numpy as np
-    import plotly.graph_objects as go
-    from scipy.stats import skew, iqr
-    
+
     # Récupération des données train
     split = state.get("split")
     if split is None:
@@ -1430,7 +1427,7 @@ def univariate_analysis_page():
                 "font-size:18px !important; color:#c0392b !important; font-weight:600 !important;"
             )
             ui.button(
-                "⬅ Retour au Preprocessing", 
+                " Retour au Preprocessing", 
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/preprocessing2'")
             ).style(
                 "margin-top:20px !important; background:#01335A !important; color:white !important; "
@@ -1452,7 +1449,7 @@ def univariate_analysis_page():
 
     # ---------- UI PRINCIPALE ----------
     with ui.column().classes("w-full items-center").style(
-        "background:#f0f2f5 !important; min-height:100vh !important; padding:48px 24px !important; "
+        "background:#f0f2f5 !important; min-height:100vh !important; padding:24px !important; "
         "font-family:'Inter', sans-serif !important;"
     ):
         # HEADER
@@ -1461,33 +1458,32 @@ def univariate_analysis_page():
             "margin-bottom:8px !important; text-align:center !important; letter-spacing:-0.5px !important;"
         )
         ui.label("Exploration détaillée de chaque variable (dataset d'entraînement)").style(
-            "font-size:16px !important; color:#636e72 !important; margin-bottom:48px !important; "
+            "font-size:16px !important; color:#636e72 !important; "
             "text-align:center !important; font-weight:400 !important;"
         )
 
         # --- OVERVIEW METRICS ---
         with ui.card().classes("w-full max-w-6xl mb-6").style(
-            "background:white !important; border-radius:16px !important; padding:32px !important; "
+            "background:white !important; border-radius:16px !important; padding:16px !important; "
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
             ui.label(" Vue d'ensemble du dataset").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
-                "margin-bottom:20px !important;"
+                "margin-bottom:6px !important;"
             )
             
             with ui.row().classes("w-full gap-8 items-center justify-around"):
                 def metric_card(icon, label, value, sublabel=""):
                     with ui.column().classes("items-center"):
-                        ui.label(icon).style("font-size:32px !important; margin-bottom:8px !important;")
                         ui.label(value).style(
                             "font-weight:700 !important; font-size:28px !important; color:#01335A !important;"
                         )
                         ui.label(label).style(
-                            "font-size:13px !important; color:#636e72 !important; margin-top:4px !important;"
+                            "font-size:13px !important; color:#636e72 !important; margin-top:2px !important;"
                         )
                         if sublabel:
                             ui.label(sublabel).style(
-                                "font-size:12px !important; color:#7f8c8d !important; margin-top:2px !important;"
+                                "font-size:12px !important; color:#7f8c8d !important; "
                             )
                 
                 metric_card("", "Variables numériques", str(n_numeric), f"{round(n_numeric/total_features*100)}% du total")
@@ -1497,7 +1493,7 @@ def univariate_analysis_page():
 
         # --- FILTRES & TRI ---
         with ui.card().classes("w-full max-w-6xl mb-6").style(
-            "background:white !important; border-radius:16px !important; padding:24px !important; "
+            "background:white !important; border-radius:16px !important; padding:20px !important; "
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
             with ui.row().classes("w-full gap-4 items-end"):
@@ -1694,8 +1690,8 @@ def univariate_analysis_page():
                         with ui.column().classes("w-full gap-2 mb-4"):
                             for icon, msg in alerts:
                                 with ui.card().classes("w-full p-3").style(
-                                    "background:#fff3cd !important; border-radius:8px !important; "
-                                    "border-left:3px solid #f39c12 !important; box-shadow:none !important;"
+                                    "background:#cde4ff !important; border-radius:8px !important; "
+                                    "border-left:3px solid #01335A !important; box-shadow:none !important;"
                                 ):
                                     with ui.row().classes("items-center gap-2"):
                                         ui.label(icon).style("font-size:18px !important;")
@@ -1728,7 +1724,7 @@ def univariate_analysis_page():
             with cards_container:
                 with ui.card().classes("w-full").style(
                     "background:white !important; border-radius:16px !important; padding:28px !important; "
-                    "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important; border-left:4px solid #2ecc71 !important;"
+                    "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important; border-left:4px solid #01335A !important;"
                 ):
                     # Header
                     with ui.row().classes("w-full items-center justify-between mb-4"):
@@ -1770,8 +1766,8 @@ def univariate_analysis_page():
                     # Alertes
                     if n_unique > 50:
                         with ui.card().classes("w-full p-3 mb-4").style(
-                            "background:#fff3cd !important; border-radius:8px !important; "
-                            "border-left:3px solid #f39c12 !important; box-shadow:none !important;"
+                            "background:#cde4ff !important; border-radius:8px !important; "
+                            "border-left:3px solid #01335A !important; box-shadow:none !important;"
                         ):
                             with ui.row().classes("items-center gap-2"):
                                 ui.label("").style("font-size:18px !important;")
@@ -1913,7 +1909,7 @@ def outliers_analysis_page():
     if df is None:
         with ui.column().classes("items-center justify-center w-full h-screen"):
             ui.label("❌ Aucun dataset chargé.").style("font-size:18px; color:#c0392b; font-weight:600;")
-            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")).style(
+            ui.button(" Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")).style(
                 "background:#01335A; color:white; padding:12px 32px; border-radius:8px; margin-top:20px;"
             )
         return
@@ -2187,7 +2183,7 @@ def outliers_analysis_page():
                         f"border-radius:24px; font-weight:600; font-size:13px;"
                     )
                 
-                outlier_color = '#e74c3c' if pct > 5 else ('#f39c12' if pct > 1 else '#01335A')
+                outlier_color = '#e74c3c' if pct > 5 else ('#01335A' if pct > 1 else '#01335A')
                 ui.label(f"Outliers détectés: {n_outliers} ({pct}%)").style(
                     f"color:white; margin-top:12px; font-weight:500; font-size:16px; opacity:0.95;"
                 )
@@ -2275,7 +2271,7 @@ def outliers_analysis_page():
                 # Avertissement
                 if var_type in ['discrete', 'binary', 'constant']:
                     with ui.card().classes("w-full mt-4").style(
-                        "background:#fff9e6; padding:16px; border-radius:12px; border-left:4px solid #f39c12;"
+                        "background:#fff9e6; padding:16px; border-radius:12px; border-left:4px solid #01335A;"
                     ):
                         ui.label("💡 Recommandation").style("font-weight:600; margin-bottom:8px; color:#856404;")
                         
@@ -2519,7 +2515,7 @@ def outliers_analysis_page():
                     pairs = get_correlation_pairs(df_current, threshold=0.7)
                     if pairs:
                         with ui.card().classes("w-full mt-4").style(
-                            "background:#fff9e6; padding:16px; border-radius:12px; border-left:4px solid #f39c12;"
+                            "background:#fff9e6; padding:16px; border-radius:12px; border-left:4px solid #01335A;"
                         ):
                             ui.label(f" {len(pairs)} paires fortement corrélées").style(
                                 "font-weight:600; margin-bottom:8px; color:#856404;"
@@ -2688,7 +2684,7 @@ def multivariate_analysis_page():
                 "font-size:18px; color:#c0392b; font-weight:600;"
             )
             ui.button(
-                "⬅ Retour à l'Upload",
+                " Retour à l'Upload",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")
             ).style(
                 "background:#01335A; color:white; padding:12px 32px; border-radius:8px; margin-top:20px;"
@@ -3047,7 +3043,7 @@ def multivariate_analysis_page():
                     # Afficher les paires fortement corrélées
                     if len(pairs) > 0:
                         with ui.card().classes("w-full mt-4").style(
-                            "background:#fff9e6; padding:16px; border-radius:12px; border-left:4px solid #f39c12;"
+                            "background:#fff9e6; padding:16px; border-radius:12px; border-left:4px solid #01335A;"
                         ):
                             ui.label(f" {len(pairs)} paire(s) fortement corrélée(s) (|r| ≥ 0.8)").style(
                                 "font-weight:600; margin-bottom:8px; color:#856404;"
@@ -3322,7 +3318,7 @@ def missing_values_page():
                 "font-size:18px !important; color:#c0392b !important; font-weight:600 !important;"
             )
             ui.button(
-                "⬅ Retour à l'Upload",
+                " Retour à l'Upload",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")
             ).style(
                 "background:#01335A !important; color:white !important; padding:12px 32px !important; "
@@ -4097,7 +4093,7 @@ def encoding_page():
                 "font-size:18px !important; color:#c0392b !important; font-weight:600 !important;"
             )
             ui.button(
-                "⬅ Retour à l'Upload",
+                " Retour à l'Upload",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")
             ).style(
                 "background:#01335A !important; color:white !important; padding:12px 32px !important; "
@@ -4161,7 +4157,7 @@ def encoding_page():
         if n <= 10:
             return "🟢", "Low", "#27ae60", "green"
         elif n <= 50:
-            return "🟡", "Medium", "#f39c12", "orange"
+            return "🟡", "Medium", "#01335A", "orange"
         else:
             return "🔴", "High", "#e74c3c", "red"
     
@@ -4536,8 +4532,8 @@ def encoding_page():
                         
                         elif method == "Target Encoding":
                             with ui.card().classes("w-full p-4 mb-4").style(
-                                "background:#fff3cd !important; border-radius:8px !important; "
-                                "border-left:3px solid #f39c12 !important; box-shadow:none !important;"
+                                "background:#cde4ff !important; border-radius:8px !important; "
+                                "border-left:3px solid #01335A !important; box-shadow:none !important;"
                             ):
                                 ui.markdown("""
 **📌 Target Encoding**
@@ -4771,7 +4767,7 @@ def encoding_page():
                     metric_card("", "Catégorielles", str(n_categorical), f"{pct_cat}% du total")
                     metric_card("", "Configurées", f"{n_configured}/{n_categorical}", "")
                     metric_card("🟢", "Low", str(low_card), "≤10")
-                    metric_card("🟡", "Medium", str(medium_card), "11-50", "#f39c12")
+                    metric_card("🟡", "Medium", str(medium_card), "11-50", "#01335A")
                     metric_card("🔴", "High", str(high_card), ">50", "#e74c3c")
         
         # --- TABLE DES FEATURES ---
@@ -4899,7 +4895,7 @@ def distribution_transform_page():
                 "font-size:18px !important; color:#c0392b !important; font-weight:600 !important;"
             )
             ui.button(
-                "⬅ Retour à l'Upload",
+                " Retour à l'Upload",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")
             ).style(
                 "background:#01335A !important; color:white !important; padding:12px 32px !important; "
@@ -4976,7 +4972,7 @@ def distribution_transform_page():
         if abs_skew < 0.5:
             return "🟢", "Normal", "#27ae60"
         elif abs_skew < 1.5:
-            return "🟡", "Modéré", "#f39c12"
+            return "🟡", "Modéré", "#01335A"
         else:
             return "🔴", "Fort", "#e74c3c"
     
@@ -5071,7 +5067,7 @@ def distribution_transform_page():
         if abs_skew < 0.5:
             impacts["Naive Bayes"] = ("", "Distribution normale", "#27ae60")
         elif abs_skew < 1.5:
-            impacts["Naive Bayes"] = ("🟡", "Assume normalité (légèrement violée)", "#f39c12")
+            impacts["Naive Bayes"] = ("🟡", "Assume normalité (légèrement violée)", "#01335A")
         else:
             impacts["Naive Bayes"] = ("🔴", "Assume normalité (fortement violée)", "#e74c3c")
         
@@ -5079,9 +5075,9 @@ def distribution_transform_page():
         if abs_skew < 0.5:
             impacts["KNN"] = ("", "Distances équilibrées", "#27ae60")
         elif abs_skew < 1.5:
-            impacts["KNN"] = ("🟡", "Distances légèrement biaisées", "#f39c12")
+            impacts["KNN"] = ("🟡", "Distances légèrement biaisées", "#01335A")
         else:
-            impacts["KNN"] = ("🟡", "Distances biaisées vers extrêmes", "#f39c12")
+            impacts["KNN"] = ("🟡", "Distances biaisées vers extrêmes", "#01335A")
         
         # C4.5
         impacts["Decision Tree"] = ("", "Robuste aux distributions", "#27ae60")
@@ -5261,7 +5257,7 @@ def distribution_transform_page():
                                 )
                             elif has_zero:
                                 ui.label(" Zéros").style(
-                                    "color:#f39c12 !important; font-weight:600 !important; font-size:16px !important;"
+                                    "color:#01335A !important; font-weight:600 !important; font-size:16px !important;"
                                 )
                             else:
                                 ui.label(" Toutes > 0").style(
@@ -5272,7 +5268,7 @@ def distribution_transform_page():
                 if selected_algos:
                     with ui.card().classes("w-full mb-4").style(
                         "background:#fff9e6 !important; padding:20px !important; "
-                        "border-radius:12px !important; border-left:4px solid #f39c12 !important;"
+                        "border-radius:12px !important; border-left:4px solid #01335A !important;"
                     ):
                         ui.label("Impact sur vos algorithmes :").style(
                             "font-weight:700 !important; margin-bottom:12px !important; color:#856404 !important;"
@@ -5678,7 +5674,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                     "font-size:13px !important; justify-content:center !important;"
                 ):
                     ui.label("🔴 Skew > 1.5 : Fortement recommandée").style("color:#e74c3c !important;")
-                    ui.label("🟡 Skew 0.5-1.5 : Optionnelle").style("color:#f39c12 !important;")
+                    ui.label("🟡 Skew 0.5-1.5 : Optionnelle").style("color:#01335A !important;")
                     ui.label("🟢 Skew < 0.5 : Non nécessaire").style("color:#27ae60 !important;")
         
         # Section : Table des features
@@ -5751,7 +5747,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                         
                         if "KNN" in selected_algos:
                             ui.label("🟡 KNN : Transformation utile (stabilise distances)").style(
-                                "font-size:14px !important; color:#f39c12 !important; margin-bottom:4px !important;"
+                                "font-size:14px !important; color:#01335A !important; margin-bottom:4px !important;"
                             )
                         
                         if "Decision Tree" in selected_algos or "C4.5" in selected_algos:
@@ -5816,7 +5812,7 @@ def feature_scaling_page():
     if df is None:
         with ui.column().classes("items-center justify-center w-full h-screen").style("background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);"):
             ui.label("❌ Aucun dataset chargé.").style("font-size:18px; color:#01579b; font-weight:600;")
-            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")).style(
+            ui.button(" Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")).style(
                 "background:#0277bd; color:white; font-weight:600; padding:12px 24px; border-radius:8px;"
             )
         return
@@ -6256,7 +6252,7 @@ def feature_scaling_page():
         # Navigation
         with ui.row().classes("w-full max-w-5xl justify-between mt-16"):
             ui.button(
-                "⬅ Étape précédente",
+                " Étape précédente",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/distribution_transform'")
             ).style(
                 "background:#90caf9; color:#01579b; font-weight:600; "
@@ -6288,7 +6284,7 @@ def dimension_reduction_page():
     if df is None:
         with ui.column().classes("items-center justify-center w-full h-screen"):
             ui.label("❌ Aucun dataset chargé.").style("font-size:18px; color:#c0392b; font-weight:600;")
-            ui.button("⬅ Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'"))
+            ui.button(" Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'"))
         return
     
     target_col = state.get("target_column", None)
@@ -6517,7 +6513,7 @@ def dimension_reduction_page():
                     )
             
             # Recommandations
-            with ui.card().classes("w-full p-4").style("background:#fff3cd; border-left:4px solid #ffc107;"):
+            with ui.card().classes("w-full p-4").style("background:#cde4ff; border-left:4px solid #ffc107;"):
                 ui.label(" Recommandations par algorithme").style("font-weight:700; font-size:16px; margin-bottom:12px;")
                 ui.label(f"• **KNN** : Ratio idéal > 50 {'' if ratio > 50 else ' Curse of dimensionality'}").style("font-size:14px; margin-bottom:6px;")
                 ui.label("• **C4.5** : Pas de limite stricte ").style("font-size:14px; margin-bottom:6px;")
@@ -6645,7 +6641,7 @@ def dimension_reduction_page():
                                 
                                 elif current_method == "feature_selection":
                                     # Configuration Feature Selection
-                                    with ui.card().classes("w-full p-6 mb-6").style("background:#fff3cd; border-left:4px solid #ffc107;"):
+                                    with ui.card().classes("w-full p-6 mb-6").style("background:#cde4ff; border-left:4px solid #ffc107;"):
                                         ui.label("📌 Sélection de Features (sans transformation)").style(
                                             "font-weight:700; font-size:18px; color:#856404; margin-bottom:12px;"
                                         )
@@ -6754,7 +6750,7 @@ def dimension_reduction_page():
         # Navigation
         with ui.row().classes("w-full max-w-5xl justify-between mt-16"):
             ui.button(
-                "⬅ Étape précédente",
+                " Étape précédente",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/scaling'")
             ).style(
                 "background:#95a5a6; color:white; font-weight:600; "
@@ -6782,7 +6778,7 @@ def recap_validation_page():
     if df is None:
         with ui.column().classes("items-center justify-center w-full h-screen"):
             ui.label("❌ Aucun dataset chargé.").style("font-size:18px; color:#c0392b; font-weight:600;")
-            ui.button("⬅ Retour", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'"))
+            ui.button(" Retour", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'"))
         return
     
     # Collecter toutes les transformations
@@ -7262,7 +7258,7 @@ def recap_validation_page():
             
             with ui.row().classes("w-full justify-center gap-4"):
                 ui.button(
-                    "⬅️ Modifier une Étape",
+                    "️ Modifier une Étape",
                     on_click=open_step_selector
                 ).style(
                     "background:#95a5a6; color:white; font-weight:600; "
@@ -7288,7 +7284,7 @@ def recap_validation_page():
         # Navigation
         with ui.row().classes("w-full max-w-6xl justify-start mt-6"):
             ui.button(
-                "⬅ Étape précédente",
+                " Étape précédente",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/dimension_reduction'")
             ).style("background:#95a5a6; color:white; font-weight:600; height:50px; width:220px; border-radius:10px;")
 
@@ -7317,7 +7313,7 @@ def algorithm_config_page():
             ui.label("❌ Données non disponibles. Complétez d'abord le preprocessing.").style(
                 "font-size:18px; color:#c0392b; font-weight:600;"
             )
-            ui.button("⬅ Retour", on_click=lambda: ui.run_javascript("window.location.href='/supervised/recap_validation'"))
+            ui.button(" Retour", on_click=lambda: ui.run_javascript("window.location.href='/supervised/recap_validation'"))
         return
     
     # ---------- INITIALISATION STATE ----------
@@ -7683,7 +7679,7 @@ def algorithm_config_page():
                             knn_algo.on_value_change(lambda e: state["algo_configs"]["knn"].update({"algorithm": e.value}))
                     
                     # Estimation performances
-                    with ui.card().classes("w-full p-4 mt-4").style("background:#fff3cd;"):
+                    with ui.card().classes("w-full p-4 mt-4").style("background:#cde4ff;"):
                         ui.label("⏱️ Estimation Performances").style("font-weight:700; margin-bottom:8px;")
                         ui.label(f"• Temps training : < 0.1s (lazy learner - pas d'entraînement réel)").style("font-size:14px;")
                         pred_time = (compat['n_samples'] * compat['n_features']) / 100000
@@ -7983,7 +7979,7 @@ def algorithm_config_page():
                 cv_options_container.clear()
                 if state.get("validation_strategy") == "cv":
                     with cv_options_container:
-                        with ui.card().classes("w-full p-4").style("background:#fff3cd;"):
+                        with ui.card().classes("w-full p-4").style("background:#cde4ff;"):
                             ui.label("⚙️ Paramètres Cross-Validation :").style("font-weight:600; margin-bottom:8px;")
                             
                             with ui.row().classes("w-full items-center gap-4"):
@@ -8054,7 +8050,7 @@ def algorithm_config_page():
             
             if not selected:
                 ui.label(" Aucun algorithme sélectionné").style(
-                    "font-size:18px; color:#fff3cd; text-align:center;"
+                    "font-size:18px; color:#cde4ff; text-align:center;"
                 )
             else:
                 with ui.column().classes("w-full gap-4"):
@@ -8099,7 +8095,7 @@ def algorithm_config_page():
         # ==================== BOUTONS FINAUX ====================
         with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
             ui.button(
-                "⬅ Retour au Récapitulatif",
+                " Retour au Récapitulatif",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/recap_validation'")
             ).style(
                 "background:#95a5a6; color:white; font-weight:600; height:56px; padding:0 32px; border-radius:12px; font-size:16px;"
@@ -8146,7 +8142,7 @@ def feature_importance_page():
             ui.label("❌ Données non disponibles. Complétez d'abord les étapes précédentes.").style(
                 "font-size:18px; color:#c0392b; font-weight:600;"
             )
-            ui.button("⬅ Retour", on_click=lambda: ui.run_javascript("window.location.href='/supervised/algorithm_config'"))
+            ui.button(" Retour", on_click=lambda: ui.run_javascript("window.location.href='/supervised/algorithm_config'"))
         return
     
     # Préparer données
@@ -8279,7 +8275,7 @@ def feature_importance_page():
                     signif_color = "#01335A"
                 elif p_val_test < 0.01:
                     signif = "**"
-                    signif_color = "#f39c12"
+                    signif_color = "#01335A"
                 elif p_val_test < 0.05:
                     signif = "*"
                     signif_color = "#01335A"
@@ -8356,7 +8352,7 @@ def feature_importance_page():
         
         fig = go.Figure()
         
-        colors = ['#01335A' if imp > 60 else '#f39c12' if imp > 30 else '#e74c3c' 
+        colors = ['#01335A' if imp > 60 else '#01335A' if imp > 30 else '#e74c3c' 
                   for imp in df_importance["importance"]]
         
         fig.add_trace(go.Bar(
@@ -8563,10 +8559,10 @@ def feature_importance_page():
                 ui.html(table_html, sanitize=False)
                 
                 # Légende significativité
-                with ui.card().classes("w-full p-4 mb-4").style("background:#fff3cd;"):
+                with ui.card().classes("w-full p-4 mb-4").style("background:#cde4ff;"):
                     ui.label("📖 Légende Significativité (p-value) :").style("font-weight:700; margin-bottom:8px;")
                     ui.label("*** p < 0.001 (Très significatif) - Forte évidence d'association").style("font-size:14px; color:#01335A;")
-                    ui.label("** p < 0.01 (Significatif) - Bonne évidence d'association").style("font-size:14px; color:#f39c12;")
+                    ui.label("** p < 0.01 (Significatif) - Bonne évidence d'association").style("font-size:14px; color:#01335A;")
                     ui.label("* p < 0.05 (Marginalement significatif) - Évidence modérée").style("font-size:14px; color:#01335A;")
                     ui.label("(vide) p >= 0.05 (Non significatif) - Pas d'évidence d'association").style("font-size:14px; color:#95a5a6;")
                 
@@ -8860,7 +8856,7 @@ def feature_importance_page():
         # ==================== NAVIGATION ====================
         with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
             ui.button(
-                "⬅ Retour Config Algos",
+                " Retour Config Algos",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/algorithm_config'")
             ).style(
                 "background:#95a5a6; color:white; font-weight:600; height:56px; padding:0 32px; border-radius:12px; font-size:16px;"
@@ -8897,7 +8893,7 @@ def training_page():
             ui.label("❌ Données non disponibles. Complétez les étapes précédentes.").style(
                 "font-size:18px; color:#c0392b; font-weight:600;"
             )
-            ui.button("⬅ Retour", on_click=lambda: ui.run_javascript("window.location.href='/supervised/feature_importance'"))
+            ui.button(" Retour", on_click=lambda: ui.run_javascript("window.location.href='/supervised/feature_importance'"))
         return
     
     X_train = split.get("X_train")
@@ -9331,7 +9327,7 @@ def training_page():
         # ==================== NAVIGATION ====================
         with ui.row().classes("w-full max-w-6xl justify-start gap-4 mt-8"):
             ui.button(
-                "⬅ Retour Feature Importance",
+                " Retour Feature Importance",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/feature_importance'")
             ).style(
                 "background:#95a5a6; color:white; font-weight:600; height:50px; padding:0 24px; border-radius:10px;"
@@ -9364,7 +9360,7 @@ def results_page():
             ui.label("❌ Aucun résultat d'entraînement disponible.").style(
                 "font-size:18px; color:#c0392b; font-weight:600;"
             )
-            ui.button("⬅ Retour au Training", on_click=lambda: ui.run_javascript("window.location.href='/supervised/training'"))
+            ui.button(" Retour au Training", on_click=lambda: ui.run_javascript("window.location.href='/supervised/training'"))
         return
     
     # Déterminer classes
@@ -9470,7 +9466,7 @@ def results_page():
             showlegend=True
         ))
         
-        colors = ['#01335A', '#01335A', '#e74c3c', '#f39c12', '#9b59b6']
+        colors = ['#01335A', '#01335A', '#e74c3c', '#01335A', '#9b59b6']
         
         for idx, (algo_name, result) in enumerate(training_results.items()):
             y_true = result.get("y_true")
@@ -9519,7 +9515,7 @@ def results_page():
         
         fig = go.Figure()
         
-        colors = ['#01335A', '#01335A', '#e74c3c', '#f39c12', '#9b59b6']
+        colors = ['#01335A', '#01335A', '#e74c3c', '#01335A', '#9b59b6']
         
         for idx, (algo_name, result) in enumerate(training_results.items()):
             y_true = result.get("y_true")
@@ -9569,7 +9565,7 @@ def results_page():
         
         fig = go.Figure()
         
-        colors = ['#01335A', '#01335A', '#e74c3c', '#f39c12', '#9b59b6']
+        colors = ['#01335A', '#01335A', '#e74c3c', '#01335A', '#9b59b6']
         
         for idx, row in df_comparison.iterrows():
             values = [row[m] for m in metrics]
@@ -9706,7 +9702,7 @@ def results_page():
                 )
             
             # Légende
-            with ui.card().classes("w-full p-3 mt-4").style("background:#fff3cd;"):
+            with ui.card().classes("w-full p-3 mt-4").style("background:#cde4ff;"):
                 ui.label("📖 Légende :").style("font-weight:700; margin-bottom:6px;")
                 ui.label("🥇 Meilleur  🥈 Second  🥉 Troisième").style("font-size:14px;")
         
@@ -9817,7 +9813,7 @@ def results_page():
                             minority_class = class_counts.idxmin()
                             minority_pct = (class_counts.min() / class_counts.sum() * 100)
                             
-                            with ui.card().classes("w-full p-4").style("background:#fff3cd;"):
+                            with ui.card().classes("w-full p-4").style("background:#cde4ff;"):
                                 ui.label(" Observations :").style("font-weight:700; margin-bottom:8px;")
                                 
                                 if minority_pct < 30:
@@ -9896,7 +9892,7 @@ def results_page():
                         class_counts = pd.Series(y_true).value_counts()
                         minority_pct = (class_counts.min() / class_counts.sum() * 100)
                         
-                        with ui.card().classes("w-full p-4 mt-4").style("background:#fff3cd;"):
+                        with ui.card().classes("w-full p-4 mt-4").style("background:#cde4ff;"):
                             ui.label("💡 Rappel :").style("font-weight:700; margin-bottom:8px;")
                             ui.label(f"• Classe minoritaire représente {minority_pct:.1f}% des données").style("font-size:14px;")
                             ui.label("• Precision-Recall plus informative que ROC pour classes déséquilibrées").style("font-size:14px;")
@@ -9935,7 +9931,7 @@ def results_page():
                         ui.label("→ Collecter plus de données si possible").style("font-size:14px;")
                     
                     elif best_acc < 0.92:
-                        ui.label("🟡 Bonne performance (85-92%)").style("font-weight:600; color:#f39c12; margin-bottom:8px;")
+                        ui.label("🟡 Bonne performance (85-92%)").style("font-weight:600; color:#01335A; margin-bottom:8px;")
                         ui.label("→ Hyperparameter tuning peut encore améliorer").style("font-size:14px;")
                         ui.label("→ Tester ensemble methods (stacking/blending)").style("font-size:14px;")
                     
@@ -9954,7 +9950,7 @@ def results_page():
         # ==================== NAVIGATION ====================
         with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
             ui.button(
-                "⬅ Retour au Training",
+                " Retour au Training",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/training'")
             ).style(
                 "background:#95a5a6; color:white; font-weight:600; height:56px; padding:0 32px; border-radius:12px; font-size:16px;"
@@ -10084,7 +10080,7 @@ def algos_page():
 
         with ui.row().classes("gap-6"):
             ui.button(
-                "⬅ Retour Prétraitement",
+                " Retour Prétraitement",
                 on_click=lambda: ui.run_javascript("window.location.href='/preprocess'")
             ).classes("w-64 h-11")
 
