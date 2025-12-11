@@ -690,274 +690,468 @@ def map_detected_type(detected_type):
 
 @ui.page('/supervised/user_decisions')
 def user_decisions_page():
+    import pandas as pd
+    import numpy as np
+
     df = state.get("raw_df", None)
     columns_info = state.get("columns_info", None)
 
     if df is None or columns_info is None:
         with ui.column().classes("w-full h-screen items-center justify-center"):
             ui.label("❌ Aucun dataset chargé ou informations de colonnes manquantes.").style(
-                "font-size:18px; color:#c0392b; font-weight:600;"
+                "font-size:18px !important; color:#c0392b !important; font-weight:600 !important;"
             )
-            ui.button("Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")).style(
-                "margin-top:20px; background:#01335A; color:white; font-weight:600; padding:12px 32px; border-radius:8px;"
+            ui.button(
+                "Retour à l'Upload",
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")
+            ).style(
+                "margin-top:20px !important; background:#01335A !important; color:white !important; "
+                "font-weight:600 !important; padding:12px 32px !important; border-radius:8px !important;"
             )
         return
 
-    # Définir la dernière colonne comme target par défaut
+    # ---------------------- CORRECTIONS NUMÉRIQUES ----------------------
+    for col in df.columns:
+        if pd.api.types.is_numeric_dtype(df[col]):
+            non_null = df[col].dropna()
+            if len(non_null) > 0 and (non_null % 1 == 0).all():
+                df[col] = df[col].astype('Int64')
+
+    state["raw_df"] = df
+
     default_target = columns_info[-1]["Colonne"] if columns_info else None
 
-    # ----------- STYLES GÉNÉRAUX ----------- 
-    with ui.column().classes("w-full items-center p-8").style(
-        "min-height:100vh; background-color:#f5f6fa; font-family:'Inter', sans-serif;"
-    ):
-        # HEADER
-        ui.label(" DÉCIDEZ QUOI GARDER").style(
-            "font-weight:700; font-size:32px; color:#01335A; margin-bottom:8px; text-align:center;"
-        )
-        ui.label("Configurez votre analyse et sélectionnez les colonnes pertinentes").style(
-            "font-size:16px; color:#7f8c8d; margin-bottom:32px; text-align:center;"
-        )
+    # ---------------------- FONCTIONS INTERNES ----------------------
+    def detect_actual_type(col_info, col_name):
+        col_data = df[col_name]
+        n_unique = col_data.nunique()
+        n_total = len(col_data.dropna())
 
-        # ----------  SÉLECTION DE LA TARGET ----------
-        with ui.card().classes("w-full max-w-4xl p-6 mb-6").style(
-            "background:white; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.08);"
-        ):
-            ui.label(" Sélection de la colonne Target").style(
-                "font-weight:700; font-size:22px; color:#01335A; margin-bottom:16px;"
-            )
-            
-            ui.label("La colonne target est la variable que vous souhaitez prédire").style(
-                "font-size:14px; color:#7f8c8d; margin-bottom:12px;"
-            )
+        if n_unique == 1:
+            return "Identifiant"
+        if col_name.lower().startswith('id') or col_name.lower().endswith('_id'):
+            return "Identifiant"
+        if n_total > 0 and n_unique / n_total > 0.95:
+            return "Identifiant"
 
-            target_dropdown = ui.select(
-                options=[col["Colonne"] for col in columns_info],
-                label="Colonne cible",
-                value=default_target,  # Dernière colonne par défaut
-                on_change=lambda e: on_target_change(e.value)
-            ).props("outlined dense").classes("w-full")
+        if pd.api.types.is_numeric_dtype(col_data):
+            non_null = col_data.dropna()
+            if len(non_null) > 0:
+                is_integer = (non_null % 1 == 0).all()
+                if is_integer:
+                    if n_unique <= 20:
+                        return "Numérique Discrète"
+                    else:
+                        unique_sorted = sorted(non_null.unique())
+                        if len(unique_sorted) > 1:
+                            gaps = np.diff(unique_sorted)
+                            avg_gap = np.mean(gaps)
+                            if avg_gap <= 5 and np.std(gaps) < avg_gap:
+                                return "Numérique Continue"
+                            else:
+                                return "Numérique Discrète"
+                        return "Numérique Discrète"
+                else:
+                    return "Numérique Continue"
 
-            target_warning = ui.label("").style(
-                "color:#01335A; font-weight:600; margin-top:8px; font-size:14px;"
-            )
-            imbalance_label = ui.label("").style(
-                "margin-top:8px; font-size:14px; color:#2c3e50;"
-            )
-            
-            with ui.row().classes("w-full items-center gap-2 mt-4"):
-                smote_cb = ui.checkbox("Appliquer un rééquilibrage (SMOTE/undersampling)")
-                smote_cb.disable()
-                ui.label("Recommandé si classes déséquilibrées").style(
-                    "font-size:12px; color:#7f8c8d;"
-                )
-            with ui.card().classes("p-6 w-full max-w-3xl shadow-md rounded-xl").style(
-                "background-color:white !important; border-left:6px solid #09538C !important;"
-            ):
-                ui.label(" Qu’est-ce que SMOTE ?").style(
-                    "font-size:22px !important; font-weight:700 !important; color:#01335A !important;"
-                )
+        if pd.api.types.is_datetime64_any_dtype(col_data):
+            return "Date/Datetime"
 
-                ui.label(
-                    "SMOTE (Synthetic Minority Oversampling Technique) est une méthode utilisée lorsque un dataset est "
-                    "déséquilibré. Au lieu de simplement dupliquer les données de la classe minoritaire, SMOTE génère "
-                    "de nouveaux exemples synthétiques en créant des points intermédiaires entre des observations existantes "
-                    "de la minorité. "
-                ).style(
-                "font-size:15px !important; color:#2d3436 !important; margin-top:10px !important; "
-                "line-height:1.6 !important;"
-                )
+        if col_data.dtype == 'object' or pd.api.types.is_categorical_dtype(col_data):
+            values_lower = [str(v).lower() for v in col_data.unique()[:20]]
+            ordinal_patterns = [
+                ['low', 'medium', 'high'],
+                ['bad', 'good', 'excellent'],
+                ['small', 'medium', 'large'],
+                ['never', 'sometimes', 'often', 'always'],
+                ['poor', 'fair', 'good', 'excellent'],
+                ['xs', 's', 'm', 'l', 'xl', 'xxl']
+            ]
+            for pattern in ordinal_patterns:
+                if any(p in values_lower for p in pattern):
+                    return "Catégorielle Ordinale"
+            return "Catégorielle Nominale"
 
-                ui.label(
-                    "✔ Utile lorsque certaines classes sont rares\n"
-                    "✔ Améliore la performance des modèles supervisés\n"
-                    "✔ Réduit le sur-apprentissage lié au simple oversampling"
-                ).style(
-                    "font-size:15px !important; color:#01335A !important; margin-top:12px !important; "
-                    "line-height:1.6 !important;"
-                )
+        return "Texte"
 
-                ui.label(
-                    "⚠ Attention : SMOTE doit être appliqué **uniquement sur l’ensemble d’entraînement**, "
-                    "jamais sur le test."
-                ).style(
-                    "font-size:14px !important; color:#d63031 !important; margin-top:12px !important;"
-                )
-
-
-        # ----------  CORRECTION DES TYPES ----------
-        with ui.card().classes("w-full max-w-6xl p-6 mb-6").style(
-            "background:white; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.08);"
-        ):
-            ui.label("🛠 Correction des types de colonnes").style(
-                "font-weight:700; font-size:22px; color:#01335A; margin-bottom:16px;"
-            )
-            
-            ui.label("Vérifiez et corrigez les types détectés automatiquement").style(
-                "font-size:14px; color:#7f8c8d; margin-bottom:20px;"
-            )
-
-            column_type_widgets = {}
-            column_exclude_widgets = {}
-
-            # Header du tableau
-            with ui.row().classes("w-full items-center gap-4 mb-3 pb-3").style(
-                "border-bottom:2px solid #e1e8ed;"
-            ):
-                ui.label("Colonne").style(
-                    "width:200px; font-weight:700; font-size:14px; color:#01335A;"
-                )
-                ui.label("Type").style(
-                    "flex:1; font-weight:700; font-size:14px; color:#01335A;"
-                )
-                ui.label("Exclure").style(
-                    "width:100px; font-weight:700; font-size:14px; color:#01335A; text-align:center;"
-                )
-
-            # Lignes des colonnes
-            for col in columns_info:
-                with ui.row().classes("w-full items-center gap-4 mb-2").style(
-                    "padding:8px; border-radius:6px; background:#f8f9fa;"
-                ):
-                    # Nom de la colonne
-                    ui.label(col["Colonne"]).style(
-                        "width:200px; font-weight:600; font-size:14px; color:#2c3e50;"
-                    )
-                    
-                    # Type selector
-                    col_type = ui.select(
-                        options=[
-                            "Numérique Continue",
-                            "Numérique Discrète",
-                            "Catégorielle Nominale",
-                            "Catégorielle Ordinale",
-                            "Date/Datetime",
-                            "Texte",
-                            "Identifiant"
-                        ],
-                        value=map_detected_type(col["Type Détecté"])
-                    ).props("outlined dense").classes("flex-1")
-                    
-                    column_type_widgets[col["Colonne"]] = col_type
-
-                    # Checkbox Exclusion avec détection automatique
-                    auto_exclude = False
-                    if col["Cardinalité"] == 1:
-                        auto_exclude = True
-                    if "%" in col["% Missing"]:
-                        missing_pct = float(col["% Missing"].replace("%","").strip())
-                        if missing_pct >= 100:
-                            auto_exclude = True
-                    if col["Colonne"].lower().startswith("id") or col["Cardinalité"] / len(df) > 0.95:
-                        auto_exclude = True
-                    
-                    exclude_cb = ui.checkbox("", value=auto_exclude).style(
-                        "width:100px;"
-                    )
-                    column_exclude_widgets[col["Colonne"]] = exclude_cb
-
-            # Info sur les exclusions automatiques
-            with ui.card().classes("w-full p-4 mt-4").style(
-                "background:#e3f2fd; border-left:4px solid #2196f3;"
-            ):
-                ui.label("💡 Exclusions automatiques détectées :").style(
-                    "font-weight:600; margin-bottom:8px; color:#01335A;"
-                )
-                ui.label("• Colonnes avec cardinalité = 1 (valeur unique)").style(
-                    "font-size:13px; color:#2c3e50;"
-                )
-                ui.label("• Colonnes avec 100% de valeurs manquantes").style(
-                    "font-size:13px; color:#2c3e50;"
-                )
-                ui.label("• Colonnes identifiants (commençant par 'id' ou cardinalité > 95%)").style(
-                    "font-size:13px; color:#2c3e50;"
-                )
-
-        # ---------- BOUTONS D'ACTION ----------
-        def go_to_split():
-            on_confirm()  #  Sauvegarder AVANT de naviguer
-            ui.navigate.to('/supervised/preprocessing2')
-
-        with ui.row().classes("w-full max-w-4xl gap-4 mt-8 justify-center"):
-            ui.button(
-                " Valider les décisions", 
-                on_click=lambda: on_confirm()
-            ).style(
-                "background:#01335A !important; color:white; font-weight:600; "
-                "border-radius:8px !important; height:50px; min-width:220px; font-size:16px;"
-            )
-            
-            ui.button(
-                "➡ Passer à Split", 
-                on_click=lambda: go_to_split()
-            ).style(
-                "background:#01335A !important; color:white; font-weight:600; "
-                "border-radius:8px !important; height:50px; min-width:220px; font-size:16px;"
-            )
-
-    # ----------------- FONCTIONS INTERNES -----------------
     def on_target_change(target_col):
         if target_col is None:
             target_warning.text = ""
             imbalance_label.text = "Sélectionnez la target pour voir la distribution"
             smote_cb.disable()
             return
-        
+
         n_unique = df[target_col].nunique(dropna=True)
-        
         if n_unique > 20:
-            target_warning.text = " Attention : Plus de 20 valeurs uniques détectées - Cela semble être une régression"
+            target_warning.text = "⚠️ Plus de 20 valeurs uniques → Cela semble être une régression"
             imbalance_label.text = ""
             smote_cb.disable()
         else:
             target_warning.text = ""
             counts = df[target_col].value_counts()
             total = counts.sum()
-            
-            # Formater l'affichage
-            distribution_text = " Distribution des classes : "
+
+            distribution_text = "📊 Distribution des classes : "
             for k, v in counts.items():
                 pct = (v / total * 100)
                 distribution_text += f"{k}: {v} ({pct:.1f}%) | "
             distribution_text = distribution_text.rstrip(" | ")
-            
             imbalance_label.text = distribution_text
-            
-            # Activer SMOTE si déséquilibre détecté
+
             min_class = counts.min()
             max_class = counts.max()
-            if max_class / min_class > 1.5:  # Déséquilibre détecté
+            if max_class / min_class > 1.5:
                 smote_cb.enable()
-                imbalance_label.text += "\n Déséquilibre détecté - SMOTE recommandé"
-                imbalance_label.style("color:#01335A;")
+                imbalance_label.text += "\n⚠️ Déséquilibre détecté - SMOTE recommandé"
+                imbalance_label.style("color:#e74c3c !important; font-weight:600 !important;")
             else:
                 smote_cb.enable()
-                imbalance_label.style("color:#01335A;")
+                imbalance_label.text += "\n✅ Classes équilibrées"
+                imbalance_label.style("color:#27ae60 !important; font-weight:600 !important;")
 
     def on_confirm():
         target_col = target_dropdown.value
         if target_col is None:
-            ui.notify(" Veuillez sélectionner une colonne target avant de continuer.", color="negative")
+            ui.notify("⚠️ Veuillez sélectionner une colonne target", color="warning")
             return
-        
-        # Sauvegarder target
+
         state["target_column"] = target_col
-        
-        # Sauvegarder types
+
         for col_name, widget in column_type_widgets.items():
             state.setdefault("columns_types", {})[col_name] = widget.value
-        
-        # Sauvegarder exclusions
+
         for col_name, cb in column_exclude_widgets.items():
             state.setdefault("columns_exclude", {})[col_name] = cb.value
-        
-        # Sauvegarder SMOTE
+
         state["apply_smote"] = smote_cb.value
-        
-        ui.notify(" Décisions enregistrées avec succès !", color="positive")
 
+        ui.notify("✅ Décisions enregistrées avec succès !", color="positive")
 
+    def go_to_split():
+        on_confirm()
+        ui.run_javascript("setTimeout(() => window.location.href='/supervised/preprocessing2', 500);")
 
-    # 🔥 Déclencher l'analyse initiale avec la target par défaut (APRÈS la définition de la fonction)
+    # ---------------------- UI ----------------------
+    with ui.column().classes("w-full items-center").style(
+        "min-height:100vh !important; background:#f0f2f5 !important; padding:48px 24px !important; "
+        "font-family:'Inter', sans-serif !important;"
+    ):
+        ui.label("Configuration de l'Analyse").style(
+            "font-weight:700 !important; font-size:36px !important; color:#01335A !important; "
+            "margin-bottom:8px !important; text-align:center !important; letter-spacing:-0.5px !important;"
+        )
+        ui.label("Sélection de la target et configuration des types de colonnes").style(
+            "font-size:16px !important; color:#636e72 !important; margin-bottom:48px !important; "
+            "text-align:center !important; font-weight:400 !important;"
+        )
+
+        # ---------- SÉLECTION DE LA TARGET ----------
+        with ui.card().classes("w-full max-w-4xl mb-6").style(
+            "background:white !important; border-radius:16px !important; padding:32px !important; "
+            "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
+        ):
+            ui.label("🎯 Sélection de la colonne Target").style(
+                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
+                "margin-bottom:16px !important;"
+            )
+            ui.label("La colonne target est la variable que vous souhaitez prédire").style(
+                "font-size:14px !important; color:#636e72 !important; margin-bottom:20px !important;"
+            )
+
+            target_dropdown = ui.select(
+                options=[col["Colonne"] for col in columns_info],
+                label="Colonne cible",
+                value=default_target,
+                on_change=lambda e: on_target_change(e.value)
+            ).props("outlined").classes("w-full mb-4")
+
+            target_warning = ui.label("").style(
+                "color:#e74c3c !important; font-weight:600 !important; font-size:14px !important;"
+            )
+
+            imbalance_label = ui.label("").style(
+                "font-size:14px !important; color:#2c3e50 !important; margin-top:12px !important;"
+            )
+
+            with ui.row().classes("w-full items-center gap-3 mt-6"):
+                smote_cb = ui.checkbox("Appliquer un rééquilibrage (SMOTE)")
+                smote_cb.disable()
+                ui.label("Recommandé si classes déséquilibrées").style(
+                    "font-size:13px !important; color:#7f8c8d !important; font-style:italic !important;"
+                )
+
+        # Info SMOTE
+        with ui.card().classes("w-full max-w-4xl mb-6").style(
+            "background:#e3f2fd !important; border-radius:16px !important; padding:24px !important; "
+            "border-left:4px solid #2196f3 !important; box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
+        ):
+            ui.label("💡 Qu'est-ce que SMOTE ?").style(
+                "font-size:18px !important; font-weight:700 !important; color:#01335A !important; "
+                "margin-bottom:12px !important;"
+            )
+
+            ui.label(
+                "SMOTE (Synthetic Minority Oversampling Technique) génère de nouveaux exemples synthétiques "
+                "pour la classe minoritaire en créant des points intermédiaires entre observations existantes."
+            ).style(
+                "font-size:14px !important; color:#2c3e50 !important; line-height:1.6 !important; "
+                "margin-bottom:12px !important;"
+            )
+
+            ui.label(
+                "✔ Utile pour classes déséquilibrées\n"
+                "✔ Améliore les performances\n"
+                "✔ Évite le simple oversampling"
+            ).style(
+                "font-size:13px !important; color:#01335A !important; line-height:1.8 !important; "
+                "margin-bottom:8px !important;"
+            )
+
+            ui.label(
+                "⚠ Attention : SMOTE appliqué uniquement sur l'ensemble d'entraînement"
+            ).style(
+                "font-size:13px !important; color:#e74c3c !important; font-weight:600 !important;"
+            )
+
+        # ---------- APERÇU DES DONNÉES ----------
+        with ui.card().classes("w-full max-w-6xl mb-6").style(
+            "background:white !important; border-radius:16px !important; padding:32px !important; "
+            "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
+        ):
+            ui.label("👁️ Aperçu des données").style(
+                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
+                "margin-bottom:16px !important;"
+            )
+            
+            ui.label(
+                f"Visualisation des 10 premières lignes du dataset ({len(df)} lignes × {len(df.columns)} colonnes)"
+            ).style(
+                "font-size:14px !important; color:#636e72 !important; margin-bottom:20px !important;"
+            )
+
+            # Créer un aperçu des 10 premières lignes
+            df_preview = df.head(10).copy()
+            
+            # Préparer les données pour le tableau
+            columns_for_table = []
+            rows_for_table = []
+            
+            # Colonnes
+            for col in df_preview.columns:
+                columns_for_table.append({
+                    "name": col,
+                    "label": col,
+                    "field": col,
+                    "align": "left",
+                    "sortable": True
+                })
+            
+            # Lignes
+            for idx, row in df_preview.iterrows():
+                row_dict = {"_index": str(idx)}
+                for col in df_preview.columns:
+                    val = row[col]
+                    # Formater la valeur
+                    if pd.isna(val):
+                        row_dict[col] = "NaN"
+                    elif isinstance(val, (int, np.integer)):
+                        row_dict[col] = str(val)
+                    elif isinstance(val, (float, np.floating)):
+                        row_dict[col] = f"{val:.2f}"
+                    else:
+                        row_dict[col] = str(val)[:50]  # Limiter à 50 caractères
+                rows_for_table.append(row_dict)
+            
+            # Ajouter colonne index
+            columns_for_table.insert(0, {
+                "name": "_index",
+                "label": "Index",
+                "field": "_index",
+                "align": "center",
+                "sortable": False
+            })
+            
+            # Afficher le tableau
+            ui.table(
+                columns=columns_for_table,
+                rows=rows_for_table,
+                row_key="_index"
+            ).props("flat bordered dense").style(
+                "width:100% !important; font-size:12px !important; max-height:400px !important; "
+                "overflow-y:auto !important;"
+            )
+            
+            # Statistiques rapides
+            with ui.row().classes("w-full gap-8 items-center justify-around mt-6").style(
+                "background:#f8f9fa !important; padding:20px !important; border-radius:12px !important;"
+            ):
+                # Nombre de lignes
+                with ui.column().classes("items-center"):
+                    ui.label("📊").style("font-size:28px !important; margin-bottom:4px !important;")
+                    ui.label(f"{len(df):,}").style(
+                        "font-weight:700 !important; font-size:24px !important; color:#01335A !important;"
+                    )
+                    ui.label("Lignes").style(
+                        "font-size:13px !important; color:#636e72 !important; margin-top:4px !important;"
+                    )
+                
+                # Nombre de colonnes
+                with ui.column().classes("items-center"):
+                    ui.label("📋").style("font-size:28px !important; margin-bottom:4px !important;")
+                    ui.label(f"{len(df.columns)}").style(
+                        "font-weight:700 !important; font-size:24px !important; color:#01335A !important;"
+                    )
+                    ui.label("Colonnes").style(
+                        "font-size:13px !important; color:#636e72 !important; margin-top:4px !important;"
+                    )
+                
+                # Valeurs manquantes
+                with ui.column().classes("items-center"):
+                    ui.label("⚠️").style("font-size:28px !important; margin-bottom:4px !important;")
+                    total_missing = df.isna().sum().sum()
+                    missing_pct = (total_missing / (len(df) * len(df.columns)) * 100)
+                    ui.label(f"{total_missing:,}").style(
+                        "font-weight:700 !important; font-size:24px !important; color:#e74c3c !important;"
+                    )
+                    ui.label(f"Missing ({missing_pct:.1f}%)").style(
+                        "font-size:13px !important; color:#636e72 !important; margin-top:4px !important;"
+                    )
+                
+                # Colonnes numériques
+                with ui.column().classes("items-center"):
+                    ui.label("🔢").style("font-size:28px !important; margin-bottom:4px !important;")
+                    n_numeric = len(df.select_dtypes(include=[np.number]).columns)
+                    ui.label(f"{n_numeric}").style(
+                        "font-weight:700 !important; font-size:24px !important; color:#2196f3 !important;"
+                    )
+                    ui.label("Numériques").style(
+                        "font-size:13px !important; color:#636e72 !important; margin-top:4px !important;"
+                    )
+                
+                # Colonnes catégorielles
+                with ui.column().classes("items-center"):
+                    ui.label("🏷️").style("font-size:28px !important; margin-bottom:4px !important;")
+                    n_categorical = len(df.select_dtypes(include=['object', 'category']).columns)
+                    ui.label(f"{n_categorical}").style(
+                        "font-weight:700 !important; font-size:24px !important; color:#094282 !important;"
+                    )
+                    ui.label("Catégorielles").style(
+                        "font-size:13px !important; color:#636e72 !important; margin-top:4px !important;"
+                    )
+
+        # ---------- CONFIGURATION DES TYPES ----------
+        column_type_widgets = {}
+        column_exclude_widgets = {}
+
+        with ui.card().classes("w-full max-w-6xl mb-6").style(
+            "background:white !important; border-radius:16px !important; padding:32px !important; "
+            "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
+        ):
+            ui.label("🛠 Configuration des types de colonnes").style(
+                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
+                "margin-bottom:16px !important;"
+            )
+            ui.label("Vérifiez et corrigez les types détectés automatiquement").style(
+                "font-size:14px !important; color:#636e72 !important; margin-bottom:20px !important;"
+            )
+
+            # Header tableau
+            with ui.row().classes("w-full items-center gap-4 mb-4 pb-3").style(
+                "border-bottom:2px solid #e1e8ed !important;"
+            ):
+                ui.label("Colonne").style(
+                    "width:200px !important; font-weight:700 !important; font-size:14px !important; "
+                    "color:#01335A !important;"
+                )
+                ui.label("Type Détecté").style(
+                    "flex:1 !important; font-weight:700 !important; font-size:14px !important; "
+                    "color:#01335A !important;"
+                )
+                ui.label("Exclure").style(
+                    "width:120px !important; font-weight:700 !important; font-size:14px !important; "
+                    "color:#01335A !important; text-align:center !important;"
+                )
+
+            for col in columns_info:
+                col_name = col["Colonne"]
+                actual_type = detect_actual_type(col, col_name)
+
+                with ui.row().classes("w-full items-center gap-4 mb-2").style(
+                    "padding:12px !important; border-radius:8px !important; background:#f8f9fa !important;"
+                ):
+                    ui.label(col_name).style(
+                        "width:200px !important; font-weight:600 !important; font-size:14px !important; "
+                        "color:#2c3e50 !important;"
+                    )
+
+                    col_type = ui.select(
+                        options=[
+                            "Numérique Continue", "Numérique Discrète",
+                            "Catégorielle Nominale", "Catégorielle Ordinale",
+                            "Date/Datetime", "Texte", "Identifiant"
+                        ],
+                        value=actual_type
+                    ).props("outlined dense").classes("flex-1")
+
+                    column_type_widgets[col_name] = col_type
+
+                    auto_exclude = False
+                    if col["Cardinalité"] == 1:
+                        auto_exclude = True
+                    if "%" in col["% Missing"]:
+                        try:
+                            missing_pct = float(col["% Missing"].replace("%", "").strip())
+                            if missing_pct >= 100:
+                                auto_exclude = True
+                        except:
+                            pass
+                    if actual_type == "Identifiant":
+                        auto_exclude = True
+
+                    exclude_cb = ui.checkbox("", value=auto_exclude)
+                    column_exclude_widgets[col_name] = exclude_cb
+
+            # Info exclusions
+            with ui.card().classes("w-full mt-6").style(
+                "background:#12344f !important; padding:20px !important; border-radius:12px !important; "
+                "border-left:4px solid #01335A  !important; box-shadow:none !important;"
+            ):
+                ui.label("💡 Exclusions automatiques détectées :").style(
+                    "font-weight:700 !important; margin-bottom:12px !important; color:white !important;"
+                )
+                
+                exclusions = [
+                    "• Colonnes avec cardinalité = 1 (valeur unique)",
+                    "• Colonnes avec 100% de valeurs manquantes",
+                    "• Colonnes identifiants (détection automatique)"
+                ]
+                
+                for excl in exclusions:
+                    ui.label(excl).style(
+                        "font-size:13px !important; color:white !important; margin-bottom:4px !important;"
+                    )
+
+        # ---------- BOUTONS ----------
+        with ui.row().classes("w-full max-w-4xl gap-4 mt-8 justify-center"):
+            ui.button(
+                "Valider les décisions", 
+                on_click=on_confirm
+            ).style(
+                "background:#01335A !important; color:white !important; font-weight:600 !important; "
+                "border-radius:8px !important; height:50px !important; min-width:220px !important; "
+                "font-size:16px !important; text-transform:none !important;"
+            )
+
+            ui.button(
+                "Suivant →", 
+                on_click=go_to_split
+            ).style(
+                "background:#01335A !important; color:white !important; font-weight:600 !important; "
+                "border-radius:8px !important; height:50px !important; min-width:220px !important; "
+                "font-size:16px !important; text-transform:none !important;"
+            )
+
+    # Déclencher l'analyse initiale
     if default_target:
         on_target_change(default_target)
 
@@ -1973,7 +2167,7 @@ def outliers_analysis_page():
                     )
                     
                     type_badge_color = {
-                        'continuous': '#3498db',
+                        'continuous': '#01335A',
                         'discrete': '#9b59b6',
                         'binary': '#01335A',
                         'constant': '#95a5a6'
@@ -4641,7 +4835,7 @@ def encoding_page():
                         "✨ Appliquer les recommandations",
                         on_click=apply_recommended
                     ).style(
-                        "background:#3498db !important; color:white !important; border-radius:8px !important; "
+                        "background:#01335A !important; color:white !important; border-radius:8px !important; "
                         "padding:12px 24px !important; text-transform:none !important; font-weight:600 !important;"
                     )
                     
@@ -4926,7 +5120,7 @@ def distribution_transform_page():
         
         # Histogram original
         fig.add_trace(
-            go.Histogram(x=data_original, nbinsx=30, name="Original", marker_color='#3498db', opacity=0.8),
+            go.Histogram(x=data_original, nbinsx=30, name="Original", marker_color='#01335A', opacity=0.8),
             row=1, col=1
         )
         
@@ -4941,7 +5135,7 @@ def distribution_transform_page():
             qq_original = stats.probplot(data_original, dist="norm")
             fig.add_trace(
                 go.Scatter(x=qq_original[0][0], y=qq_original[0][1], mode='markers', 
-                          name="Original", marker=dict(color='#3498db', size=4)),
+                          name="Original", marker=dict(color='#01335A', size=4)),
                 row=2, col=1
             )
             fig.add_trace(
@@ -5569,7 +5763,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                         "✨ Appliquer recommandations",
                         on_click=apply_recommended
                     ).style(
-                        "background:#3498db !important; color:white !important; border-radius:8px !important; "
+                        "background:#01335A !important; color:white !important; border-radius:8px !important; "
                         "padding:10px 20px !important; text-transform:none !important; font-weight:500 !important;"
                     )
                     
@@ -6150,7 +6344,7 @@ def dimension_reduction_page():
             go.Bar(
                 x=list(range(1, n_comp + 1)),
                 y=variance_ratio[:n_comp] * 100,
-                marker_color='#3498db',
+                marker_color='#01335A',
                 name='Variance individuelle'
             ),
             row=1, col=1
@@ -6500,7 +6694,7 @@ def dimension_reduction_page():
                                             x=top_15['importance'],
                                             y=top_15['feature'],
                                             orientation='h',
-                                            marker_color='#3498db'
+                                            marker_color='#01335A'
                                         ))
                                         fig.update_layout(
                                             height=400,
@@ -6833,7 +7027,7 @@ def recap_validation_page():
                         dialog.close()
                         ui.run_javascript(f"window.location.href='{url}'")
                 
-                ui.button("Modifier", on_click=go_to_step).style("background:#3498db; color:white;")
+                ui.button("Modifier", on_click=go_to_step).style("background:#01335A; color:white;")
         
         dialog.open()
     
@@ -7039,7 +7233,7 @@ def recap_validation_page():
                     " Télécharger Dataset Preprocessé",
                     on_click=download_preprocessed_data
                 ).style(
-                    "background:#3498db; color:white; font-weight:600; "
+                    "background:#01335A; color:white; font-weight:600; "
                     "height:48px; padding:0 24px; border-radius:10px;"
                 )
                 
@@ -7440,7 +7634,7 @@ def algorithm_config_page():
                         
                         knn_neighbors_slider.on_value_change(update_knn_neighbors)
                     
-                    ui.label(f"💡 Règle empirique : K = √n_samples ≈ {get_recommended_k()}").style("font-size:13px; color:#3498db; margin-left:250px; margin-bottom:8px;")
+                    ui.label(f"💡 Règle empirique : K = √n_samples ≈ {get_recommended_k()}").style("font-size:13px; color:#01335A; margin-left:250px; margin-bottom:8px;")
                     ui.label(" K petit → Overfitting | K grand → Underfitting").style("font-size:13px; color:#01335A; margin-left:250px; margin-bottom:16px;")
                     
                     # 2. metric
@@ -7499,7 +7693,7 @@ def algorithm_config_page():
                     with ui.row().classes("w-full justify-end gap-2 mt-4"):
                         ui.button("🔄 Réinitialiser", on_click=lambda: reset_config("knn")).props("flat")
                         ui.button("💡 Appliquer Recommandation", on_click=lambda: apply_recommended_config("knn")).style(
-                            "background:#3498db; color:white;"
+                            "background:#01335A; color:white;"
                         )
         
         # ==================== CARTE 2: DECISION TREE ====================
@@ -7637,7 +7831,7 @@ def algorithm_config_page():
                     with ui.row().classes("w-full justify-end gap-2 mt-4"):
                         ui.button("🔄 Réinitialiser", on_click=lambda: reset_config("decision_tree")).props("flat")
                         ui.button("💡 Appliquer Recommandation", on_click=lambda: apply_recommended_config("decision_tree")).style(
-                            "background:#3498db; color:white;"
+                            "background:#01335A; color:white;"
                         )
         
         
@@ -7727,7 +7921,7 @@ def algorithm_config_page():
                             nb_custom_input.on_value_change(update_nb_custom_input)
                             
                             ui.label("💡 Augmenter si underfitting, diminuer si overfitting (mais 1e-9 optimal généralement)").style(
-                                "font-size:13px; color:#3498db; margin-top:8px;"
+                                "font-size:13px; color:#01335A; margin-top:8px;"
                             )
                     
                     # Info sur les hypothèses
@@ -7751,7 +7945,7 @@ def algorithm_config_page():
                     with ui.row().classes("w-full justify-end gap-2 mt-4"):
                         ui.button("🔄 Réinitialiser", on_click=lambda: reset_config("naive_bayes")).props("flat")
                         ui.button("💡 Config par défaut", on_click=lambda: apply_recommended_config("naive_bayes")).style(
-                            "background:#3498db; color:white;"
+                            "background:#01335A; color:white;"
                         )
         
         # ==================== SECTION: STRATÉGIE DE VALIDATION ====================
@@ -8216,7 +8410,7 @@ def feature_importance_page():
                 x=X_feature,
                 y=y_train,
                 mode='markers',
-                marker=dict(size=5, opacity=0.6, color='#3498db')
+                marker=dict(size=5, opacity=0.6, color='#01335A')
             ))
             
             fig.update_layout(
@@ -8540,7 +8734,7 @@ def feature_importance_page():
                             " Continuer avec toutes les features",
                             on_click=skip_to_training
                         ).style(
-                            "background:#3498db; color:white; font-weight:600; height:48px; width:100%; border-radius:8px;"
+                            "background:#01335A; color:white; font-weight:600; height:48px; width:100%; border-radius:8px;"
                         )
                     
                     # Option 2 : Réduire Top N
@@ -8630,7 +8824,7 @@ def feature_importance_page():
                     x=comparison_df["feature"],
                     y=comparison_df["univariate"],
                     name="Univariée (Chi²/ANOVA)",
-                    marker_color='#3498db'
+                    marker_color='#01335A'
                 ))
                 
                 fig.add_trace(go.Bar(
@@ -8725,7 +8919,7 @@ def training_page():
             "name": "K-Nearest Neighbors",
             "class": KNeighborsClassifier,
             "icon": "",
-            "color": "#3498db"
+            "color": "#01335A"
         },
         "Decision Tree": {
             "name": "C4.5 Decision Tree",
@@ -9054,7 +9248,7 @@ def training_page():
                     "🔄 Relancer avec autres paramètres",
                     on_click=lambda: ui.run_javascript("window.location.href='/supervised/algorithm_config'")
                 ).style(
-                    "background:#3498db; color:white; font-weight:600; height:56px; padding:0 32px; border-radius:12px; font-size:16px;"
+                    "background:#01335A; color:white; font-weight:600; height:56px; padding:0 32px; border-radius:12px; font-size:16px;"
                 )
     
     # ---------- INTERFACE ----------
@@ -9274,7 +9468,7 @@ def results_page():
             showlegend=True
         ))
         
-        colors = ['#3498db', '#01335A', '#e74c3c', '#f39c12', '#9b59b6']
+        colors = ['#01335A', '#01335A', '#e74c3c', '#f39c12', '#9b59b6']
         
         for idx, (algo_name, result) in enumerate(training_results.items()):
             y_true = result.get("y_true")
@@ -9323,7 +9517,7 @@ def results_page():
         
         fig = go.Figure()
         
-        colors = ['#3498db', '#01335A', '#e74c3c', '#f39c12', '#9b59b6']
+        colors = ['#01335A', '#01335A', '#e74c3c', '#f39c12', '#9b59b6']
         
         for idx, (algo_name, result) in enumerate(training_results.items()):
             y_true = result.get("y_true")
@@ -9373,7 +9567,7 @@ def results_page():
         
         fig = go.Figure()
         
-        colors = ['#3498db', '#01335A', '#e74c3c', '#f39c12', '#9b59b6']
+        colors = ['#01335A', '#01335A', '#e74c3c', '#f39c12', '#9b59b6']
         
         for idx, row in df_comparison.iterrows():
             values = [row[m] for m in metrics]
@@ -9768,7 +9962,7 @@ def results_page():
                 "🔬 Hyperparameter Tuning",
                 on_click=lambda: ui.notify("🚧 Fonctionnalité en développement", color="info")
             ).style(
-                "background:#3498db; color:white; font-weight:600; height:56px; padding:0 32px; border-radius:12px; font-size:16px;"
+                "background:#01335A; color:white; font-weight:600; height:56px; padding:0 32px; border-radius:12px; font-size:16px;"
             )
             
             ui.button(
