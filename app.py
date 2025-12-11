@@ -398,7 +398,7 @@ def supervised_upload_page():
             card.style(
                 """
                 padding: 32px !important;
-                width: 580px !important;
+                width: 800px !important;
                 border-radius: 12px !important;
                 box-shadow: 0 4px 20px rgba(0,0,0,0.12) !important;
                 display: flex !important;
@@ -2668,6 +2668,12 @@ def multivariate_analysis_page():
     """
     Analyse multivariée - Corrélations et redondance
     Design moderne unifié avec #01335A
+    
+    Cette page permet d'analyser les corrélations entre variables numériques pour :
+    - Détecter la redondance (features hautement corrélées)
+    - Calculer le VIF (Variance Inflation Factor) pour la multicolinéarité
+    - Créer des features engineered (combinaisons de features existantes)
+    - Optimiser le dataset pour les algorithmes (notamment Naive Bayes)
     """
     import pandas as pd
     import numpy as np
@@ -2682,24 +2688,25 @@ def multivariate_analysis_page():
     if df is None:
         with ui.column().classes("items-center justify-center w-full h-screen"):
             ui.label("❌ Aucun dataset chargé.").style(
-                "font-size:18px; color:#c0392b; font-weight:600;"
+                "font-size:18px !important; color:#c0392b !important; font-weight:600 !important;"
             )
             ui.button(
-                " Retour à l'Upload",
+                "⬅ Retour à l'Upload",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")
             ).style(
-                "background:#01335A; color:white; padding:12px 32px; border-radius:8px; margin-top:20px;"
+                "background:#01335A !important; color:white !important; padding:12px 32px !important; "
+                "border-radius:8px !important; margin-top:20px !important;"
             )
         return
 
-    # Préparations
+    # Préparations : identifier les colonnes numériques actives
     numeric_cols = df.select_dtypes(include=[int, float, "number"]).columns.tolist()
     active_numeric = [c for c in numeric_cols if not columns_exclude.get(c, False) and c != target_col]
 
     if "engineered_features" not in state:
         state["engineered_features"] = []
 
-    # Calculer les paires corrélées une seule fois
+    # Calculer les paires corrélées une seule fois (optimisation)
     pairs = []
     corr = None
     if len(active_numeric) >= 2:
@@ -2716,7 +2723,7 @@ def multivariate_analysis_page():
     # ----------------- FONCTIONS INTERNES -----------------
     
     def make_histogram_plot(series, name):
-        """Crée un histogramme Plotly"""
+        """Crée un histogramme Plotly pour visualiser la distribution d'une feature"""
         fig = go.Figure()
         fig.add_trace(go.Histogram(
             x=series,
@@ -2736,25 +2743,28 @@ def multivariate_analysis_page():
         return fig
 
     def open_pair_modal(feat_a, feat_b, r_val):
-        """Modal avec détails de la paire et création de feature"""
+        """
+        Modal détaillé pour une paire de features corrélées
+        Affiche : scatter plot + formulaire de création de feature combinée
+        """
         with ui.dialog() as dlg, ui.card().classes("w-full max-w-4xl").style(
-            "padding:0; border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,0.15);"
+            "padding:0 !important; border-radius:16px !important; box-shadow:0 10px 40px rgba(0,0,0,0.15) !important;"
         ):
-            # Header
+            # Header avec gradient
             with ui.column().classes("w-full").style(
-                "background:linear-gradient(135deg, #01335A 0%, #09538C 100%); "
-                "padding:24px 32px; border-radius:16px 16px 0 0;"
+                "background:linear-gradient(135deg, #01335A 0%, #09538C 100%) !important; "
+                "padding:24px 32px !important; border-radius:16px 16px 0 0 !important;"
             ):
                 ui.label(f"Analyse de paire : {feat_a} ↔ {feat_b}").style(
-                    "font-weight:700; font-size:22px; color:white;"
+                    "font-weight:700 !important; font-size:22px !important; color:white !important;"
                 )
                 ui.label(f"Corrélation : {r_val:.3f}").style(
-                    "color:white; font-size:16px; margin-top:4px; opacity:0.9;"
+                    "color:white !important; font-size:16px !important; margin-top:4px !important; opacity:0.9 !important;"
                 )
             
             # Contenu
-            with ui.column().classes("w-full").style("padding:32px;"):
-                # Scatter plot
+            with ui.column().classes("w-full").style("padding:32px !important;"):
+                # Scatter plot pour visualiser la relation
                 scatter = go.Figure()
                 scatter.add_trace(go.Scatter(
                     x=df[feat_a],
@@ -2771,14 +2781,16 @@ def multivariate_analysis_page():
                     plot_bgcolor='#f8f9fa',
                     font=dict(family="Inter, sans-serif", color="#2c3e50")
                 )
-                ui.plotly(scatter).style("width:100%;")
+                ui.plotly(scatter).style("width:100% !important;")
                 
-                # Formulaire création feature
+                # Formulaire création feature combinée
                 with ui.card().classes("w-full mt-6").style(
-                    "background:#f8f9fa; padding:20px; border-radius:12px; border:1px solid #e1e8ed;"
+                    "background:#f8f9fa !important; padding:20px !important; "
+                    "border-radius:12px !important; border:1px solid #e1e8ed !important;"
                 ):
                     ui.label("Créer une nouvelle feature combinée").style(
-                        "font-weight:600; font-size:16px; color:#01335A; margin-bottom:16px;"
+                        "font-weight:600 !important; font-size:16px !important; "
+                        "color:#01335A !important; margin-bottom:16px !important;"
                     )
                     
                     with ui.row().classes("w-full gap-4 items-end"):
@@ -2801,7 +2813,7 @@ def multivariate_analysis_page():
                 # Boutons
                 with ui.row().classes("w-full justify-end gap-3 mt-6"):
                     ui.button("Annuler", on_click=lambda: dlg.close()).props("flat").style(
-                        "color:#7f8c8d; text-transform:none;"
+                        "color:#7f8c8d !important; text-transform:none !important;"
                     )
                     
                     ui.button(
@@ -2810,20 +2822,23 @@ def multivariate_analysis_page():
                             feat_a, feat_b, name_input.value, formula_select.value, dlg
                         )
                     ).style(
-                        "background:#01335A; color:white; border-radius:8px; "
-                        "padding:10px 24px; text-transform:none; font-weight:600;"
+                        "background:#01335A !important; color:white !important; border-radius:8px !important; "
+                        "padding:10px 24px !important; text-transform:none !important; font-weight:600 !important;"
                     )
         
         dlg.open()
 
     def create_engineered_feature(a, b, new_name, formula_str, dialog_obj):
-        """Crée une feature engineered"""
+        """
+        Crée une nouvelle feature en combinant deux features existantes
+        Formules possibles : division, soustraction, addition, multiplication
+        """
         if not new_name:
-            ui.notify(" Donnez un nom à la nouvelle feature", color="warning")
+            ui.notify("⚠️ Donnez un nom à la nouvelle feature", color="warning")
             return
         
         if new_name in df.columns:
-            ui.notify(" Une colonne avec ce nom existe déjà", color="warning")
+            ui.notify("⚠️ Une colonne avec ce nom existe déjà", color="warning")
             return
         
         try:
@@ -2831,7 +2846,7 @@ def multivariate_analysis_page():
             s_b = df[b].astype(float)
             
             if "/" in formula_str:
-                new_series = s_b / s_a.replace({0: np.nan})
+                new_series = s_b / s_a.replace({0: np.nan})  # Éviter division par zéro
             elif "-" in formula_str:
                 new_series = s_b - s_a
             elif "+" in formula_str:
@@ -2849,31 +2864,38 @@ def multivariate_analysis_page():
                 (new_name, f"{formula_str} of {b} and {a}")
             )
             
-            ui.notify(f" Feature '{new_name}' créée avec succès", color="positive")
+            ui.notify(f"✅ Feature '{new_name}' créée avec succès", color="positive")
             dialog_obj.close()
             
         except Exception as e:
             ui.notify(f"❌ Erreur : {str(e)}", color="negative")
 
     def keep_feature(a, b, keep="both"):
-        """Garde une feature et exclut l'autre"""
+        """
+        Gère l'exclusion de features redondantes
+        Options : garder A, garder B, ou garder les deux
+        """
         if keep == a:
             state.setdefault("columns_exclude", {})[b] = True
-            ui.notify(f" {a} conservée, {b} exclue", color="positive")
+            ui.notify(f"✅ {a} conservée, {b} exclue", color="positive")
         elif keep == b:
             state.setdefault("columns_exclude", {})[a] = True
-            ui.notify(f" {b} conservée, {a} exclue", color="positive")
+            ui.notify(f"✅ {b} conservée, {a} exclue", color="positive")
         else:
             state.setdefault("columns_exclude", {})[a] = False
             state.setdefault("columns_exclude", {})[b] = False
-            ui.notify(f" Les deux features sont conservées", color="positive")
+            ui.notify(f"✅ Les deux features sont conservées", color="positive")
         
         ui.run_javascript("setTimeout(() => window.location.reload(), 800);")
 
     def apply_naivebayes_prune():
-        """Applique la recommandation pour Naive Bayes"""
+        """
+        Applique une stratégie d'optimisation pour Naive Bayes
+        Pour chaque paire corrélée, garde la feature la plus corrélée avec la target
+        Naive Bayes assume l'indépendance des features : les corrélations élevées violent cette hypothèse
+        """
         if not pairs:
-            ui.notify(" Aucune paire corrélée à traiter", color="warning")
+            ui.notify("⚠️ Aucune paire corrélée à traiter", color="warning")
             return
         
         excluded_count = 0
@@ -2885,6 +2907,7 @@ def multivariate_analysis_page():
                 except:
                     corr_a = corr_b = 0
                 
+                # Garder celle avec la plus forte corrélation à la target
                 if corr_a >= corr_b:
                     state.setdefault("columns_exclude", {})[b] = True
                     excluded_count += 1
@@ -2892,28 +2915,29 @@ def multivariate_analysis_page():
                     state.setdefault("columns_exclude", {})[a] = True
                     excluded_count += 1
             else:
+                # Si pas de target, exclure arbitrairement B
                 state.setdefault("columns_exclude", {})[b] = True
                 excluded_count += 1
         
-        ui.notify(f" {excluded_count} features exclues (optimisation Naive Bayes)", color="positive")
+        ui.notify(f"✅ {excluded_count} features exclues (optimisation Naive Bayes)", color="positive")
         ui.run_javascript("setTimeout(() => window.location.reload(), 1000);")
 
     def open_bulk_engineer_modal():
-        """Modal pour créer une feature combinée manuellement"""
+        """Modal pour créer une feature combinée de manière manuelle (choix libre des features)"""
         with ui.dialog() as dlg, ui.card().classes("w-full max-w-2xl").style(
-            "padding:0; border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,0.15);"
+            "padding:0 !important; border-radius:16px !important; box-shadow:0 10px 40px rgba(0,0,0,0.15) !important;"
         ):
             # Header
             with ui.column().classes("w-full").style(
-                "background:linear-gradient(135deg, #01335A 0%, #09538C 100%); "
-                "padding:24px 32px; border-radius:16px 16px 0 0;"
+                "background:linear-gradient(135deg, #01335A 0%, #09538C 100%) !important; "
+                "padding:24px 32px !important; border-radius:16px 16px 0 0 !important;"
             ):
                 ui.label("Créer une feature combinée").style(
-                    "font-weight:700; font-size:22px; color:white;"
+                    "font-weight:700 !important; font-size:22px !important; color:white !important;"
                 )
             
             # Contenu
-            with ui.column().classes("w-full").style("padding:32px;"):
+            with ui.column().classes("w-full").style("padding:32px !important;"):
                 col_a = ui.select(
                     options=active_numeric,
                     label="Feature A"
@@ -2947,7 +2971,7 @@ def multivariate_analysis_page():
                     b = col_b.value
                     
                     if not a or not b or not name_input.value:
-                        ui.notify(" Sélectionnez A, B et donnez un nom", color="warning")
+                        ui.notify("⚠️ Sélectionnez A, B et donnez un nom", color="warning")
                         return
                     
                     mapping = {
@@ -2964,48 +2988,81 @@ def multivariate_analysis_page():
                 # Boutons
                 with ui.row().classes("w-full justify-end gap-3 mt-6"):
                     ui.button("Annuler", on_click=lambda: dlg.close()).props("flat").style(
-                        "color:#7f8c8d; text-transform:none;"
+                        "color:#7f8c8d !important; text-transform:none !important;"
                     )
                     
                     ui.button("Créer", on_click=create_btn_action).style(
-                        "background:#01335A; color:white; border-radius:8px; "
-                        "padding:10px 24px; text-transform:none; font-weight:600;"
+                        "background:#01335A !important; color:white !important; border-radius:8px !important; "
+                        "padding:10px 24px !important; text-transform:none !important; font-weight:600 !important;"
                     )
         
         dlg.open()
 
     # ---------- UI PRINCIPALE ----------
     with ui.column().classes("w-full items-center").style(
-        "background:#f0f2f5; min-height:100vh; padding:48px 24px; font-family:'Inter', sans-serif;"
+        "background:#f0f2f5 !important; min-height:100vh !important; padding:48px 24px !important; "
+        "font-family:'Inter', sans-serif !important;"
     ):
         # HEADER
         ui.label("Analyse Multivariée").style(
-            "font-weight:700; font-size:36px; color:#01335A; margin-bottom:8px; "
-            "text-align:center; letter-spacing:-0.5px;"
+            "font-weight:700 !important; font-size:36px !important; color:#01335A !important; "
+            "margin-bottom:8px !important; text-align:center !important; letter-spacing:-0.5px !important;"
         )
         ui.label("Corrélations et gestion de la redondance entre variables").style(
-            "font-size:16px; color:#636e72; margin-bottom:48px; text-align:center; font-weight:400;"
+            "font-size:16px !important; color:#636e72 !important; margin-bottom:48px !important; "
+            "text-align:center !important; font-weight:400 !important;"
         )
         
-        # SECTION A : HEATMAP (SANS COEFFICIENTS AFFICHÉS)
+        # EXPLICATION DE LA PAGE
         with ui.card().classes("w-full max-w-6xl mb-6").style(
-            "background:white; border-radius:16px; padding:32px; box-shadow:0 2px 8px rgba(0,0,0,0.08);"
+            "background:#e3f2fd !important; border-radius:16px !important; padding:24px !important; "
+            "border-left:4px solid #2196f3 !important; box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
-            ui.label("Matrice de corrélation").style(
-                "font-weight:700; font-size:22px; color:#01335A; margin-bottom:16px;"
+            ui.label("💡 À quoi sert cette étape ?").style(
+                "font-weight:700 !important; font-size:18px !important; color:#01335A !important; "
+                "margin-bottom:12px !important;"
+            )
+            
+            ui.label(
+                "Cette page analyse les corrélations entre vos features numériques pour :"
+            ).style(
+                "font-size:14px !important; color:#2c3e50 !important; margin-bottom:8px !important;"
+            )
+            
+            points = [
+                "🔍 Détecter la redondance : deux features très corrélées apportent une information similaire",
+                "📊 Calculer le VIF : mesure la multicolinéarité (problématique pour certains modèles)",
+                " Créer des features combinées : nouvelles features en combinant des existantes (ex: ratio, différence)",
+                "🎯 Optimiser pour vos algorithmes : Naive Bayes est sensible aux corrélations, les arbres de décision non"
+            ]
+            
+            for point in points:
+                ui.label(f"• {point}").style(
+                    "font-size:13px !important; color:#01335A !important; margin-left:12px !important; "
+                    "margin-bottom:4px !important; line-height:1.6 !important;"
+                )
+        
+        # SECTION A : HEATMAP
+        with ui.card().classes("w-full max-w-6xl mb-6").style(
+            "background:white !important; border-radius:16px !important; padding:32px !important; "
+            "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
+        ):
+            ui.label("📊 Matrice de corrélation").style(
+                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
+                "margin-bottom:16px !important;"
             )
             
             ui.label("Cliquez sur une cellule pour analyser la paire en détail").style(
-                "font-size:14px; color:#636e72; margin-bottom:20px;"
+                "font-size:14px !important; color:#636e72 !important; margin-bottom:20px !important;"
             )
 
             if len(active_numeric) < 2:
-                ui.label(" Moins de 2 colonnes numériques disponibles").style(
-                    "color:#7f8c8d; font-size:15px;"
+                ui.label("⚠️ Moins de 2 colonnes numériques disponibles").style(
+                    "color:#7f8c8d !important; font-size:15px !important;"
                 )
             else:
                 try:
-                    # Heatmap SANS text/texttemplate (pas de coefficients affichés)
+                    # Heatmap interactive
                     heatmap_fig = go.Figure(data=go.Heatmap(
                         z=corr.values,
                         x=corr.columns,
@@ -3025,7 +3082,7 @@ def multivariate_analysis_page():
                         font=dict(family="Inter, sans-serif", color="#2c3e50")
                     )
 
-                    plot = ui.plotly(heatmap_fig).style("width:100%;")
+                    plot = ui.plotly(heatmap_fig).style("width:100% !important;")
                     
                     # Click handler
                     def on_heatmap_click(e):
@@ -3044,43 +3101,50 @@ def multivariate_analysis_page():
                     # Afficher les paires fortement corrélées
                     if len(pairs) > 0:
                         with ui.card().classes("w-full mt-4").style(
-                            "background:#fff9e6; padding:16px; border-radius:12px; border-left:4px solid #01335A;"
+                            "background:#fff9e6 !important; padding:16px !important; "
+                            "border-radius:12px !important; border-left:4px solid #f39c12 !important;"
                         ):
-                            ui.label(f" {len(pairs)} paire(s) fortement corrélée(s) (|r| ≥ 0.8)").style(
-                                "font-weight:600; margin-bottom:8px; color:#856404;"
+                            ui.label(f"⚠️ {len(pairs)} paire(s) fortement corrélée(s) (|r| ≥ 0.8)").style(
+                                "font-weight:600 !important; margin-bottom:8px !important; color:#856404 !important;"
                             )
                             for p_a, p_b, p_r in pairs[:8]:
                                 ui.label(f"• {p_a} ↔ {p_b}: r = {p_r:.3f}").style(
-                                    "font-size:13px; margin-left:12px; color:#856404;"
+                                    "font-size:13px !important; margin-left:12px !important; color:#856404 !important;"
                                 )
                             if len(pairs) > 8:
                                 ui.label(f"... et {len(pairs)-8} autres paires").style(
-                                    "font-size:13px; margin-left:12px; font-style:italic; color:#7f8c8d;"
+                                    "font-size:13px !important; margin-left:12px !important; "
+                                    "font-style:italic !important; color:#7f8c8d !important;"
                                 )
                 
                 except Exception as e:
-                    ui.label(f" Erreur lors du calcul de la corrélation: {str(e)}").style("color:#e74c3c;")
+                    ui.label(f"⚠️ Erreur lors du calcul de la corrélation: {str(e)}").style(
+                        "color:#e74c3c !important;"
+                    )
 
         # SECTION B : PAIRES CORRÉLÉES
         with ui.card().classes("w-full max-w-6xl mb-6").style(
-            "background:white; border-radius:16px; padding:32px; box-shadow:0 2px 8px rgba(0,0,0,0.08);"
+            "background:white !important; border-radius:16px !important; padding:32px !important; "
+            "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
-            ui.label("Paires fortement corrélées").style(
-                "font-weight:700; font-size:22px; color:#01335A; margin-bottom:16px;"
+            ui.label("🔗 Paires fortement corrélées").style(
+                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
+                "margin-bottom:16px !important;"
             )
             
             ui.label("Détection automatique des corrélations élevées (|r| ≥ 0.8)").style(
-                "font-size:14px; color:#636e72; margin-bottom:20px;"
+                "font-size:14px !important; color:#636e72 !important; margin-bottom:20px !important;"
             )
 
             if len(active_numeric) < 2:
-                ui.label(" Pas assez de variables numériques").style("color:#7f8c8d;")
+                ui.label("⚠️ Pas assez de variables numériques").style("color:#7f8c8d !important;")
             elif len(pairs) == 0:
                 with ui.card().classes("w-full").style(
-                    "background:#01335A; padding:16px; border-radius:12px; border-left:4px solid #01335A;"
+                    "background:#e8f5e9 !important; padding:16px !important; "
+                    "border-radius:12px !important; border-left:4px solid #4caf50 !important;"
                 ):
-                    ui.label(" Aucune corrélation élevée détectée").style(
-                        "color:white; font-weight:500;"
+                    ui.label("✅ Aucune corrélation élevée détectée").style(
+                        "color:#1b5e20 !important; font-weight:500 !important;"
                     )
             else:
                 rows = []
@@ -3092,9 +3156,10 @@ def multivariate_analysis_page():
                     else:
                         mark = "🟢"
                     
-                    impact_nb = "🔴" if abs(r) > 0.85 else "🟡"
-                    impact_knn = "🟡" if abs(r) >= 0.8 else "🟢"
-                    impact_c45 = "🟢"
+                    # Impact sur les algorithmes
+                    impact_nb = "🔴" if abs(r) > 0.85 else "🟡"  # Naive Bayes très sensible
+                    impact_knn = "🟡" if abs(r) >= 0.8 else "🟢"  # KNN modérément sensible
+                    impact_c45 = "🟢"  # Decision Tree robuste
                     
                     rows.append({
                         "Feature A": a,
@@ -3116,159 +3181,284 @@ def multivariate_analysis_page():
                     ],
                     rows=rows,
                     row_key="Feature A"
-                ).props("flat bordered").style("width:100%;")
+                ).props("flat bordered").style("width:100% !important;")
 
-        # SECTION C : VIF
+        # SECTION C : VIF (CORRIGÉE)
         with ui.card().classes("w-full max-w-6xl mb-6").style(
-            "background:white; border-radius:16px; padding:32px; box-shadow:0 2px 8px rgba(0,0,0,0.08);"
+            "background:white !important; border-radius:16px !important; padding:32px !important; "
+            "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
-            ui.label("VIF (Variance Inflation Factor)").style(
-                "font-weight:700; font-size:22px; color:#01335A; margin-bottom:16px;"
+            ui.label("📈 VIF (Variance Inflation Factor)").style(
+                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
+                "margin-bottom:16px !important;"
             )
             
             ui.label("Indicateur de multicolinéarité : VIF > 5 suggère une redondance").style(
-                "font-size:14px; color:#636e72; margin-bottom:20px;"
+                "font-size:14px !important; color:#636e72 !important; margin-bottom:20px !important;"
             )
             
             if len(active_numeric) < 2:
-                ui.label(" Pas assez de colonnes numériques").style("color:#7f8c8d;")
+                ui.label("⚠️ Pas assez de colonnes numériques").style(
+                    "color:#7f8c8d !important; font-size:15px !important;"
+                )
             else:
                 vif_df = []
                 try:
-                    X_vif = df[active_numeric].dropna()
-                    X_vif_const = sm.add_constant(X_vif)
+                    # Nettoyage et conversion des données
+                    X_vif = df[active_numeric].copy()
+                    X_vif = X_vif.dropna()
                     
-                    for i, col in enumerate(active_numeric):
-                        vif_val = variance_inflation_factor(X_vif_const.values, i + 1)
-                        level = "🟢 OK" if vif_val <= 5 else ("🟡 Modéré" if vif_val <= 10 else "🔴 Élevé")
-                        vif_df.append({
-                            "Feature": col,
-                            "VIF": f"{vif_val:.2f}",
-                            "Niveau": level
-                        })
+                    if len(X_vif) < 10:
+                        ui.label("⚠️ Pas assez de lignes valides après suppression des NaN").style(
+                            "color:#7f8c8d !important; font-size:15px !important;"
+                        )
+                    else:
+                        # Convertir en float64 (Int64 cause des erreurs)
+                        for col in X_vif.columns:
+                            X_vif[col] = X_vif[col].astype('float64')
+                        
+                        # Supprimer les colonnes avec variance nulle
+                        variance = X_vif.var()
+                        non_constant_cols = variance[variance > 1e-10].index.tolist()
+                        
+                        if len(non_constant_cols) < 2:
+                            ui.label("⚠️ Pas assez de colonnes avec variance non-nulle").style(
+                                "color:#7f8c8d !important; font-size:15px !important;"
+                            )
+                        else:
+                            X_vif = X_vif[non_constant_cols]
+                            
+                            # Supprimer les valeurs infinies
+                            X_vif = X_vif.replace([np.inf, -np.inf], np.nan).dropna()
+                            
+                            if len(X_vif) < 10:
+                                ui.label("⚠️ Pas assez de lignes valides après nettoyage").style(
+                                    "color:#7f8c8d !important; font-size:15px !important;"
+                                )
+                            else:
+                                # Ajouter constante
+                                try:
+                                    X_vif_const = sm.add_constant(X_vif, has_constant='add')
+                                except Exception as e:
+                                    print(f"⚠️ add_constant failed: {e}")
+                                    X_vif_const = X_vif
+                                
+                                # Calculer VIF pour chaque colonne
+                                calculated_vifs = []
+                                for i, col in enumerate(non_constant_cols):
+                                    try:
+                                        if X_vif_const.shape[1] > X_vif.shape[1]:
+                                            vif_val = variance_inflation_factor(X_vif_const.values, i + 1)
+                                        else:
+                                            vif_val = variance_inflation_factor(X_vif_const.values, i)
+                                        
+                                        if np.isnan(vif_val) or np.isinf(vif_val):
+                                            vif_val = 999.99
+                                            level = "🔴 Colinéarité parfaite"
+                                        else:
+                                            if vif_val <= 5:
+                                                level = "🟢 OK"
+                                            elif vif_val <= 10:
+                                                level = "🟡 Modéré"
+                                            else:
+                                                level = "🔴 Élevé"
+                                        
+                                        calculated_vifs.append({
+                                            "Feature": col,
+                                            "VIF": f"{vif_val:.2f}" if vif_val < 999 else "> 999",
+                                            "Niveau": level
+                                        })
+                                    
+                                    except Exception as e:
+                                        print(f"⚠️ VIF calculation failed for {col}: {e}")
+                                        calculated_vifs.append({
+                                            "Feature": col,
+                                            "VIF": "N/A",
+                                            "Niveau": "⚠️ Erreur calcul"
+                                        })
+                                
+                                if len(calculated_vifs) > 0:
+                                    # Trier par VIF décroissant
+                                    try:
+                                        calculated_vifs = sorted(
+                                            calculated_vifs, 
+                                            key=lambda x: float(x["VIF"].replace("> 999", "999").replace("N/A", "0")),
+                                            reverse=True
+                                        )
+                                    except:
+                                        pass
+                                    
+                                    ui.table(
+                                        columns=[
+                                            {"name": "Feature", "label": "Feature", "field": "Feature", "align": "left"},
+                                            {"name": "VIF", "label": "VIF", "field": "VIF", "align": "center"},
+                                            {"name": "Niveau", "label": "Niveau", "field": "Niveau", "align": "center"}
+                                        ],
+                                        rows=calculated_vifs,
+                                        row_key="Feature"
+                                    ).props("flat bordered").style("width:100% !important;")
+                                    
+                                    # Avertissement si VIF élevé
+                                    high_vif = [x for x in calculated_vifs if "Élevé" in x["Niveau"] or "parfaite" in x["Niveau"]]
+                                    if high_vif:
+                                        with ui.card().classes("w-full mt-4").style(
+                                            "background:#fff3cd !important; padding:16px !important; "
+                                            "border-radius:12px !important; border-left:4px solid #f39c12 !important;"
+                                        ):
+                                            ui.label(f"⚠️ {len(high_vif)} feature(s) avec VIF élevé détectée(s)").style(
+                                                "font-weight:600 !important; color:#856404 !important; margin-bottom:8px !important;"
+                                            )
+                                            ui.label(
+                                                "Recommandation : Exclure une des features corrélées ou créer une combinaison"
+                                            ).style(
+                                                "font-size:13px !important; color:#856404 !important;"
+                                            )
+                                else:
+                                    ui.label("⚠️ Impossible de calculer le VIF").style(
+                                        "color:#e74c3c !important; font-size:15px !important;"
+                                    )
+                
                 except Exception as e:
-                    ui.label(f"❌ Erreur calcul VIF : {str(e)}").style("color:#e74c3c;")
-
-                if len(vif_df) > 0:
-                    ui.table(
-                        columns=[
-                            {"name": "Feature", "label": "Feature", "field": "Feature", "align": "left"},
-                            {"name": "VIF", "label": "VIF", "field": "VIF", "align": "center"},
-                            {"name": "Niveau", "label": "Niveau", "field": "Niveau", "align": "center"}
-                        ],
-                        rows=vif_df,
-                        row_key="Feature"
-                    ).props("flat bordered").style("width:100%;")
+                    with ui.card().classes("w-full").style(
+                        "background:#ffe6e6 !important; padding:16px !important; "
+                        "border-radius:12px !important; border-left:4px solid #e74c3c !important;"
+                    ):
+                        ui.label("❌ Erreur lors du calcul du VIF").style(
+                            "font-weight:600 !important; color:#c0392b !important; margin-bottom:8px !important;"
+                        )
+                        ui.label(f"Détail : {str(e)}").style(
+                            "font-size:13px !important; color:#c0392b !important; margin-bottom:8px !important;"
+                        )
+                        ui.label(
+                            "Causes probables : Colonnes avec variance nulle, valeurs infinies, ou types incompatibles"
+                        ).style(
+                            "font-size:13px !important; color:#c0392b !important;"
+                        )
 
         # SECTION D : ACTIONS
         with ui.card().classes("w-full max-w-6xl mb-6").style(
-            "background:white; border-radius:16px; padding:32px; box-shadow:0 2px 8px rgba(0,0,0,0.08);"
+            "background:white !important; border-radius:16px !important; padding:32px !important; "
+            "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
-            ui.label("Actions et recommandations").style(
-                "font-weight:700; font-size:22px; color:#01335A; margin-bottom:16px;"
+            ui.label(" Actions et recommandations").style(
+                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
+                "margin-bottom:16px !important;"
             )
 
             # Boutons globaux
             with ui.row().classes("gap-3 mb-6"):
                 ui.button(
-                    "Optimiser pour Naive Bayes",
+                    "🎯 Optimiser pour Naive Bayes",
                     on_click=apply_naivebayes_prune
                 ).style(
-                    "background:#01335A !important; color:white; border-radius:8px; "
-                    "padding:10px 20px; text-transform:none; font-weight:500;"
+                    "background:#01335A !important; color:white !important; border-radius:8px !important; "
+                    "padding:10px 20px !important; text-transform:none !important; font-weight:500 !important;"
                 )
                 
                 ui.button(
-                    "Créer feature combinée",
+                    "➕ Créer feature combinée",
                     on_click=open_bulk_engineer_modal
-                ).props("outlined").style(
-                    "background:#01335A !important; color:white; border-radius:8px; "
-                    "padding:10px 20px; text-transform:none; font-weight:500;"
+                ).style(
+                    "background:#3498db !important; color:white !important; border-radius:8px !important; "
+                    "padding:10px 20px !important; text-transform:none !important; font-weight:500 !important;"
                 )
 
             # Cartes comparatives pour chaque paire
             if len(pairs) > 0:
                 ui.label(f"{len(pairs)} paire(s) à analyser").style(
-                    "font-weight:600; color:#636e72; margin-bottom:16px;"
+                    "font-weight:600 !important; color:#636e72 !important; margin-bottom:16px !important;"
                 )
                 
-                for idx, (a, b, r) in enumerate(pairs[:5]):
-                    with ui.expansion(f"{a} ↔ {b} (r = {r:.3f})", icon="compare_arrows").classes("w-full mb-3"):
+                for idx, (a, b, r) in enumerate(pairs[:5]):  # Limiter à 5 pour performance
+                    with ui.expansion(
+                        f"{a} ↔ {b} (r = {r:.3f})", 
+                        icon="compare_arrows"
+                    ).classes("w-full mb-3"):
                         with ui.row().classes("w-full gap-4"):
                             # Feature A
                             with ui.card().classes("flex-1").style(
-                                "background:#f8f9fa; padding:16px; border-radius:12px;"
+                                "background:#f8f9fa !important; padding:16px !important; border-radius:12px !important;"
                             ):
-                                ui.label(a).style("font-weight:700; font-size:15px; margin-bottom:8px; color:#01335A;")
+                                ui.label(a).style(
+                                    "font-weight:700 !important; font-size:15px !important; "
+                                    "margin-bottom:8px !important; color:#01335A !important;"
+                                )
                                 hist_a = make_histogram_plot(df[a].dropna(), a)
-                                ui.plotly(hist_a).style("width:100%;")
-                                ui.label(f"Moyenne: {float(df[a].dropna().mean()):.3f}").style("font-size:13px; color:#636e72;")
+                                ui.plotly(hist_a).style("width:100% !important;")
+                                ui.label(f"Moyenne: {float(df[a].dropna().mean()):.3f}").style(
+                                    "font-size:13px !important; color:#636e72 !important;"
+                                )
                                 
                                 if target_col and pd.api.types.is_numeric_dtype(df[target_col]):
                                     try:
                                         corr_a = df[a].corr(df[target_col])
                                         ui.label(f"Corrélation avec target: {corr_a:.3f}").style(
-                                            "font-size:13px; color:#01335A; font-weight:600;"
+                                            "font-size:13px !important; color:#01335A !important; font-weight:600 !important;"
                                         )
                                     except:
                                         pass
 
                             # Feature B
                             with ui.card().classes("flex-1").style(
-                                "background:#f8f9fa; padding:16px; border-radius:12px;"
+                                "background:#f8f9fa !important; padding:16px !important; border-radius:12px !important;"
                             ):
-                                ui.label(b).style("font-weight:700; font-size:15px; margin-bottom:8px; color:#01335A;")
+                                ui.label(b).style(
+                                    "font-weight:700 !important; font-size:15px !important; "
+                                    "margin-bottom:8px !important; color:#01335A !important;"
+                                )
                                 hist_b = make_histogram_plot(df[b].dropna(), b)
-                                ui.plotly(hist_b).style("width:100%;")
-                                ui.label(f"Moyenne: {float(df[b].dropna().mean()):.3f}").style("font-size:13px; color:#636e72;")
+                                ui.plotly(hist_b).style("width:100% !important;")
+                                ui.label(f"Moyenne: {float(df[b].dropna().mean()):.3f}").style(
+                                    "font-size:13px !important; color:#636e72 !important;"
+                                )
                                 
                                 if target_col and pd.api.types.is_numeric_dtype(df[target_col]):
                                     try:
                                         corr_b = df[b].corr(df[target_col])
                                         ui.label(f"Corrélation avec target: {corr_b:.3f}").style(
-                                            "font-size:13px; color:#01335A; font-weight:600;"
+                                            "font-size:13px !important; color:#01335A !important; font-weight:600 !important;"
                                         )
                                     except:
                                         pass
                         
-                        # Actions
+                        # Actions pour cette paire
                         with ui.row().classes("w-full gap-2 mt-4"):
                             ui.button(
                                 f"Garder {a}",
                                 on_click=lambda a=a, b=b: keep_feature(a, b, keep=a)
-                            ).props("flat").style("color:#01335A; text-transform:none;")
+                            ).props("flat").style("color:#01335A !important; text-transform:none !important;")
                             
                             ui.button(
                                 f"Garder {b}",
                                 on_click=lambda a=a, b=b: keep_feature(a, b, keep=b)
-                            ).props("flat").style("color:#01335A; text-transform:none;")
+                            ).props("flat").style("color:#01335A !important; text-transform:none !important;")
                             
                             ui.button(
                                 "Garder les deux",
                                 on_click=lambda a=a, b=b: keep_feature(a, b, keep="both")
-                            ).props("flat").style("color:#01335A; text-transform:none;")
+                            ).props("flat").style("color:#01335A !important; text-transform:none !important;")
                             
                             ui.button(
                                 "Créer feature combinée",
                                 on_click=lambda a=a, b=b, r=r: open_pair_modal(a, b, r)
                             ).style(
-                                "background:#01335A; color:white; border-radius:8px; "
-                                "padding:8px 16px; text-transform:none;"
+                                "background:#01335A !important; color:white !important; border-radius:8px !important; "
+                                "padding:8px 16px !important; text-transform:none !important;"
                             )
                 
                 if len(pairs) > 5:
                     ui.label(f"... et {len(pairs) - 5} autres paires (limitées pour performance)").style(
-                        "font-size:13px; color:#7f8c8d; font-style:italic; text-align:center; margin-top:12px;"
+                        "font-size:13px !important; color:#7f8c8d !important; "
+                        "font-style:italic !important; text-align:center !important; margin-top:12px !important;"
                     )
             else:
                 with ui.card().classes("w-full").style(
-                    "background:#01335A; padding:16px; border-radius:12px; border-left:4px solid #01335A;"
+                    "background:#e8f5e9 !important; padding:16px !important; "
+                    "border-radius:12px !important; border-left:4px solid #4caf50 !important;"
                 ):
-                    ui.label(" Aucune paire corrélée à analyser").style(
-                    "background:#01335A !important; color:white; border-radius:8px; "
-                    "padding:10px 20px; text-transform:none; font-weight:500;"
-                )
-
+                    ui.label("✅ Aucune paire corrélée à analyser").style(
+                        "color:#1b5e20 !important; font-weight:500 !important;"
+                    )
 
         # NAVIGATION
         with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
@@ -3276,19 +3466,20 @@ def multivariate_analysis_page():
                 "← Précédent",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/preprocessing2'")
             ).style(
-                "background:#01335A !important; color:white; font-weight:500; border-radius:8px; "
-                "height:48px; min-width:140px; font-size:14px; text-transform:none; "
-                "box-shadow:0 2px 8px rgba(0,0,0,0.08);"
+                "background:white !important; color:#01335A !important; font-weight:500 !important; "
+                "border-radius:8px !important; height:48px !important; min-width:140px !important; "
+                "font-size:14px !important; text-transform:none !important; "
+                "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
             )
             
             ui.button(
                 "Suivant →",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/missing_values'")
             ).style(
-                "background:#01335A !important; color:white; font-weight:600; border-radius:8px; "
-                "height:48px; min-width:140px; font-size:14px; text-transform:none;"
+                "background:#01335A !important; color:white !important; font-weight:600 !important; "
+                "border-radius:8px !important; height:48px !important; min-width:140px !important; "
+                "font-size:14px !important; text-transform:none !important;"
             )
-
 
 
 
@@ -3300,7 +3491,7 @@ def multivariate_analysis_page():
 def missing_values_page():
     """
     Page complète pour gestion des valeurs manquantes avec visualisation before/after
-    Gestion robuste des features créées dynamiquement
+    Gestion robuste des features créées dynamiquement + vérification exhaustive
     """
     import pandas as pd
     import numpy as np
@@ -3319,7 +3510,7 @@ def missing_values_page():
                 "font-size:18px !important; color:#c0392b !important; font-weight:600 !important;"
             )
             ui.button(
-                " Retour à l'Upload",
+                "⬅ Retour à l'Upload",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")
             ).style(
                 "background:#01335A !important; color:white !important; padding:12px 32px !important; "
@@ -3327,41 +3518,33 @@ def missing_values_page():
             )
         return
 
-    #  CORRECTION : Synchroniser le split avec raw_df pour inclure les nouvelles features
+    # CORRECTION : Synchroniser le split avec raw_df pour inclure les nouvelles features
     if split and "X_train" in split:
         try:
-            # Récupérer les nouvelles colonnes ajoutées à raw_df
             new_cols = [c for c in df.columns if c not in split["X_train"].columns and c != target_col]
             
             if new_cols:
                 print(f"🔄 Synchronisation des nouvelles features : {new_cols}")
                 
-                # Ajouter les nouvelles colonnes au split
                 for key in ["X_train", "X_val", "X_test"]:
                     if key in split and isinstance(split[key], pd.DataFrame):
-                        # Récupérer les indices du split
                         indices = split[key].index
-                        
-                        # Ajouter les nouvelles colonnes depuis raw_df
                         for col in new_cols:
                             if col in df.columns:
                                 try:
                                     split[key][col] = df[col].reindex(indices)
                                 except Exception as e:
-                                    print(f" Impossible de synchroniser {col} pour {key}: {e}")
+                                    print(f"⚠️ Impossible de synchroniser {col} pour {key}: {e}")
                 
-                # Mettre à jour le state
                 state["split"] = split
-                print(f" {len(new_cols)} nouvelles features synchronisées dans le split")
+                print(f"✅ {len(new_cols)} nouvelles features synchronisées dans le split")
         
         except Exception as e:
-            print(f" Erreur lors de la synchronisation : {e}")
+            print(f"❌ Erreur lors de la synchronisation : {e}")
 
-    # Sauvegarde df_original si pas déjà fait
     if "df_original" not in state:
         state["df_original"] = df.copy()
 
-    # Déterminer df_train pour le fit
     df_train = None
     if split and "X_train" in split:
         df_train = split["X_train"].copy()
@@ -3392,9 +3575,8 @@ def missing_values_page():
             if method == "none" or method == "drop":
                 continue
             
-            #  CORRECTION : Vérifier que la colonne existe
             if col not in df_train_local.columns:
-                print(f" Colonne {col} introuvable dans df_train, ignorée")
+                print(f"⚠️ Colonne {col} introuvable dans df_train, ignorée")
                 continue
             
             try:
@@ -3441,9 +3623,8 @@ def missing_values_page():
             if cols_filter and col not in cols_filter:
                 continue
             
-            #  CORRECTION : Vérifier existence colonne
             if col not in df_result.columns:
-                print(f" Colonne {col} introuvable dans df_target, ignorée")
+                print(f"⚠️ Colonne {col} introuvable dans df_target, ignorée")
                 continue
             
             method = info.get("method")
@@ -3482,7 +3663,6 @@ def missing_values_page():
 
     def get_rows_with_missing(df_data: pd.DataFrame, cols: list, max_rows: int = 20):
         """Récupère les indices des lignes contenant des valeurs manquantes"""
-        #  CORRECTION : Filtrer seulement les colonnes existantes
         valid_cols = [c for c in cols if c in df_data.columns]
         if not valid_cols:
             return []
@@ -3491,17 +3671,383 @@ def missing_values_page():
         indices = df_data[mask].index.tolist()
         return indices[:max_rows]
 
+    def verify_missing_values_after_imputation():
+        """
+        Vérifie exhaustivement s'il reste des valeurs manquantes après imputation
+        Retourne un rapport détaillé
+        """
+        report = {
+            "has_remaining_missing": False,
+            "total_remaining": 0,
+            "affected_columns": {},
+            "datasets": {}
+        }
+        
+        # Vérification raw_df
+        raw_df = state.get("raw_df")
+        if raw_df is not None:
+            missing_in_raw = raw_df[active_cols].isna().sum()
+            cols_with_missing = missing_in_raw[missing_in_raw > 0]
+            
+            if len(cols_with_missing) > 0:
+                report["has_remaining_missing"] = True
+                report["total_remaining"] += int(missing_in_raw.sum())
+                report["datasets"]["raw_df"] = {
+                    "total": int(missing_in_raw.sum()),
+                    "columns": cols_with_missing.to_dict()
+                }
+        
+        # Vérification splits
+        split = state.get("split", {})
+        for dataset_name in ["X_train", "X_val", "X_test"]:
+            if dataset_name in split and isinstance(split[dataset_name], pd.DataFrame):
+                df_split = split[dataset_name]
+                split_cols = [c for c in active_cols if c in df_split.columns]
+                
+                if split_cols:
+                    missing_in_split = df_split[split_cols].isna().sum()
+                    cols_with_missing = missing_in_split[missing_in_split > 0]
+                    
+                    if len(cols_with_missing) > 0:
+                        report["has_remaining_missing"] = True
+                        report["total_remaining"] += int(missing_in_split.sum())
+                        report["datasets"][dataset_name] = {
+                            "total": int(missing_in_split.sum()),
+                            "columns": cols_with_missing.to_dict()
+                        }
+        
+        # Consolidation par colonne
+        for dataset_info in report["datasets"].values():
+            for col, count in dataset_info["columns"].items():
+                if col not in report["affected_columns"]:
+                    report["affected_columns"][col] = 0
+                report["affected_columns"][col] += int(count)
+        
+        return report
+
+    def check_unconfigured_or_none_columns():
+        """
+        Vérifie s'il y a des colonnes non configurées ou avec méthode 'none'
+        Retourne un rapport avec les colonnes problématiques
+        """
+        strategies = state.get("missing_strategy", {})
+        unconfigured = []
+        none_method = []
+        
+        # Colonnes avec valeurs manquantes
+        cols_with_missing = [c for c in active_cols if df[c].isna().sum() > 0]
+        
+        for col in cols_with_missing:
+            if col not in strategies:
+                unconfigured.append(col)
+            elif strategies[col].get("method", "none") == "none":
+                none_method.append(col)
+        
+        return {
+            "has_issues": len(unconfigured) > 0 or len(none_method) > 0,
+            "unconfigured": unconfigured,
+            "none_method": none_method,
+            "total_issues": len(unconfigured) + len(none_method)
+        }
+
+    def show_unconfigured_warning_dialog(report):
+        """Affiche un dialog d'avertissement pour colonnes non traitées"""
+        
+        with ui.dialog() as dialog, ui.card().classes("w-full max-w-3xl").style(
+            "padding:0 !important; border-radius:16px !important; "
+            "box-shadow:0 10px 40px rgba(0,0,0,0.15) !important;"
+        ):
+            # Header avec alerte orange
+            with ui.column().classes("w-full").style(
+                "background:linear-gradient(135deg, #f39c12 0%, #e67e22 100%) !important; "
+                "padding:24px 32px !important; border-radius:16px 16px 0 0 !important;"
+            ):
+                ui.label("⚠️ Colonnes non traitées détectées").style(
+                    "font-weight:700 !important; font-size:20px !important; color:white !important;"
+                )
+                ui.label(
+                    f"{report['total_issues']} colonne(s) avec valeurs manquantes non traitées"
+                ).style(
+                    "color:white !important; font-size:14px !important; "
+                    "margin-top:4px !important; opacity:0.9 !important;"
+                )
+            
+            # Contenu
+            with ui.column().classes("w-full").style("padding:32px !important;"):
+                # Avertissement principal
+                with ui.card().classes("w-full mb-6").style(
+                    "background:#fff3cd !important; padding:20px !important; "
+                    "border-radius:12px !important; border-left:4px solid #f39c12 !important; "
+                    "box-shadow:none !important;"
+                ):
+                    ui.markdown("""
+<div style="color:#856404; font-size:14px; line-height:1.8;">
+
+### ⚠️ Impact sur les algorithmes de Machine Learning
+
+Les valeurs manquantes non traitées peuvent **gravement affecter** les performances de vos modèles :
+
+**Problèmes potentiels :**
+- ❌ **Erreurs d'exécution** : Certains algorithmes (KNN, SVM, Réseaux de neurones) refusent les NaN
+- 📉 **Biais dans les prédictions** : Les algorithmes gèrent mal les données incomplètes
+- 🔻 **Perte de données** : Suppression automatique des lignes avec NaN (perte d'information)
+- ⚠️ **Résultats imprévisibles** : Comportement inconsistant selon les librairies
+
+**Recommandation :** Configurez une stratégie d'imputation pour **toutes** les colonnes avec valeurs manquantes.
+
+</div>
+                    """)
+                
+                # Liste des colonnes non configurées
+                if report["unconfigured"]:
+                    ui.separator().classes("my-4")
+                    ui.label(f"📋 Colonnes non configurées ({len(report['unconfigured'])}) :").style(
+                        "font-weight:700 !important; font-size:16px !important; "
+                        "color:#2c3e50 !important; margin-bottom:12px !important;"
+                    )
+                    
+                    with ui.column().classes("w-full gap-2"):
+                        for col in report["unconfigured"][:10]:
+                            n_missing = int(df[col].isna().sum())
+                            pct = round(n_missing / len(df) * 100, 1)
+                            
+                            with ui.card().classes("w-full").style(
+                                "background:#f8f9fa !important; padding:12px 16px !important; "
+                                "border-radius:8px !important; box-shadow:none !important; "
+                                "border-left:3px solid #e74c3c !important;"
+                            ):
+                                with ui.row().classes("items-center justify-between w-full"):
+                                    ui.label(f"• {col}").style(
+                                        "font-weight:600 !important; color:#2c3e50 !important;"
+                                    )
+                                    ui.label(f"{n_missing} NaN ({pct}%)").style(
+                                        "font-size:12px !important; color:#e74c3c !important; "
+                                        "font-family:monospace !important;"
+                                    )
+                        
+                        if len(report["unconfigured"]) > 10:
+                            ui.label(f"... et {len(report['unconfigured']) - 10} autre(s)").style(
+                                "font-size:12px !important; color:#7f8c8d !important; "
+                                "font-style:italic !important; margin-top:8px !important;"
+                            )
+                
+                # Liste des colonnes avec méthode "none"
+                if report["none_method"]:
+                    ui.separator().classes("my-4")
+                    ui.label(f"🚫 Colonnes avec méthode 'none' ({len(report['none_method'])}) :").style(
+                        "font-weight:700 !important; font-size:16px !important; "
+                        "color:#2c3e50 !important; margin-bottom:12px !important;"
+                    )
+                    
+                    with ui.column().classes("w-full gap-2"):
+                        for col in report["none_method"][:10]:
+                            n_missing = int(df[col].isna().sum())
+                            pct = round(n_missing / len(df) * 100, 1)
+                            
+                            with ui.card().classes("w-full").style(
+                                "background:#f8f9fa !important; padding:12px 16px !important; "
+                                "border-radius:8px !important; box-shadow:none !important; "
+                                "border-left:3px solid #f39c12 !important;"
+                            ):
+                                with ui.row().classes("items-center justify-between w-full"):
+                                    ui.label(f"• {col}").style(
+                                        "font-weight:600 !important; color:#2c3e50 !important;"
+                                    )
+                                    ui.label(f"{n_missing} NaN ({pct}%)").style(
+                                        "font-size:12px !important; color:#f39c12 !important; "
+                                        "font-family:monospace !important;"
+                                    )
+                        
+                        if len(report["none_method"]) > 10:
+                            ui.label(f"... et {len(report['none_method']) - 10} autre(s)").style(
+                                "font-size:12px !important; color:#7f8c8d !important; "
+                                "font-style:italic !important; margin-top:8px !important;"
+                            )
+                
+                # Recommandations
+                ui.separator().classes("my-4")
+                with ui.card().classes("w-full").style(
+                    "background:linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important; "
+                    "padding:20px !important; border-radius:12px !important; "
+                    "border-left:4px solid #2196f3 !important; box-shadow:none !important;"
+                ):
+                    ui.label("💡 Que faire ?").style(
+                        "font-weight:700 !important; font-size:16px !important; "
+                        "color:#01335A !important; margin-bottom:12px !important;"
+                    )
+                    
+                    ui.markdown("""
+<div style="color:#01335A; font-size:13px; line-height:1.8;">
+
+**Option 1 : Configuration manuelle**
+- Retournez à la configuration et choisissez une méthode pour chaque colonne
+
+**Option 2 : Stratégie globale**
+- Utilisez "Balanced" pour appliquer automatiquement median/mode
+- Utilisez "Aggressive" pour appliquer KNN sur les colonnes numériques
+
+**Option 3 : Exclusion**
+- Si la colonne est peu importante, excluez-la de l'analyse
+
+</div>
+                    """)
+                
+                # Boutons d'action
+                with ui.row().classes("w-full justify-end gap-3 mt-6"):
+                    ui.button(
+                        "← Retour à la configuration",
+                        on_click=dialog.close
+                    ).style(
+                        "background:#01335A !important; color:white !important; "
+                        "border-radius:8px !important; padding:10px 24px !important; "
+                        "text-transform:none !important; font-weight:600 !important;"
+                    ).props('icon="arrow_back"')
+                    
+                    def continue_anyway():
+                        dialog.close()
+                        ui.notify(
+                            "⚠️ Continuer avec des valeurs manquantes peut affecter vos modèles",
+                            color="warning",
+                            timeout=5000
+                        )
+                    
+                    ui.button(
+                        "Continuer quand même →",
+                        on_click=continue_anyway
+                    ).style(
+                        "background:#f39c12 !important; color:white !important; "
+                        "border-radius:8px !important; padding:10px 24px !important; "
+                        "text-transform:none !important; font-weight:600 !important;"
+                    ).props('icon-right="warning"')
+        
+        dialog.open()
+
+    def show_verification_dialog(verification_report):
+        """Affiche un dialog détaillé avec les valeurs manquantes restantes"""
+        
+        with ui.dialog() as dialog, ui.card().classes("w-full max-w-4xl").style(
+            "padding:0 !important; border-radius:16px !important; "
+            "box-shadow:0 10px 40px rgba(0,0,0,0.15) !important;"
+        ):
+            # Header avec alerte
+            with ui.column().classes("w-full").style(
+                "background:linear-gradient(135deg, #e74c3c 0%, #c0392b 100%) !important; "
+                "padding:24px 32px !important; border-radius:16px 16px 0 0 !important;"
+            ):
+                ui.label("⚠️ Valeurs manquantes détectées").style(
+                    "font-weight:700 !important; font-size:20px !important; color:white !important;"
+                )
+                ui.label(
+                    f"{verification_report['total_remaining']} valeurs manquantes restantes"
+                ).style(
+                    "color:white !important; font-size:14px !important; "
+                    "margin-top:4px !important; opacity:0.9 !important;"
+                )
+            
+            # Contenu détaillé
+            with ui.column().classes("w-full").style("padding:32px !important;"):
+                # Par dataset
+                ui.label("📊 Répartition par dataset :").style(
+                    "font-weight:600 !important; font-size:16px !important; "
+                    "color:#2c3e50 !important; margin-bottom:12px !important;"
+                )
+                
+                for dataset_name, info in verification_report["datasets"].items():
+                    with ui.expansion(dataset_name, icon="dataset").classes("w-full mb-2"):
+                        ui.label(f"Total : {info['total']} valeurs manquantes").style(
+                            "font-weight:600 !important; margin-bottom:8px !important;"
+                        )
+                        
+                        # Tableau des colonnes affectées
+                        rows = []
+                        for col, count in info["columns"].items():
+                            current_strat = state.get("missing_strategy", {}).get(col, {})
+                            method = current_strat.get("method", "none")
+                            
+                            rows.append({
+                                "Colonne": col,
+                                "Valeurs manquantes": int(count),
+                                "Stratégie actuelle": method
+                            })
+                        
+                        ui.table(
+                            columns=[
+                                {"name": "Colonne", "label": "Colonne", "field": "Colonne", "align": "left"},
+                                {"name": "Valeurs manquantes", "label": "Manquantes", 
+                                 "field": "Valeurs manquantes", "align": "center"},
+                                {"name": "Stratégie actuelle", "label": "Stratégie", 
+                                 "field": "Stratégie actuelle", "align": "center"}
+                            ],
+                            rows=rows,
+                            row_key="Colonne"
+                        ).props("flat dense").style("width:100% !important;")
+                
+                # Recommandations
+                ui.separator().classes("my-4")
+                ui.label("💡 Recommandations :").style(
+                    "font-weight:600 !important; font-size:16px !important; "
+                    "color:#2c3e50 !important; margin-bottom:12px !important;"
+                )
+                
+                with ui.column().classes("w-full gap-2"):
+                    for col in verification_report["affected_columns"].keys():
+                        current_strat = state.get("missing_strategy", {}).get(col, {})
+                        method = current_strat.get("method", "none")
+                        
+                        if method == "none":
+                            ui.label(f"• {col} : Aucune stratégie configurée → Configurez une méthode").style(
+                                "color:#e74c3c !important; font-size:13px !important;"
+                            )
+                        elif method == "forward_fill" or method == "backward_fill":
+                            ui.label(
+                                f"• {col} : Fill méthode peut laisser des NaN en début/fin → "
+                                "Essayez median/mode/constant"
+                            ).style(
+                                "color:#f39c12 !important; font-size:13px !important;"
+                            )
+                        else:
+                            ui.label(
+                                f"• {col} : Vérifiez les paramètres de {method}"
+                            ).style(
+                                "color:#3498db !important; font-size:13px !important;"
+                            )
+                
+                # Actions
+                with ui.row().classes("w-full justify-end gap-3 mt-6"):
+                    ui.button(
+                        "Retour à la configuration",
+                        on_click=dialog.close
+                    ).style(
+                        "background:#01335A !important; color:white !important; "
+                        "border-radius:8px !important; padding:10px 24px !important; "
+                        "text-transform:none !important; font-weight:600 !important;"
+                    )
+        
+        dialog.open()
+
     def apply_and_propagate(navigate_after=False):
-        """Applique l'imputation sur raw_df ET tous les splits"""
+        """Applique l'imputation sur raw_df ET tous les splits avec vérification"""
         try:
+            print("🚀 Début de apply_and_propagate")  # ✅ DEBUG
+            
             strategies = state.get("missing_strategy", {})
             if not strategies:
-                ui.notify(" Aucune stratégie configurée", color="warning")
+                ui.notify("⚠️ Aucune stratégie configurée", color="warning")
+                return False
+            
+            print(f"📋 Stratégies à appliquer : {list(strategies.keys())}")  # ✅ DEBUG
+            
+            # ✅ VÉRIFICATION DES COLONNES NON CONFIGURÉES OU "NONE"
+            unconfigured_report = check_unconfigured_or_none_columns()
+            print(f"🔍 Rapport non configurées : {unconfigured_report}")  # ✅ DEBUG
+            
+            if unconfigured_report["has_issues"]:
+                print("⚠️ Des colonnes ont des problèmes, affichage du dialog")  # ✅ DEBUG
+                show_unconfigured_warning_dialog(unconfigured_report)
                 return False
             
             split = state.get("split", {})
             
-            # 1. FIT sur le bon dataset
             if split and "X_train" in split:
                 df_train_for_fit = split["X_train"].copy()
                 if target_col and "y_train" in split and target_col not in df_train_for_fit.columns:
@@ -3509,34 +4055,62 @@ def missing_values_page():
             else:
                 df_train_for_fit = state["raw_df"].copy()
             
+            print("🔧 Début du fit des imputers")  # ✅ DEBUG
+            
             # Fit des imputers
             fitted = fit_imputers(strategies, df_train_for_fit)
             state["fitted_imputers"] = serialize_fitted_imputers(fitted)
             
-            # 2. APPLICATION sur raw_df
+            print(f"✅ {len(fitted)} imputers fitted")  # ✅ DEBUG
+            
+            # Application sur raw_df
+            print("📝 Application sur raw_df")  # ✅ DEBUG
             state["raw_df"] = apply_fitted_imputers(state["raw_df"], fitted, active_cols)
             
-            # 3. APPLICATION sur les splits si présents
+            # Application sur splits
             if split:
+                print("📝 Application sur les splits")  # ✅ DEBUG
                 for key in ["X_train", "X_val", "X_test"]:
                     if key in split and isinstance(split[key], pd.DataFrame):
+                        print(f"  - Application sur {key}")  # ✅ DEBUG
                         split[key] = apply_fitted_imputers(split[key], fitted, active_cols)
                 
                 state["split"] = split
             
-            ui.notify(" Imputation appliquée sur raw_df et tous les splits!", color="positive")
+            print("🔍 Vérification post-imputation")  # ✅ DEBUG
             
-            # Navigation conditionnelle
-            if navigate_after:
-                ui.run_javascript("setTimeout(() => window.location.href='/supervised/encoding', 1000);")
+            # ✅ VÉRIFICATION POST-IMPUTATION
+            verification_report = verify_missing_values_after_imputation()
+            
+            print(f"📊 Rapport vérification : {verification_report['has_remaining_missing']}")  # ✅ DEBUG
+            
+            if verification_report["has_remaining_missing"]:
+                ui.notify(
+                    f"⚠️ Attention : {verification_report['total_remaining']} valeurs manquantes restantes!",
+                    color="warning",
+                    timeout=5000
+                )
+                show_verification_dialog(verification_report)
+                return False
             else:
-                ui.run_javascript("setTimeout(() => window.location.reload(), 1000);")
+                ui.notify("✅ Imputation réussie : Toutes les valeurs manquantes ont été traitées!", color="positive")
+            
+            print(f"🎯 Navigate after : {navigate_after}")  # ✅ DEBUG
+            
+            if navigate_after:
+                print("🚀 Navigation vers /supervised/encoding")  # ✅ DEBUG
+                ui.run_javascript("setTimeout(() => window.location.href='/supervised/encoding', 1500);")
+            else:
+                print("🔄 Rechargement de la page")  # ✅ DEBUG
+                ui.run_javascript("setTimeout(() => window.location.reload(), 1500);")
             
             return True
         
         except Exception as e:
             ui.notify(f"❌ Erreur lors de l'application : {str(e)}", color="negative")
-            print(f"Détail erreur: {e}")
+            print(f"❌ Détail erreur: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     def open_feature_modal(col_name):
@@ -3545,97 +4119,105 @@ def missing_values_page():
         current_method = current_strategy.get("method", "none")
         
         with ui.dialog() as dialog, ui.card().classes("w-full max-w-2xl").style(
-            "padding:32px !important; border-radius:16px !important; "
+            "padding:0 !important; border-radius:16px !important; "
             "box-shadow:0 10px 40px rgba(0,0,0,0.15) !important;"
         ):
-            ui.label(f"Configuration : {col_name}").style(
-                "font-weight:700 !important; font-size:20px !important; color:#01335A !important; "
-                "margin-bottom:16px !important;"
-            )
-            
-            dtype = df[col_name].dtype
-            n_missing = int(df[col_name].isna().sum())
-            pct = round(n_missing / len(df) * 100, 2)
-            
-            ui.label(f"Type: {dtype} | Missing: {n_missing} ({pct}%)").style(
-                "color:#636e72 !important; margin-bottom:20px !important; font-size:14px !important;"
-            )
-            
-            # Options d'imputation
-            if pd.api.types.is_numeric_dtype(df[col_name]):
-                options = ["none", "drop", "mean", "median", "mode", "constant", "knn", "iterative"]
-            else:
-                options = ["none", "drop", "mode", "constant", "forward_fill", "backward_fill"]
-            
-            method_select = ui.select(
-                options=options, 
-                value=current_method, 
-                label="Méthode"
-            ).props("outlined").classes("w-full mb-4")
-            
-            # Paramètres additionnels
-            params_container = ui.column().classes("w-full")
-            
-            constant_input = None
-            knn_input = None
-            iter_input = None
-            
-            def update_params():
-                nonlocal constant_input, knn_input, iter_input
-                params_container.clear()
-                with params_container:
-                    if method_select.value == "constant":
-                        constant_input = ui.input(
-                            label="Valeur constante", 
-                            value=str(current_strategy.get("params", {}).get("fill_value", "0"))
-                        ).props("outlined")
-                    elif method_select.value == "knn":
-                        knn_input = ui.number(
-                            label="Nombre de voisins", 
-                            value=current_strategy.get("params", {}).get("n_neighbors", 5), 
-                            min=1, 
-                            max=20
-                        ).props("outlined")
-                    elif method_select.value == "iterative":
-                        iter_input = ui.number(
-                            label="Max iterations", 
-                            value=current_strategy.get("params", {}).get("max_iter", 10), 
-                            min=1, 
-                            max=100
-                        ).props("outlined")
-            
-            method_select.on_value_change(lambda: update_params())
-            update_params()
-            
-            # Boutons d'action
-            with ui.row().classes("w-full justify-end gap-3 mt-6"):
-                ui.button("Annuler", on_click=dialog.close).props("flat").style(
-                    "color:#7f8c8d !important; text-transform:none !important;"
+            # Header avec gradient
+            with ui.column().classes("w-full").style(
+                "background:linear-gradient(135deg, #01335A 0%, #09538C 100%) !important; "
+                "padding:24px 32px !important; border-radius:16px 16px 0 0 !important;"
+            ):
+                ui.label(f"Configuration : {col_name}").style(
+                    "font-weight:700 !important; font-size:20px !important; color:white !important;"
                 )
                 
-                def save_strategy():
-                    method = method_select.value
-                    params = {}
-                    
-                    if method == "constant" and constant_input:
-                        params["fill_value"] = constant_input.value
-                    elif method == "knn" and knn_input:
-                        params["n_neighbors"] = int(knn_input.value)
-                    elif method == "iterative" and iter_input:
-                        params["max_iter"] = int(iter_input.value)
-                    
-                    state.setdefault("missing_strategy", {})[col_name] = {
-                        "method": method,
-                        "params": params
-                    }
-                    
-                    ui.notify(f" Stratégie sauvegardée pour {col_name}", color="positive")
-                    dialog.close()
+                dtype = df[col_name].dtype
+                n_missing = int(df[col_name].isna().sum())
+                pct = round(n_missing / len(df) * 100, 2)
                 
-                ui.button("Sauvegarder", on_click=save_strategy).style(
-                    "background:#01335A !important; color:white !important; border-radius:8px !important; "
-                    "padding:10px 24px !important; text-transform:none !important; font-weight:600 !important;"
+                ui.label(f"Type: {dtype} | Missing: {n_missing} ({pct}%)").style(
+                    "color:white !important; font-size:14px !important; margin-top:4px !important; opacity:0.9 !important;"
                 )
+            
+            # Contenu
+            with ui.column().classes("w-full").style("padding:32px !important;"):
+                # Options d'imputation
+                if pd.api.types.is_numeric_dtype(df[col_name]):
+                    options = ["none", "drop", "mean", "median", "mode", "constant", "knn", "iterative"]
+                else:
+                    options = ["none", "drop", "mode", "constant", "forward_fill", "backward_fill"]
+                
+                method_select = ui.select(
+                    options=options, 
+                    value=current_method, 
+                    label="Méthode"
+                ).props("outlined").classes("w-full mb-4")
+                
+                # Paramètres additionnels
+                params_container = ui.column().classes("w-full")
+                
+                constant_input = None
+                knn_input = None
+                iter_input = None
+                
+                def update_params():
+                    nonlocal constant_input, knn_input, iter_input
+                    params_container.clear()
+                    with params_container:
+                        if method_select.value == "constant":
+                            constant_input = ui.input(
+                                label="Valeur constante", 
+                                value=str(current_strategy.get("params", {}).get("fill_value", "0"))
+                            ).props("outlined")
+                        elif method_select.value == "knn":
+                            knn_input = ui.number(
+                                label="Nombre de voisins", 
+                                value=current_strategy.get("params", {}).get("n_neighbors", 5), 
+                                min=1, 
+                                max=20
+                            ).props("outlined")
+                        elif method_select.value == "iterative":
+                            iter_input = ui.number(
+                                label="Max iterations", 
+                                value=current_strategy.get("params", {}).get("max_iter", 10), 
+                                min=1, 
+                                max=100
+                            ).props("outlined")
+                
+                method_select.on_value_change(lambda: update_params())
+                update_params()
+                
+                # Boutons d'action
+                with ui.row().classes("w-full justify-end gap-3 mt-6"):
+                    ui.button("Annuler", on_click=dialog.close).props("flat").style(
+                        "color:#7f8c8d !important; text-transform:none !important;"
+                    )
+                    
+                    def save_strategy():
+                        method = method_select.value
+                        params = {}
+                        
+                        if method == "constant" and constant_input:
+                            params["fill_value"] = constant_input.value
+                        elif method == "knn" and knn_input:
+                            params["n_neighbors"] = int(knn_input.value)
+                        elif method == "iterative" and iter_input:
+                            params["max_iter"] = int(iter_input.value)
+                        
+                        state.setdefault("missing_strategy", {})[col_name] = {
+                            "method": method,
+                            "params": params
+                        }
+                        
+                        ui.notify(f"✅ Stratégie sauvegardée pour {col_name}", color="positive")
+                        dialog.close()
+                        # ✅ CORRECTION : Recharger la page pour mettre à jour le tableau
+                        ui.run_javascript("setTimeout(() => window.location.reload(), 500);")
+                    
+                    ui.button("Sauvegarder", on_click=save_strategy).style(
+                        "background:#01335A !important; color:white !important; border-radius:8px !important; "
+                        "padding:10px 24px !important; text-transform:none !important; font-weight:600 !important;"
+                    )
         
         dialog.open()
 
@@ -3644,19 +4226,17 @@ def missing_values_page():
         strategies = state.get("missing_strategy", {})
         
         if not strategies:
-            ui.notify(" Aucune stratégie configurée", color="warning")
+            ui.notify("⚠️ Aucune stratégie configurée", color="warning")
             return
         
         try:
-            # Fit sur df_train
             fitted = fit_imputers(strategies, df_train)
             
-            # Récupérer les lignes avec missing values AVANT traitement
             cols_with_strategy = list(strategies.keys())
             cols_to_check = [c for c in cols_with_strategy if c in df_train.columns]
             
             if not cols_to_check:
-                ui.notify(" Aucune colonne valide à traiter", color="warning")
+                ui.notify("⚠️ Aucune colonne valide à traiter", color="warning")
                 return
             
             missing_indices = get_rows_with_missing(df_train, cols_to_check, max_rows=15)
@@ -3665,22 +4245,18 @@ def missing_values_page():
                 ui.notify("ℹ️ Aucune ligne avec valeurs manquantes dans les colonnes sélectionnées", color="info")
                 return
             
-            # BEFORE : lignes originales
             df_before = df_train.loc[missing_indices, cols_to_check].copy()
             
-            # Application sur copie complète
             df_preview = df_train.copy()
             df_preview = apply_fitted_imputers(df_preview, fitted, active_cols)
             
-            # AFTER : mêmes lignes après imputation
             df_after = df_preview.loc[missing_indices, cols_to_check].copy()
             
-            # Stats globales
             before_missing = df_train[active_cols].isna().sum().sum()
             after_missing = df_preview[active_cols].isna().sum().sum()
             
             preview_info.set_text(
-                f" Preview généré : {before_missing} valeurs manquantes → {after_missing} après imputation | {len(missing_indices)} lignes affichées"
+                f"📊 Preview généré : {before_missing} valeurs manquantes → {after_missing} après imputation | {len(missing_indices)} lignes affichées"
             )
             
             # Affichage des tableaux BEFORE/AFTER
@@ -3688,8 +4264,8 @@ def missing_values_page():
             table_after_container.clear()
             
             with table_before_container:
-                ui.label("📋 AVANT Imputation (lignes avec missing)").style(
-                    "font-weight:700 !important; font-size:16px !important; color:#e74c3c !important; "
+                ui.label("AVANT Imputation").style(
+                    "font-weight:700 !important; font-size:16px !important; color:#01335A !important; "
                     "margin-bottom:12px !important;"
                 )
                 
@@ -3716,8 +4292,8 @@ def missing_values_page():
                 )
             
             with table_after_container:
-                ui.label(" APRÈS Imputation (mêmes lignes)").style(
-                    "font-weight:700 !important; font-size:16px !important; color:#01335A !important; "
+                ui.label("APRÈS Imputation").style(
+                    "font-weight:700 !important; font-size:16px !important; color:#2196f3 !important; "
                     "margin-bottom:12px !important;"
                 )
                 
@@ -3727,12 +4303,12 @@ def missing_values_page():
                     for col in cols_to_check:
                         val = df_after.loc[idx, col]
                         if pd.isna(val):
-                            row_dict[col] = " Still NaN"
+                            row_dict[col] = "⚠️ Still NaN"
                         else:
                             was_nan = pd.isna(df_before.loc[idx, col])
                             display_val = str(val)[:30]
                             if was_nan:
-                                row_dict[col] = f" {display_val}"
+                                row_dict[col] = f"✓ {display_val}"
                             else:
                                 row_dict[col] = display_val
                     rows_after.append(row_dict)
@@ -3758,12 +4334,12 @@ def missing_values_page():
                 fig_before.add_trace(go.Histogram(
                     x=df_train[sample_col].dropna(), 
                     name="Before", 
-                    marker_color="#e74c3c",
+                    marker_color="#64b5f6",
                     opacity=0.7
                 ))
                 fig_before.update_layout(
-                    title=f"{sample_col} - Distribution AVANT Imputation",
-                    height=300,
+                    title=f"{sample_col} - Distribution AVANT",
+                    height=280,
                     showlegend=True,
                     paper_bgcolor='white',
                     plot_bgcolor='#f8f9fa',
@@ -3778,8 +4354,8 @@ def missing_values_page():
                     opacity=0.7
                 ))
                 fig_after.update_layout(
-                    title=f"{sample_col} - Distribution APRÈS Imputation",
-                    height=300,
+                    title=f"{sample_col} - Distribution APRÈS",
+                    height=280,
                     showlegend=True,
                     paper_bgcolor='white',
                     plot_bgcolor='#f8f9fa',
@@ -3800,37 +4376,49 @@ def missing_values_page():
         strategies = state.get("missing_strategy", {})
         
         if not strategies:
-            ui.notify(" Aucune stratégie configurée", color="warning")
+            ui.notify("⚠️ Aucune stratégie configurée", color="warning")
             return
         
+        # ✅ DEBUG : Afficher les stratégies configurées
+        print(f"🔍 Stratégies configurées : {strategies}")
+        
         with ui.dialog() as dialog, ui.card().style(
-            "padding:32px !important; border-radius:16px !important; "
+            "padding:0 !important; border-radius:16px !important; "
             "box-shadow:0 10px 40px rgba(0,0,0,0.15) !important;"
         ):
-            ui.label(" Confirmation").style(
-                "font-weight:700 !important; font-size:20px !important; color:#01335A !important; "
-                "margin-bottom:16px !important;"
-            )
-            ui.label("Voulez-vous appliquer l'imputation sur raw_df et tous les datasets (train/val/test) ?").style(
-                "margin-bottom:8px !important; color:#2c3e50 !important; font-size:14px !important;"
-            )
-            ui.label(" Cette action est irréversible (sauf si vous rechargez le fichier)").style(
-                "color:#e74c3c !important; font-size:13px !important;"
-            )
+            # Header
+            with ui.column().classes("w-full").style(
+                "background:linear-gradient(135deg, #01335A 0%, #09538C 100%) !important; "
+                "padding:24px 32px !important; border-radius:16px 16px 0 0 !important;"
+            ):
+                ui.label("⚠️ Confirmation").style(
+                    "font-weight:700 !important; font-size:20px !important; color:white !important;"
+                )
             
-            with ui.row().classes("w-full justify-end gap-3 mt-6"):
-                ui.button("Annuler", on_click=dialog.close).props("flat").style(
-                    "color:#7f8c8d !important; text-transform:none !important;"
+            # Contenu
+            with ui.column().classes("w-full").style("padding:32px !important;"):
+                ui.label("Voulez-vous appliquer l'imputation sur raw_df et tous les datasets (train/val/test) ?").style(
+                    "margin-bottom:12px !important; color:#2c3e50 !important; font-size:14px !important;"
+                )
+                ui.label("⚠️ Cette action est irréversible (sauf si vous rechargez le fichier)").style(
+                    "color:#e74c3c !important; font-size:13px !important;"
                 )
                 
-                def confirm_and_next():
-                    dialog.close()
-                    apply_and_propagate(navigate_after=True)
-                
-                ui.button("Confirmer", on_click=confirm_and_next).style(
-                    "background:#01335A !important; color:white !important; border-radius:8px !important; "
-                    "padding:10px 24px !important; text-transform:none !important; font-weight:600 !important;"
-                )
+                with ui.row().classes("w-full justify-end gap-3 mt-6"):
+                    ui.button("Annuler", on_click=dialog.close).props("flat").style(
+                        "color:#7f8c8d !important; text-transform:none !important;"
+                    )
+                    
+                    def confirm_and_next():
+                        print("✅ Bouton 'Confirmer' cliqué")  # ✅ DEBUG
+                        dialog.close()
+                        result = apply_and_propagate(navigate_after=True)
+                        print(f"📊 Résultat apply_and_propagate: {result}")  # ✅ DEBUG
+                    
+                    ui.button("Confirmer", on_click=confirm_and_next).style(
+                        "background:#01335A !important; color:white !important; border-radius:8px !important; "
+                        "padding:10px 24px !important; text-transform:none !important; font-weight:600 !important;"
+                    )
         
         dialog.open()
 
@@ -3845,7 +4433,7 @@ def missing_values_page():
                 if miss_pct.get(col, 0.0) > 20:
                     state.setdefault("columns_exclude", {})[col] = True
                     excluded_count += 1
-            ui.notify(f" Conservative : {excluded_count} colonnes >20% marquées pour exclusion", color="positive")
+            ui.notify(f"✅ Conservative : {excluded_count} colonnes >20% marquées pour exclusion", color="positive")
 
         elif val.startswith("Balanced"):
             strategy_count = 0
@@ -3855,7 +4443,7 @@ def missing_values_page():
                 method = "median" if pd.api.types.is_numeric_dtype(df[col]) else "mode"
                 state.setdefault("missing_strategy", {})[col] = {"method": method, "params": {}}
                 strategy_count += 1
-            ui.notify(f" Balanced : {strategy_count} colonnes configurées (Median/Mode)", color="positive")
+            ui.notify(f"✅ Balanced : {strategy_count} colonnes configurées (Median/Mode)", color="positive")
 
         elif val.startswith("Aggressive"):
             knn_count = 0
@@ -3863,10 +4451,13 @@ def missing_values_page():
                 if pd.api.types.is_numeric_dtype(df[col]) and df[col].isna().sum() > 0:
                     state.setdefault("missing_strategy", {})[col] = {"method": "knn", "params": {"n_neighbors": 5}}
                     knn_count += 1
-            ui.notify(f" Aggressive : KNN appliqué à {knn_count} colonnes numériques", color="positive")
+            ui.notify(f"✅ Aggressive : KNN appliqué à {knn_count} colonnes numériques", color="positive")
 
         elif val.startswith("Custom"):
             ui.notify("ℹ️ Choix Custom : configure colonne par colonne via le tableau", color="info")
+        
+        # ✅ CORRECTION : Recharger la page après application de la stratégie globale
+        ui.run_javascript("setTimeout(() => window.location.reload(), 800);")
 
     # ---------- UI ----------
     with ui.column().classes("w-full items-center").style(
@@ -3883,35 +4474,91 @@ def missing_values_page():
             "text-align:center !important; font-weight:400 !important;"
         )
 
-        # --- A - Overview ---
+        # --- A - Overview COMPACTE ---
         with ui.card().classes("w-full max-w-6xl mb-6").style(
-            "background:white !important; border-radius:16px !important; padding:32px !important; "
+            "background:linear-gradient(135deg, #01335A 0%, #09538C 100%) !important; "
+            "border-radius:16px !important; padding:24px 32px !important; "
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
-            ui.label(" Vue d'ensemble").style(
-                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
-                "margin-bottom:20px !important;"
-            )
-            
-            with ui.row().classes("w-full gap-8 items-center justify-around"):
-                def metric(label, value, sub=""):
-                    with ui.column().classes("items-center"):
-                        ui.label(label).style(
-                            "font-size:13px !important; color:#636e72 !important; margin-bottom:4px !important;"
+            with ui.row().classes("w-full items-center justify-between"):
+                # Total missing
+                with ui.row().classes("items-center gap-3"):
+                    ui.icon("warning", size="md").classes("text-white")
+                    with ui.column().classes("gap-0"):
+                        ui.label(f"{total_missing:,}").style(
+                            "font-weight:700 !important; font-size:28px !important; color:white !important; "
+                            "line-height:1 !important;"
                         )
-                        ui.label(value).style(
-                            "font-weight:700 !important; font-size:28px !important; color:#01335A !important;"
+                        ui.label(f"valeurs manquantes ({total_pct}%)").style(
+                            "font-size:12px !important; color:rgba(255,255,255,0.8) !important; margin-top:4px !important;"
                         )
-                        if sub: 
-                            ui.label(sub).style(
-                                "font-size:12px !important; color:#7f8c8d !important; margin-top:4px !important;"
-                            )
                 
-                metric("Total missing", f"{total_missing:,}", f"{total_pct}% du dataset")
-                metric("Features affectées", f"{affected}/{len(active_cols)}", "colonnes")
-                metric("Lignes", f"{len(df):,}", "observations")
+                # Features affectées
+                with ui.row().classes("items-center gap-3"):
+                    ui.icon("table_chart", size="md").classes("text-white")
+                    with ui.column().classes("gap-0"):
+                        ui.label(f"{affected}/{len(active_cols)}").style(
+                            "font-weight:700 !important; font-size:28px !important; color:white !important; "
+                            "line-height:1 !important;"
+                        )
+                        ui.label("features affectées").style(
+                            "font-size:12px !important; color:rgba(255,255,255,0.8) !important; margin-top:4px !important;"
+                        )
+                
+                # Lignes
+                with ui.row().classes("items-center gap-3"):
+                    ui.icon("dataset", size="md").classes("text-white")
+                    with ui.column().classes("gap-0"):
+                        ui.label(f"{len(df):,}").style(
+                            "font-weight:700 !important; font-size:28px !important; color:white !important; "
+                            "line-height:1 !important;"
+                        )
+                        ui.label("observations").style(
+                            "font-size:12px !important; color:rgba(255,255,255,0.8) !important; margin-top:4px !important;"
+                        )
 
-        # --- B - Table of columns ---
+        # --- B - Badge de statut de configuration ---
+        configured_cols = len(state.get("missing_strategy", {}))
+        
+        with ui.card().classes("w-full max-w-6xl mb-6").style(
+            "background:white !important; border-radius:16px !important; padding:24px !important; "
+            "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
+        ):
+            with ui.row().classes("w-full items-center justify-between"):
+                with ui.column():
+                    ui.label("📋 Statut de configuration").style(
+                        "font-weight:600 !important; font-size:16px !important; "
+                        "color:#2c3e50 !important; margin-bottom:8px !important;"
+                    )
+                    ui.label(f"{configured_cols}/{affected} colonnes avec valeurs manquantes configurées").style(
+                        "font-size:14px !important; color:#636e72 !important;"
+                    )
+                
+                # Badge de statut
+                if configured_cols == 0:
+                    status_color = "#e74c3c"
+                    status_icon = "cancel"
+                    status_text = "Non configuré"
+                elif configured_cols < affected:
+                    status_color = "#f39c12"
+                    status_icon = "warning"
+                    status_text = "Partiellement configuré"
+                else:
+                    status_color = "#27ae60"
+                    status_icon = "check_circle"
+                    status_text = "Prêt"
+                
+                with ui.row().classes("items-center gap-2").style(
+                    f"background:{status_color}15 !important; padding:8px 16px !important; "
+                    "border-radius:8px !important;"
+                ):
+                    ui.icon(status_icon, size="sm").style(f"color:{status_color} !important;")
+                    ui.label(status_text).style(
+                        f"color:{status_color} !important; font-weight:600 !important; "
+                        "font-size:14px !important;"
+                    )
+
+        # --- C - Table of columns ---
         with ui.card().classes("w-full max-w-6xl mb-6").style(
             "background:white !important; border-radius:16px !important; padding:32px !important; "
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
@@ -3926,7 +4573,16 @@ def missing_values_page():
                 n_missing = int(miss_counts.get(col, 0))
                 pct = float(miss_pct.get(col, 0.0))
                 dtype = "Numérique" if pd.api.types.is_numeric_dtype(df[col]) else "Catégoriel"
-                tag = "🔴" if pct > 20 else ("🟡" if pct >= 5 else ("🟢" if pct > 0 else ""))
+                
+                # Indicateurs en nuances de bleu
+                if pct > 20:
+                    tag = "🔴"
+                elif pct >= 5:
+                    tag = "🟡"
+                elif pct > 0:
+                    tag = "🔵"
+                else:
+                    tag = ""
                 
                 current_strat = state.get("missing_strategy", {}).get(col, {})
                 method = current_strat.get("method", "none")
@@ -3940,6 +4596,7 @@ def missing_values_page():
                     "Stratégie": method
                 })
             
+            # ✅ CORRECTION : Créer le tableau PUIS attacher l'événement
             table = ui.table(
                 columns=[
                     {"name": "Feature", "label": "Feature", "field": "Feature", "align": "left"},
@@ -3955,18 +4612,50 @@ def missing_values_page():
                 "width:100% !important; cursor:pointer !important;"
             )
             
+            # ✅ Gestionnaire de clic - attacher APRÈS création
+            def handle_row_click(e):
+                """Gestionnaire de clic sur une ligne du tableau"""
+                try:
+                    print(f"🖱️ Event reçu: {e}")
+                    
+                    # NiceGUI passe les données dans e.args
+                    if hasattr(e, 'args'):
+                        print(f"📦 e.args: {e.args}")
+                        
+                        # Essayer différentes structures possibles
+                        if len(e.args) >= 2 and isinstance(e.args[1], dict):
+                            row_data = e.args[1]
+                        elif len(e.args) >= 1 and isinstance(e.args[0], dict):
+                            row_data = e.args[0]
+                        else:
+                            row_data = e.args
+                        
+                        print(f"📋 row_data extrait: {row_data}")
+                        
+                        # Extraire le nom de la feature
+                        if isinstance(row_data, dict) and "Feature" in row_data:
+                            feature_name = row_data["Feature"]
+                            print(f"✅ Feature cliquée: {feature_name}")
+                            open_feature_modal(feature_name)
+                        else:
+                            print(f"⚠️ Structure inattendue - row_data: {row_data}")
+                    else:
+                        print(f"⚠️ Pas d'attribut args dans l'événement")
+                        
+                except Exception as err:
+                    print(f"❌ Erreur handle_row_click: {err}")
+                    import traceback
+                    traceback.print_exc()
+            
+            # ✅ Attacher l'événement avec .on()
+            table.on('row-click', handle_row_click)
+            
             ui.label("💡 Cliquez sur une ligne pour configurer la stratégie d'imputation").style(
                 "font-size:13px !important; color:#636e72 !important; margin-top:12px !important; "
                 "font-style:italic !important;"
             )
-            
-            def handle_row_click(e):
-                if e and "row" in e and "Feature" in e["row"]:
-                    open_feature_modal(e["row"]["Feature"])
-            
-            table.on("row-click", handle_row_click)
 
-        # --- C - Global strategy ---
+        # --- D - Global strategy ---
         with ui.card().classes("w-full max-w-6xl mb-6").style(
             "background:white !important; border-radius:16px !important; padding:32px !important; "
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
@@ -3997,7 +4686,7 @@ def missing_values_page():
                 "padding:10px 20px !important; text-transform:none !important; font-weight:500 !important;"
             )
 
-        # --- D - Preview & Apply ---
+        # --- E - Preview & Apply ---
         with ui.card().classes("w-full max-w-6xl mb-6").style(
             "background:white !important; border-radius:16px !important; padding:32px !important; "
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
@@ -4030,12 +4719,12 @@ def missing_values_page():
                     "🔍 Preview (train)",
                     on_click=preview_imputation
                 ).style(
-                    "background:#2d9cdb !important; color:white !important; border-radius:8px !important; "
+                    "background:#2196f3 !important; color:white !important; border-radius:8px !important; "
                     "padding:10px 20px !important; text-transform:none !important; font-weight:500 !important;"
                 )
                 
                 ui.button(
-                    " Appliquer & Continuer",
+                    "✓ Appliquer & Continuer",
                     on_click=confirm_and_apply
                 ).style(
                     "background:#01335A !important; color:white !important; border-radius:8px !important; "
@@ -4049,8 +4738,8 @@ def missing_values_page():
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/multivariate_analysis'")
             ).style(
                 "background:white !important; color:#01335A !important; font-weight:500 !important; "
-                "border-radius:8px !important; height:48px !important; min-width:140px !important; "
-                "font-size:14px !important; text-transform:none !important; "
+                "border:1px solid #e1e8ed !important; border-radius:8px !important; height:48px !important; "
+                "min-width:140px !important; font-size:14px !important; text-transform:none !important; "
                 "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
             )
             
@@ -4062,8 +4751,6 @@ def missing_values_page():
                 "border-radius:8px !important; height:48px !important; min-width:140px !important; "
                 "font-size:14px !important; text-transform:none !important;"
             )
-
-
 
 
 
@@ -4094,7 +4781,7 @@ def encoding_page():
                 "font-size:18px !important; color:#c0392b !important; font-weight:600 !important;"
             )
             ui.button(
-                " Retour à l'Upload",
+                "⬅ Retour à l'Upload",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")
             ).style(
                 "background:#01335A !important; color:white !important; padding:12px 32px !important; "
@@ -4102,7 +4789,7 @@ def encoding_page():
             )
         return
     
-    #  CORRECTION : Synchroniser le split avec raw_df
+    # CORRECTION : Synchroniser le split avec raw_df
     if split and "X_train" in split:
         try:
             new_cols = [c for c in df.columns if c not in split["X_train"].columns and c != target_col]
@@ -4118,10 +4805,10 @@ def encoding_page():
                                 split[key][col] = df.loc[indices, col]
                 
                 state["split"] = split
-                print(f" {len(new_cols)} nouvelles features synchronisées")
+                print(f"✅ {len(new_cols)} nouvelles features synchronisées")
         
         except Exception as e:
-            print(f" Erreur synchronisation : {e}")
+            print(f"❌ Erreur synchronisation : {e}")
     
     # Préparer df_train
     df_train = None
@@ -4134,7 +4821,7 @@ def encoding_page():
                 if target_col is not None and target_col not in df_train.columns:
                     df_train[target_col] = ytr
             except Exception as e:
-                print(f" Erreur création df_train : {e}")
+                print(f"❌ Erreur création df_train : {e}")
                 df_train = None
     
     if df_train is None:
@@ -4158,25 +4845,25 @@ def encoding_page():
         if n <= 10:
             return "🟢", "Low", "#27ae60", "green"
         elif n <= 50:
-            return "🟡", "Medium", "#01335A", "orange"
+            return "🟡", "Medium", "#f39c12", "orange"
         else:
             return "🔴", "High", "#e74c3c", "red"
     
     def get_recommended_encoding(col):
         """Recommande une méthode d'encodage"""
         if col not in df.columns:
-            return "Label Encoding", "Colonne introuvable", ""
+            return "Label Encoding", "Colonne introuvable", "❓"
         
         n_unique = df[col].nunique()
         
         if n_unique == 2:
-            return "Label Encoding", "Binaire - simple et efficace", ""
+            return "Label Encoding", "Binaire - simple et efficace", "✨"
         elif n_unique <= 10:
-            return "One-Hot Encoding", "Faible cardinalité - safe et interprétable", ""
+            return "One-Hot Encoding", "Faible cardinalité - safe et interprétable", "🎯"
         elif n_unique <= 50:
-            return "Frequency Encoding", "Cardinalité moyenne - évite l'explosion", ""
+            return "Frequency Encoding", "Cardinalité moyenne - évite l'explosion", "⚡"
         else:
-            return "Target Encoding", "Haute cardinalité - capture la relation avec target", ""
+            return "Target Encoding", "Haute cardinalité - capture la relation avec target", "🎲"
     
     def detect_ordinal(col):
         """Détecte si une colonne semble ordinale"""
@@ -4208,22 +4895,40 @@ def encoding_page():
         fig.add_trace(go.Bar(
             x=counts.index.astype(str),
             y=counts.values,
-            marker_color='#01335A',
+            marker=dict(
+                color='#01335A',
+                line=dict(color='#09538C', width=1)
+            ),
             text=counts.values,
             textposition='outside',
-            opacity=0.8
+            textfont=dict(size=11, color='#2c3e50', family='Inter'),
+            opacity=0.9,
+            hovertemplate='<b>%{x}</b><br>Fréquence: %{y}<extra></extra>'
         ))
         
         fig.update_layout(
-            title=f"Distribution des 15 premières modalités",
+            title=dict(
+                text=f"Distribution des modalités",
+                font=dict(size=16, color='#2c3e50', family='Inter', weight=600)
+            ),
             height=300,
-            margin=dict(l=40, r=20, t=40, b=80),
+            margin=dict(l=40, r=20, t=50, b=100),
             showlegend=False,
             paper_bgcolor='white',
             plot_bgcolor='#f8f9fa',
             font=dict(family="Inter, sans-serif", color="#2c3e50"),
-            xaxis=dict(title="Modalités", tickangle=-45),
-            yaxis=dict(title="Fréquence")
+            xaxis=dict(
+                title="Modalités",
+                tickangle=-45,
+                showgrid=False,
+                tickfont=dict(size=10)
+            ),
+            yaxis=dict(
+                title="Fréquence",
+                showgrid=True,
+                gridcolor='#e0e0e0',
+                gridwidth=0.5
+            )
         )
         
         return fig
@@ -4235,7 +4940,7 @@ def encoding_page():
         
         for col, method in strategies.items():
             if col not in df_result.columns:
-                print(f" Colonne {col} introuvable dans df_target")
+                print(f"⚠️ Colonne {col} introuvable dans df_target")
                 continue
             
             try:
@@ -4330,8 +5035,10 @@ def encoding_page():
     
     def open_encoding_modal(col_name):
         """Ouvre un modal pour configurer l'encodage d'une colonne"""
+        print(f"🔍 Opening modal for: {col_name}")
+        
         if col_name not in df.columns:
-            ui.notify(f" Colonne {col_name} introuvable", color="warning")
+            ui.notify(f"⚠️ Colonne {col_name} introuvable", color="warning")
             return
         
         current_method = state.get("encoding_strategy", {}).get(col_name, "")
@@ -4343,76 +5050,135 @@ def encoding_page():
         recommended, reason, icon = get_recommended_encoding(col_name)
         
         with ui.dialog() as dialog, ui.card().classes("w-full max-w-4xl").style(
-            "padding:0 !important; border-radius:16px !important; "
-            "box-shadow:0 10px 40px rgba(0,0,0,0.15) !important; max-height:90vh !important; "
-            "overflow-y:auto !important;"
+            "padding:0 !important; border-radius:20px !important; "
+            "box-shadow:0 20px 60px rgba(1,51,90,0.15) !important; max-height:90vh !important; "
+            "overflow-y:auto !important; border:1px solid #e1e8ed !important;"
         ):
-            # Header
+            # Header avec gradient amélioré
             with ui.column().classes("w-full").style(
-                "background:linear-gradient(135deg, #01335A 0%, #09538C 100%) !important; "
-                "padding:24px 32px !important; border-radius:16px 16px 0 0 !important;"
+                "background:linear-gradient(135deg, #01335A 0%, #09538C 50%, #0d6eaf 100%) !important; "
+                "padding:32px 40px !important; border-radius:20px 20px 0 0 !important; "
+                "position:relative !important;"
             ):
-                ui.label(f"Configuration : {col_name}").style(
-                    "font-weight:700 !important; font-size:22px !important; color:white !important;"
-                )
-                ui.label(f"Variable catégorielle • {n_unique} modalités uniques").style(
-                    "color:white !important; font-size:14px !important; margin-top:4px !important; opacity:0.9 !important;"
-                )
+                with ui.row().classes("items-center gap-3"):
+                    with ui.card().style(
+                        "background:rgba(255,255,255,0.15) !important; backdrop-filter:blur(10px) !important; "
+                        "padding:12px !important; border-radius:12px !important; box-shadow:none !important;"
+                    ):
+                        ui.label("🔤").style("font-size:32px !important;")
+                    
+                    with ui.column().classes("gap-1"):
+                        ui.label(f"{col_name}").style(
+                            "font-weight:700 !important; font-size:26px !important; color:white !important; "
+                            "text-shadow:0 2px 4px rgba(0,0,0,0.1) !important;"
+                        )
+                        ui.label(f"Variable catégorielle • {n_unique} modalités uniques").style(
+                            "color:rgba(255,255,255,0.9) !important; font-size:14px !important; font-weight:400 !important;"
+                        )
             
             # Contenu
-            with ui.column().classes("w-full").style("padding:32px !important;"):
+            with ui.column().classes("w-full").style("padding:40px !important;"):
                 # Stats & Distribution
-                with ui.row().classes("w-full gap-4 mb-6"):
+                with ui.row().classes("w-full gap-6 mb-8"):
                     # Carte stats
                     with ui.card().classes("flex-1").style(
-                        "background:#f8f9fa !important; padding:20px !important; "
-                        "border-radius:12px !important; box-shadow:none !important;"
+                        "background:linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%) !important; "
+                        "padding:28px !important; border-radius:16px !important; "
+                        "box-shadow:0 4px 12px rgba(0,0,0,0.06) !important; "
+                        "border:1px solid #e1e8ed !important;"
                     ):
                         icon_card, level, color, _ = get_cardinality_level(n_unique)
-                        ui.label(f"{icon_card} Cardinalité: {level}").style(
-                            f"font-weight:700 !important; font-size:16px !important; color:{color} !important; "
-                            "margin-bottom:12px !important;"
-                        )
+                        
+                        with ui.row().classes("items-center gap-3 mb-4"):
+                            with ui.card().style(
+                                f"background:{color}15 !important; padding:12px !important; "
+                                f"border-radius:12px !important; box-shadow:none !important; "
+                                f"border:2px solid {color}40 !important;"
+                            ):
+                                ui.label(icon_card).style("font-size:28px !important;")
+                            
+                            with ui.column().classes("gap-0"):
+                                ui.label(f"Cardinalité: {level}").style(
+                                    f"font-weight:700 !important; font-size:18px !important; color:{color} !important;"
+                                )
+                                ui.label(f"{n_unique} valeurs uniques").style(
+                                    "font-size:12px !important; color:#636e72 !important;"
+                                )
+                        
+                        ui.separator().classes("my-4")
                         
                         ui.label("Top 5 modalités :").style(
-                            "font-size:13px !important; color:#636e72 !important; margin-bottom:8px !important;"
+                            "font-size:14px !important; color:#2c3e50 !important; margin-bottom:16px !important; "
+                            "font-weight:600 !important;"
                         )
                         
-                        for val, count in top_values.items():
+                        for idx, (val, count) in enumerate(top_values.items()):
                             pct = round(count / len(df) * 100, 1)
-                            with ui.row().classes("items-center gap-2 mb-1"):
-                                ui.label(str(val)[:20]).style(
-                                    "width:120px !important; font-size:12px !important; "
+                            with ui.row().classes("items-center gap-3 mb-3"):
+                                with ui.badge().style(
+                                    "background:#01335A !important; color:white !important; "
+                                    "min-width:24px !important; height:24px !important; "
+                                    "display:flex !important; align-items:center !important; "
+                                    "justify-content:center !important; border-radius:6px !important; "
+                                    "font-weight:600 !important; font-size:11px !important;"
+                                ):
+                                    ui.label(str(idx+1))
+                                
+                                ui.label(str(val)[:25]).style(
+                                    "flex:0 0 140px !important; font-size:13px !important; "
                                     "color:#2c3e50 !important; font-weight:500 !important;"
                                 )
-                                ui.linear_progress(value=pct/100).props('color="primary"').classes("flex-1 h-2")
+                                
+                                with ui.column().classes("flex-1 gap-1"):
+                                    ui.linear_progress(value=pct/100).props(f'color="primary"').style(
+                                        "height:8px !important; border-radius:4px !important;"
+                                    )
+                                
                                 ui.label(f"{pct}%").style(
                                     "width:50px !important; text-align:right !important; "
-                                    "font-size:12px !important; color:#636e72 !important; font-family:monospace !important;"
+                                    "font-size:13px !important; color:#01335A !important; "
+                                    "font-family:monospace !important; font-weight:600 !important;"
                                 )
                     
                     # Graphique
                     with ui.column().classes("flex-1"):
-                        dist_plot = create_distribution_plot(col_name)
-                        if dist_plot:
-                            ui.plotly(dist_plot).style("width:100% !important;")
+                        with ui.card().style(
+                            "background:white !important; padding:20px !important; "
+                            "border-radius:16px !important; box-shadow:0 4px 12px rgba(0,0,0,0.06) !important; "
+                            "border:1px solid #e1e8ed !important;"
+                        ):
+                            dist_plot = create_distribution_plot(col_name)
+                            if dist_plot:
+                                ui.plotly(dist_plot).style("width:100% !important;")
                 
                 # Recommandation
                 with ui.card().classes("w-full mb-6").style(
-                    "background:linear-gradient(135deg, #e8f4f8 0%, #d4e9f7 100%) !important; "
-                    "padding:20px !important; border-radius:12px !important; "
-                    "border-left:4px solid #01335A !important; box-shadow:none !important;"
+                    "background:linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important; "
+                    "padding:24px !important; border-radius:16px !important; "
+                    "border-left:5px solid #01335A !important; "
+                    "box-shadow:0 4px 12px rgba(1,51,90,0.08) !important;"
                 ):
-                    with ui.row().classes("items-center gap-3 mb-2"):
-                        ui.label(icon).style("font-size:24px !important;")
-                        ui.label(f"Recommandation : {recommended}").style(
-                            "font-weight:700 !important; font-size:16px !important; color:#01335A !important;"
-                        )
-                    ui.label(reason).style(
-                        "font-size:13px !important; color:#2c3e50 !important; margin-left:36px !important;"
-                    )
+                    with ui.row().classes("items-start gap-4 mb-3"):
+                        with ui.card().style(
+                            "background:rgba(1,51,90,0.1) !important; padding:12px !important; "
+                            "border-radius:12px !important; box-shadow:none !important;"
+                        ):
+                            ui.label(icon).style("font-size:28px !important;")
+                        
+                        with ui.column().classes("gap-2"):
+                            ui.label(f"Recommandation : {recommended}").style(
+                                "font-weight:700 !important; font-size:18px !important; color:#01335A !important;"
+                            )
+                            ui.label(reason).style(
+                                "font-size:14px !important; color:#2c3e50 !important; line-height:1.6 !important;"
+                            )
                 
                 # Sélection méthode
+                ui.label("Choisir la méthode d'encodage").style(
+                    "font-weight:600 !important; font-size:16px !important; color:#2c3e50 !important; "
+                    "margin-bottom:12px !important;"
+                )
+                
                 method_select = ui.select(
                     options=[
                         "Label Encoding",
@@ -4423,12 +5189,11 @@ def encoding_page():
                     ],
                     value=current_method or recommended,
                     label="Méthode d'encodage"
-                ).props("outlined").classes("w-full mb-4")
+                ).props("outlined").classes("w-full mb-6")
                 
                 # Zone paramètres
                 params_container = ui.column().classes("w-full")
                 
-                # Variables pour stocker les widgets
                 drop_first_checkbox = None
                 smoothing_input = None
                 order_inputs = []
@@ -4442,109 +5207,134 @@ def encoding_page():
                         method = method_select.value
                         
                         if method == "Label Encoding":
-                            with ui.card().classes("w-full p-4").style(
-                                "background:#f8f9fa !important; border-radius:8px !important; box-shadow:none !important;"
+                            with ui.card().classes("w-full p-6").style(
+                                "background:#f8f9fa !important; border-radius:12px !important; "
+                                "box-shadow:none !important; border:1px solid #e1e8ed !important;"
                             ):
                                 ui.markdown("""
-**📌 Label Encoding**
+<div style="color:#2c3e50; font-size:14px; line-height:1.8;">
+
+### 📌 Label Encoding
 
 **Principe** : Assigne un entier unique à chaque modalité (0, 1, 2, ...)
 
- **Avantages** :
+✅ **Avantages** :
 - Simple et rapide
 - Idéal pour variables binaires
 - Pas d'explosion dimensionnelle
 
- **Attention** :
+⚠️ **Attention** :
 - Impose un ordre arbitraire
 - Peut biaiser les modèles basés sur la distance
-                                """).style("color:#2c3e50 !important; font-size:13px !important;")
+
+</div>
+                                """)
                         
                         elif method == "One-Hot Encoding":
-                            with ui.card().classes("w-full p-4 mb-4").style(
-                                "background:#f8f9fa !important; border-radius:8px !important; box-shadow:none !important;"
+                            with ui.card().classes("w-full p-6 mb-4").style(
+                                "background:#f8f9fa !important; border-radius:12px !important; "
+                                "box-shadow:none !important; border:1px solid #e1e8ed !important;"
                             ):
                                 ui.markdown("""
-**📌 One-Hot Encoding**
+<div style="color:#2c3e50; font-size:14px; line-height:1.8;">
 
-**Principe** : Crée une colonne binaire pour chaque modalité
+### 📌 One-Hot Encoding
 
- **Avantages** :
+**Principe** : Crée une colonne binaire (0/1) pour chaque modalité
+
+✅ **Avantages** :
 - Pas d'ordre imposé
 - Très interprétable
+- Compatible avec tous algorithmes
 
 ❌ **Inconvénients** :
 - Explosion dimensionnelle si haute cardinalité
-                                """).style("color:#2c3e50 !important; font-size:13px !important;")
+
+</div>
+                                """)
                             
                             drop_first_checkbox = ui.checkbox(
                                 "Drop first (éviter multicolinéarité)",
                                 value=current_params.get("drop_first", True)
-                            ).style("margin-top:8px !important;")
+                            )
                         
                         elif method == "Ordinal Encoding":
-                            with ui.card().classes("w-full p-4 mb-4").style(
-                                "background:#f8f9fa !important; border-radius:8px !important; box-shadow:none !important;"
+                            with ui.card().classes("w-full p-6 mb-4").style(
+                                "background:#f8f9fa !important; border-radius:12px !important; "
+                                "box-shadow:none !important; border:1px solid #e1e8ed !important;"
                             ):
                                 ui.markdown("""
-**📌 Ordinal Encoding**
+<div style="color:#2c3e50; font-size:14px; line-height:1.8;">
+
+### 📌 Ordinal Encoding
 
 **Principe** : Assigne des entiers selon un ordre naturel
 
- Capture l'ordre naturel (ex: Low < Medium < High)
+✅ Capture l'ordre naturel (Low < Medium < High)
 
- Applicable uniquement si ordre naturel existe
-                                """).style("color:#2c3e50 !important; font-size:13px !important;")
+⚠️ Applicable uniquement si ordre naturel existe
+
+</div>
+                                """)
                             
                             ui.label("Définir l'ordre (du plus bas au plus haut) :").style(
-                                "font-weight:600 !important; margin-bottom:12px !important; color:#01335A !important;"
+                                "font-weight:600 !important; margin-bottom:16px !important; color:#01335A !important;"
                             )
                             
                             current_order = current_params.get("order", suggested_order if is_ordinal else list(df[col_name].unique())[:10])
                             
-                            with ui.column().classes("w-full gap-2"):
+                            with ui.column().classes("w-full gap-3"):
                                 for idx, val in enumerate(current_order):
                                     with ui.row().classes("items-center gap-3"):
                                         with ui.badge().style(
-                                            "background:#01335A !important; color:white !important; "
-                                            "min-width:30px !important; height:30px !important; "
+                                            "background:linear-gradient(135deg, #01335A, #09538C) !important; "
+                                            "color:white !important; min-width:36px !important; height:36px !important; "
                                             "display:flex !important; align-items:center !important; "
-                                            "justify-content:center !important; border-radius:6px !important;"
+                                            "justify-content:center !important; border-radius:8px !important;"
                                         ):
-                                            ui.label(str(idx)).style("font-weight:600 !important;")
+                                            ui.label(str(idx)).style("font-weight:700 !important;")
                                         
                                         inp = ui.input(value=str(val)).props("outlined dense").classes("flex-1")
                                         order_inputs.append(inp)
                         
                         elif method == "Frequency Encoding":
-                            with ui.card().classes("w-full p-4").style(
-                                "background:#f8f9fa !important; border-radius:8px !important; box-shadow:none !important;"
+                            with ui.card().classes("w-full p-6").style(
+                                "background:#f8f9fa !important; border-radius:12px !important; "
+                                "box-shadow:none !important; border:1px solid #e1e8ed !important;"
                             ):
                                 ui.markdown("""
-**📌 Frequency Encoding**
+<div style="color:#2c3e50; font-size:14px; line-height:1.8;">
+
+### 📌 Frequency Encoding
 
 **Principe** : Remplace chaque modalité par sa fréquence
 
- **Avantages** :
+✅ **Avantages** :
 - Simple et efficace
 - Pas de data leakage
 - Une seule colonne générée
-                                """).style("color:#2c3e50 !important; font-size:13px !important;")
+
+</div>
+                                """)
                         
                         elif method == "Target Encoding":
-                            with ui.card().classes("w-full p-4 mb-4").style(
-                                "background:#cde4ff !important; border-radius:8px !important; "
-                                "border-left:3px solid #01335A !important; box-shadow:none !important;"
+                            with ui.card().classes("w-full p-6 mb-4").style(
+                                "background:#fff3cd !important; border-radius:12px !important; "
+                                "border-left:4px solid #f39c12 !important; box-shadow:none !important;"
                             ):
                                 ui.markdown("""
-**📌 Target Encoding**
+<div style="color:#856404; font-size:14px; line-height:1.8;">
+
+### 📌 Target Encoding
 
 **Principe** : Remplace chaque modalité par la moyenne de la target
 
- Capture directement la relation avec la target
+✅ Capture directement la relation avec la target
 
- **Risques** : Overfitting et data leakage possibles
-                                """).style("color:#856404 !important; font-size:13px !important;")
+⚠️ **Risques** : Overfitting et data leakage possibles
+
+</div>
+                                """)
                             
                             smoothing_input = ui.number(
                                 label="Smoothing (régularisation)",
@@ -4557,10 +5347,8 @@ def encoding_page():
                 update_params_ui()
                 
                 # Boutons
-                with ui.row().classes("w-full justify-end gap-3 mt-6"):
-                    ui.button("Annuler", on_click=dialog.close).props("flat").style(
-                        "color:#7f8c8d !important; text-transform:none !important;"
-                    )
+                with ui.row().classes("w-full justify-end gap-3 mt-8"):
+                    ui.button("Annuler", on_click=dialog.close).props("flat")
                     
                     def save_encoding():
                         method = method_select.value
@@ -4577,104 +5365,91 @@ def encoding_page():
                         state.setdefault("encoding_strategy", {})[col_name] = method
                         state.setdefault("encoding_params", {})[col_name] = params
                         
-                        ui.notify(f" Encodage configuré pour {col_name}", color="positive")
+                        ui.notify(f"✅ Encodage configuré pour {col_name}", color="positive")
                         dialog.close()
                         ui.run_javascript("setTimeout(() => window.location.reload(), 500);")
                     
                     ui.button("Sauvegarder", on_click=save_encoding).style(
-                        "background:#01335A !important; color:white !important; border-radius:8px !important; "
-                        "padding:10px 24px !important; text-transform:none !important; font-weight:600 !important;"
-                    )
+                        "background:linear-gradient(135deg, #01335A, #09538C) !important; "
+                        "color:white !important; border-radius:10px !important; "
+                        "padding:12px 28px !important; text-transform:none !important; "
+                        "font-weight:600 !important;"
+                    ).props('icon-right="save"')
         
         dialog.open()
     
     def apply_all_encodings():
-        """Applique tous les encodages et passe à l'étape suivante"""
+        """Applique tous les encodages"""
         strategies = state.get("encoding_strategy", {})
         split_data = state.get("split", {})
 
         if not strategies:
-            ui.notify(" Aucun encodage configuré", color="warning")
+            ui.notify("⚠️ Aucun encodage configuré", color="warning")
             return
         
-        with ui.dialog() as dialog, ui.card().classes("w-full max-w-md").style(
-            "padding:32px !important; border-radius:16px !important; "
-            "box-shadow:0 10px 40px rgba(0,0,0,0.15) !important;"
+        with ui.dialog() as dialog, ui.card().style(
+            "padding:0 !important; border-radius:20px !important; "
+            "box-shadow:0 20px 60px rgba(1,51,90,0.15) !important;"
         ):
-            ui.label(" Confirmation").style(
-                "font-weight:700 !important; font-size:20px !important; color:#01335A !important; "
-                "margin-bottom:16px !important;"
-            )
-            ui.label("Voulez-vous appliquer les encodages sur tous les datasets ?").style(
-                "margin-bottom:8px !important; color:#2c3e50 !important; font-size:14px !important;"
-            )
-            ui.label(f"{len(strategies)} encodage(s) configuré(s)").style(
-                "color:#636e72 !important; font-size:13px !important;"
-            )
+            with ui.column().classes("w-full").style(
+                "background:linear-gradient(135deg, #01335A 0%, #09538C 100%) !important; "
+                "padding:28px 32px !important; border-radius:20px 20px 0 0 !important;"
+            ):
+                ui.label("⚠️ Confirmation").style(
+                    "font-weight:700 !important; font-size:22px !important; color:white !important;"
+                )
             
-            with ui.row().classes("w-full justify-end gap-3 mt-6"):
-                ui.button("Annuler", on_click=dialog.close).props("flat").style(
-                    "color:#7f8c8d !important; text-transform:none !important;"
+            with ui.column().classes("w-full").style("padding:32px !important;"):
+                ui.label("Voulez-vous appliquer les encodages ?").style(
+                    "margin-bottom:16px !important; color:#2c3e50 !important;"
                 )
                 
-                def confirm_and_next():
-                    try:
-                        params = state.get("encoding_params", {})
-                        
-                        # FIT sur X_train uniquement
-                        if split_data and "X_train" in split_data:
-                            df_train_for_fit = split_data["X_train"].copy()
-                            if target_col and "y_train" in split_data and target_col not in df_train_for_fit.columns:
-                                df_train_for_fit[target_col] = split_data["y_train"]
-                        else:
-                            df_train_for_fit = df_train.copy()
-                    
-                        # FIT sur train
-                        _, encoders = apply_encoding(
-                            df_train_for_fit, 
-                            strategies, 
-                            params, 
-                            fit_on_train=True
-                        )
-                        state["fitted_encoders"] = encoders
-                        
-                        # TRANSFORM sur raw_df
-                        df_result, _ = apply_encoding(
-                            df.copy(),
-                            strategies,
-                            params,
-                            fit_on_train=False,
-                            fitted_encoders=encoders
-                        )
-                        state["raw_df"] = df_result
-                    
-                        # TRANSFORM sur les splits
-                        if split_data:
-                            for key in ["X_train", "X_val", "X_test"]:
-                                if key in split_data and isinstance(split_data[key], pd.DataFrame):
-                                    split_data[key], _ = apply_encoding(
-                                        split_data[key], 
-                                        strategies, 
-                                        params, 
-                                        fit_on_train=False,
-                                        fitted_encoders=encoders
-                                    )
-                            state["split"] = split_data
-                        
-                        ui.notify(" Encodages appliqués avec succès!", color="positive")
-                        dialog.close()
-                        ui.run_javascript("setTimeout(() => window.location.href='/supervised/distribution_transform', 1000);")
-                    
-                    except Exception as e:
-                        ui.notify(f"❌ Erreur : {str(e)}", color="negative")
-                        print(f"Erreur détaillée : {e}")
-                        import traceback
-                        traceback.print_exc()
-                
-                ui.button("Confirmer & Continuer", on_click=confirm_and_next).style(
-                    "background:#01335A !important; color:white !important; border-radius:8px !important; "
-                    "padding:10px 24px !important; text-transform:none !important; font-weight:600 !important;"
+                ui.label(f"📊 {len(strategies)} encodage(s) configuré(s)").style(
+                    "color:#01335A !important; font-weight:600 !important;"
                 )
+                
+                with ui.row().classes("w-full justify-end gap-3 mt-6"):
+                    ui.button("Annuler", on_click=dialog.close).props("flat")
+                    
+                    def confirm_and_next():
+                        try:
+                            params = state.get("encoding_params", {})
+                            
+                            if split_data and "X_train" in split_data:
+                                df_train_for_fit = split_data["X_train"].copy()
+                                if target_col and "y_train" in split_data and target_col not in df_train_for_fit.columns:
+                                    df_train_for_fit[target_col] = split_data["y_train"]
+                            else:
+                                df_train_for_fit = df_train.copy()
+                        
+                            _, encoders = apply_encoding(df_train_for_fit, strategies, params, fit_on_train=True)
+                            state["fitted_encoders"] = encoders
+                            
+                            df_result, _ = apply_encoding(df.copy(), strategies, params, fit_on_train=False, fitted_encoders=encoders)
+                            state["raw_df"] = df_result
+                        
+                            if split_data:
+                                for key in ["X_train", "X_val", "X_test"]:
+                                    if key in split_data and isinstance(split_data[key], pd.DataFrame):
+                                        split_data[key], _ = apply_encoding(
+                                            split_data[key], strategies, params, 
+                                            fit_on_train=False, fitted_encoders=encoders
+                                        )
+                                state["split"] = split_data
+                            
+                            ui.notify("✅ Encodages appliqués!", color="positive")
+                            dialog.close()
+                            ui.run_javascript("setTimeout(() => window.location.href='/supervised/distribution_transform', 1000);")
+                        
+                        except Exception as e:
+                            ui.notify(f"❌ Erreur : {str(e)}", color="negative")
+                            print(f"Erreur : {e}")
+                    
+                    ui.button("Confirmer", on_click=confirm_and_next).style(
+                        "background:linear-gradient(135deg, #01335A, #09538C) !important; "
+                        "color:white !important; border-radius:10px !important; "
+                        "padding:12px 24px !important;"
+                    )
         
         dialog.open()
     
@@ -4685,7 +5460,6 @@ def encoding_page():
             recommended, _, _ = get_recommended_encoding(col)
             state.setdefault("encoding_strategy", {})[col] = recommended
             
-            # Paramètres par défaut
             params = {}
             if recommended == "One-Hot Encoding":
                 params["drop_first"] = True
@@ -4693,181 +5467,190 @@ def encoding_page():
                 params["smoothing"] = 10
             elif recommended == "Ordinal Encoding":
                 is_ordinal, order = detect_ordinal(col)
-                if is_ordinal:
-                    params["order"] = order
-                else:
-                    params["order"] = list(df[col].unique())[:10]
+                params["order"] = order if is_ordinal else list(df[col].unique())[:10]
             
             state.setdefault("encoding_params", {})[col] = params
             count += 1
         
-        ui.notify(f" {count} recommandations appliquées", color="positive")
+        ui.notify(f"✅ {count} recommandations appliquées", color="positive")
         ui.run_javascript("setTimeout(() => window.location.reload(), 500);")
     
     # ---------- UI PRINCIPALE ----------
     with ui.column().classes("w-full items-center").style(
-        "background:#f0f2f5 !important; min-height:100vh !important; padding:48px 24px !important; "
-        "font-family:'Inter', sans-serif !important;"
+        "background:linear-gradient(180deg, #f0f4f8 0%, #e8f1f8 100%) !important; "
+        "min-height:100vh !important; padding:60px 24px !important;"
     ):
         # HEADER
-        ui.label("Encodage des Features Catégorielles").style(
-            "font-weight:700 !important; font-size:36px !important; color:#01335A !important; "
-            "margin-bottom:8px !important; text-align:center !important; letter-spacing:-0.5px !important;"
-        )
-        ui.label("Conversion des variables catégorielles en format numérique").style(
-            "font-size:16px !important; color:#636e72 !important; margin-bottom:48px !important; "
-            "text-align:center !important; font-weight:400 !important;"
-        )
+        with ui.column().classes("items-center mb-12"):
+            ui.label("Encodage des Features Catégorielles").style(
+                "font-weight:800 !important; font-size:42px !important; "
+                "background:linear-gradient(135deg, #01335A 0%, #09538C 100%) !important; "
+                "-webkit-background-clip:text !important; -webkit-text-fill-color:transparent !important; "
+                "text-align:center !important;"
+            )
+            ui.label("Conversion des variables catégorielles en format numérique").style(
+                "font-size:17px !important; color:#636e72 !important; text-align:center !important;"
+            )
         
-        # --- OVERVIEW METRICS ---
-        with ui.card().classes("w-full max-w-6xl mb-6").style(
-            "background:white !important; border-radius:16px !important; padding:32px !important; "
-            "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
+        # SECTION EXPLICATION
+        with ui.card().classes("w-full max-w-6xl mb-8").style(
+            "background:white !important; border-radius:24px !important; padding:48px !important; "
+            "box-shadow:0 12px 32px rgba(1,51,90,0.1) !important; position:relative !important;"
+        ):
+            with ui.row().classes("items-start gap-8 w-full"):
+                with ui.column().classes("flex-1 gap-6"):
+                    ui.label("Pourquoi encoder les variables catégorielles ?").style(
+                        "font-weight:800 !important; font-size:28px !important; color:#01335A !important;"
+                    )
+                    
+                    ui.markdown("""
+Les algorithmes de Machine Learning travaillent **exclusivement avec des nombres**. 
+Les variables catégorielles doivent être **transformées en valeurs numériques**.
+
+**🎯 Objectifs :**
+1. **Identifier** toutes les features catégorielles
+2. **Choisir** la méthode d'encodage adaptée
+3. **Appliquer** l'encodage sur train/validation/test
+
+**⚡ Méthodes disponibles :**
+- **Label Encoding** : Variables binaires
+- **One-Hot Encoding** : Faible cardinalité (<10)
+- **Frequency Encoding** : Cardinalité moyenne (10-50)
+- **Target Encoding** : Haute cardinalité (>50)
+- **Ordinal Encoding** : Ordre naturel
+                    """)
+        
+        # OVERVIEW METRICS
+        with ui.card().classes("w-full max-w-6xl mb-8").style(
+            "background:white !important; border-radius:20px !important; padding:40px !important; "
+            "box-shadow:0 8px 24px rgba(1,51,90,0.08) !important;"
         ):
             ui.label(" Vue d'ensemble").style(
-                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
-                "margin-bottom:20px !important;"
+                "font-weight:700 !important; font-size:26px !important; color:#01335A !important; margin-bottom:28px !important;"
             )
             
             if n_categorical == 0:
-                with ui.card().classes("w-full p-6 text-center").style(
-                    "background:linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%) !important; "
-                    "border-radius:12px !important; border-left:4px solid #27ae60 !important; box-shadow:none !important;"
-                ):
-                    ui.label("").style("font-size:48px !important; margin-bottom:12px !important;")
-                    ui.label("Aucune feature catégorielle détectée").style(
-                        "font-weight:600 !important; font-size:18px !important; color:#155724 !important; "
-                        "margin-bottom:8px !important;"
-                    )
-                    ui.label("Toutes vos features sont déjà au format numérique").style(
-                        "font-size:14px !important; color:#155724 !important; opacity:0.8 !important;"
-                    )
+                ui.label("✅ Aucune feature catégorielle détectée").style(
+                    "font-weight:700 !important; font-size:22px !important; color:#27ae60 !important;"
+                )
             else:
-                with ui.row().classes("w-full gap-8 items-center justify-around"):
-                    def metric_card(icon, label, value, sublabel="", color="#01335A"):
-                        with ui.column().classes("items-center"):
-                            ui.label(icon).style("font-size:32px !important; margin-bottom:8px !important;")
-                            ui.label(value).style(
-                                f"font-weight:700 !important; font-size:28px !important; color:{color} !important;"
-                            )
-                            ui.label(label).style(
-                                "font-size:13px !important; color:#636e72 !important; margin-top:4px !important;"
-                            )
-                            if sublabel:
-                                ui.label(sublabel).style(
-                                    "font-size:12px !important; color:#7f8c8d !important; margin-top:2px !important;"
-                                )
+                pct_cat = round(n_categorical / total_features * 100) if total_features > 0 else 0
+                n_configured = len([c for c in cat_cols if c in state.get("encoding_strategy", {})])
+                
+                with ui.row().classes("w-full gap-6"):
+                    with ui.card().classes("flex-1 text-center p-6").style(
+                        "background:linear-gradient(135deg, #01335A15, #01335A05) !important; "
+                        "border-radius:16px !important; border:2px solid #01335A30 !important;"
+                    ):
+                        ui.label(str(n_categorical)).style(
+                            "font-weight:800 !important; font-size:36px !important; color:#01335A !important;"
+                        )
+                        ui.label("Catégorielles").style("color:#2c3e50 !important; font-weight:600 !important;")
                     
-                    pct_cat = round(n_categorical / total_features * 100) if total_features > 0 else 0
-                    n_configured = len([c for c in cat_cols if c in state.get("encoding_strategy", {})])
-                    
-                    low_card = len([c for c in cat_cols if df[c].nunique() <= 10])
-                    medium_card = len([c for c in cat_cols if 10 < df[c].nunique() <= 50])
-                    high_card = len([c for c in cat_cols if df[c].nunique() > 50])
-                    
-                    metric_card("", "Catégorielles", str(n_categorical), f"{pct_cat}% du total")
-                    metric_card("", "Configurées", f"{n_configured}/{n_categorical}", "")
-                    metric_card("🟢", "Low", str(low_card), "≤10")
-                    metric_card("🟡", "Medium", str(medium_card), "11-50", "#01335A")
-                    metric_card("🔴", "High", str(high_card), ">50", "#e74c3c")
+                    with ui.card().classes("flex-1 text-center p-6").style(
+                        "background:linear-gradient(135deg, #2196f315, #2196f305) !important; "
+                        "border-radius:16px !important; border:2px solid #2196f330 !important;"
+                    ):
+                        ui.label(f"{n_configured}/{n_categorical}").style(
+                            "font-weight:800 !important; font-size:36px !important; color:#2196f3 !important;"
+                        )
+                        ui.label("Configurées").style("color:#2c3e50 !important; font-weight:600 !important;")
         
-        # --- TABLE DES FEATURES ---
+        # TABLE AVEC BOUTONS INDIVIDUELS
         if n_categorical > 0:
-            with ui.card().classes("w-full max-w-6xl mb-6").style(
-                "background:white !important; border-radius:16px !important; padding:32px !important; "
-                "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
+            with ui.card().classes("w-full max-w-6xl mb-8").style(
+                "background:white !important; border-radius:20px !important; padding:40px !important; "
+                "box-shadow:0 8px 24px rgba(1,51,90,0.08) !important;"
             ):
-                ui.label("⚙️ Configuration des encodages").style(
-                    "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
-                    "margin-bottom:16px !important;"
+                ui.label(" Configuration").style(
+                    "font-weight:700 !important; font-size:26px !important; color:#01335A !important; margin-bottom:20px !important;"
                 )
                 
-                ui.label("💡 Cliquez sur une ligne pour configurer l'encodage").style(
-                    "font-size:14px !important; color:#636e72 !important; margin-bottom:20px !important; "
-                    "font-style:italic !important;"
-                )
+                with ui.card().classes("w-full mb-6").style(
+                    "background:linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important; "
+                    "padding:20px !important; border-radius:12px !important; "
+                    "box-shadow:none !important; border-left:4px solid #01335A !important;"
+                ):
+                    ui.label("💡 Cliquez sur le bouton 'Configurer' pour chaque variable").style(
+                        "font-size:15px !important; color:#01335A !important; font-weight:600 !important;"
+                    )
                 
-                rows = []
+                # ✅ SOLUTION : Utiliser des boutons au lieu d'événements de clic sur table
                 for col in cat_cols:
                     n_unique = df[col].nunique()
-                    icon, level, color, badge_color = get_cardinality_level(n_unique)
+                    icon, level, color, _ = get_cardinality_level(n_unique)
                     recommended, _, rec_icon = get_recommended_encoding(col)
                     current = state.get("encoding_strategy", {}).get(col, "")
+                    status = "✅" if current else "⚪"
                     
-                    status = "" if current else "⚪"
-                    
-                    rows.append({
-                        "Feature": col,
-                        "Cardinalité": n_unique,
-                        "Niveau": f"{icon} {level}",
-                        "Recommandé": f"{rec_icon} {recommended}",
-                        "Configuré": current or "-",
-                        "Status": status
-                    })
+                    with ui.card().classes("w-full mb-3").style(
+                        "background:#f8f9fa !important; padding:20px !important; "
+                        "border-radius:12px !important; box-shadow:none !important; "
+                        "border:1px solid #e1e8ed !important; transition:all 0.2s ease !important;"
+                    ):
+                        with ui.row().classes("w-full items-center justify-between gap-4"):
+                            # Info colonne
+                            with ui.row().classes("items-center gap-4 flex-1"):
+                                ui.label(status).style("font-size:20px !important;")
+                                
+                                with ui.column().classes("gap-1"):
+                                    ui.label(col).style(
+                                        "font-weight:700 !important; font-size:16px !important; color:#01335A !important;"
+                                    )
+                                    ui.label(f"{icon} {level} • {n_unique} modalités").style(
+                                        "font-size:12px !important; color:#636e72 !important;"
+                                    )
+                                
+                                if current:
+                                    with ui.badge().style(
+                                        "background:#27ae60 !important; color:white !important; "
+                                        "padding:6px 12px !important; border-radius:6px !important;"
+                                    ):
+                                        ui.label(current).style("font-size:11px !important; font-weight:600 !important;")
+                                else:
+                                    with ui.badge().style(
+                                        "background:#f39c12 !important; color:white !important; "
+                                        "padding:6px 12px !important; border-radius:6px !important;"
+                                    ):
+                                        ui.label(f"Recommandé: {recommended}").style(
+                                            "font-size:11px !important; font-weight:600 !important;"
+                                        )
+                            
+                            # Bouton configurer
+                            ui.button(
+                                "Configurer",
+                                on_click=lambda c=col: open_encoding_modal(c)
+                            ).style(
+                                "background:linear-gradient(135deg, #01335A, #09538C) !important; "
+                                "color:white !important; border-radius:8px !important; "
+                                "padding:10px 20px !important; text-transform:none !important; "
+                                "font-weight:600 !important; font-size:13px !important;"
+                            ).props('icon-right="settings"')
                 
-                table = ui.table(
-                    columns=[
-                        {"name": "Feature", "label": "Feature", "field": "Feature", "align": "left"},
-                        {"name": "Cardinalité", "label": "Card.", "field": "Cardinalité", "align": "center"},
-                        {"name": "Niveau", "label": "Niveau", "field": "Niveau", "align": "center"},
-                        {"name": "Recommandé", "label": "Recommandé", "field": "Recommandé", "align": "left"},
-                        {"name": "Configuré", "label": "Configuré", "field": "Configuré", "align": "left"},
-                        {"name": "Status", "label": "✓", "field": "Status", "align": "center"}
-                    ],
-                    rows=rows,
-                    row_key="Feature"
-                ).props("flat bordered").style("width:100% !important; cursor:pointer !important;")
+                ui.separator().classes("my-6")
                 
-                #  CORRECTION : Utiliser "row:click" avec deux-points
-                def handle_row_click(e):
-                    try:
-                        if e and "row" in e and "Feature" in e["row"]:
-                            open_encoding_modal(e["row"]["Feature"])
-                    except Exception as ex:
-                        print(f"Erreur click: {ex}")
-                
-                table.on("row-click", handle_row_click)  # ← Correction ici
-                
-                # Actions rapides
-                with ui.row().classes("w-full gap-3 mt-6"):
-                    ui.button(
-                        "✨ Appliquer les recommandations",
-                        on_click=apply_recommended
-                    ).style(
-                        "background:#01335A !important; color:white !important; border-radius:8px !important; "
-                        "padding:12px 24px !important; text-transform:none !important; font-weight:600 !important;"
+                with ui.row().classes("w-full gap-4"):
+                    ui.button("✨ Appliquer recommandations", on_click=apply_recommended).style(
+                        "flex:1 !important; background:linear-gradient(135deg, #2196f3, #1976d2) !important; "
+                        "color:white !important; border-radius:12px !important; padding:16px !important;"
                     )
                     
-                    ui.button(
-                        " Appliquer & Continuer",
-                        on_click=apply_all_encodings
-                    ).style(
-                        "background:#01335A !important; color:white !important; border-radius:8px !important; "
-                        "padding:12px 24px !important; text-transform:none !important; font-weight:600 !important;"
+                    ui.button("✓ Appliquer & Continuer", on_click=apply_all_encodings).style(
+                        "flex:1 !important; background:linear-gradient(135deg, #01335A, #09538C) !important; "
+                        "color:white !important; border-radius:12px !important; padding:16px !important;"
                     )
         
-        # --- NAVIGATION ---
-        with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
-            ui.button(
-                "← Précédent",
-                on_click=lambda: ui.run_javascript("window.location.href='/supervised/missing_values'")
-            ).style(
-                "background:white !important; color:#01335A !important; font-weight:500 !important; "
-                "border-radius:8px !important; height:48px !important; min-width:140px !important; "
-                "font-size:14px !important; text-transform:none !important; "
-                "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
+        # NAVIGATION
+        with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-12"):
+            ui.button("← Précédent", on_click=lambda: ui.run_javascript("window.location.href='/supervised/missing_values'")).style(
+                "background:white !important; color:#01335A !important; border:2px solid #01335A !important; "
+                "border-radius:12px !important; height:52px !important; min-width:160px !important;"
             )
             
-            ui.button(
-                "Suivant →",
-                on_click=lambda: ui.run_javascript("window.location.href='/supervised/distribution_transform'")
-            ).style(
-                "background:#01335A !important; color:white !important; font-weight:600 !important; "
-                "border-radius:8px !important; height:48px !important; min-width:140px !important; "
-                "font-size:14px !important; text-transform:none !important;"
+            ui.button("Suivant →", on_click=lambda: ui.run_javascript("window.location.href='/supervised/distribution_transform'")).style(
+                "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white !important; "
+                "border-radius:12px !important; height:52px !important; min-width:160px !important;"
             )
-
-
 # ----------------- PAGE 3.8 : TRANSFORMATIONS DE DISTRIBUTIONS -----------------
 
 @ui.page('/supervised/distribution_transform')
@@ -5708,18 +6491,34 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                 table = ui.table(
                     columns=[
                         {"name": "Feature", "label": "Feature", "field": "Feature", "align": "left"},
-                        {"name": "Skewness", "label": "Skewness", "field": "Skewness", "align": "center"},
-                        {"name": "Kurtosis", "label": "Kurtosis", "field": "Kurtosis", "align": "center"},
+                        {"name": "Type", "label": "Type", "field": "Type", "align": "left"},
+                        {"name": "Missing", "label": "Missing", "field": "Missing", "align": "center"},
+                        {"name": "% Missing", "label": "% Missing", "field": "% Missing", "align": "center"},
                         {"name": "Niveau", "label": "Niveau", "field": "Niveau", "align": "center"},
-                        {"name": "Recommandé", "label": "Recommandé", "field": "Recommandé", "align": "left"},
-                        {"name": "Configuré", "label": "Configuré", "field": "Configuré", "align": "left"}
+                        {"name": "Stratégie", "label": "Stratégie", "field": "Stratégie", "align": "center"}
                     ],
                     rows=rows,
                     row_key="Feature"
                 ).props("flat bordered").style(
                     "width:100% !important; cursor:pointer !important;"
                 )
-                
+                # Gestionnaire de clic sur une ligne
+                def handle_row_click(e):
+                    """Gestionnaire de clic sur une ligne du tableau"""
+                    try:
+                        # e.args contient les arguments de l'événement
+                        # e.args[1] contient les données de la ligne cliquée
+                        if e and hasattr(e, 'args') and len(e.args) > 1:
+                            row_data = e.args[1]
+                            if isinstance(row_data, dict) and "Feature" in row_data:
+                                open_feature_modal(row_data["Feature"])
+                    except Exception as err:
+                        print(f"❌ Erreur handle_row_click: {err}")
+                        print(f"Event data: {e}")
+            
+                # Attacher l'événement après la création du tableau
+                table.on('row-click', handle_row_click)
+
                 ui.label("💡 Cliquez sur une ligne pour configurer la transformation").style(
                     "font-size:13px !important; color:#636e72 !important; margin-top:12px !important; "
                     "font-style:italic !important;"
@@ -6089,7 +6888,7 @@ def feature_scaling_page():
                         )
                 
                 with ui.column().classes("flex-1"):
-                    ui.label(f"⚙️ **{len(cat_encoded)} variables catégorielles** encodées").style("font-size:15px; margin-bottom:4px; color:#0277bd;")
+                    ui.label(f" **{len(cat_encoded)} variables catégorielles** encodées").style("font-size:15px; margin-bottom:4px; color:#0277bd;")
                     if cat_encoded:
                         ui.label(f"→ {', '.join(cat_encoded[:5])}{'...' if len(cat_encoded) > 5 else ''}").style(
                             "font-size:13px; color:#42a5f5;"
@@ -6170,7 +6969,7 @@ def feature_scaling_page():
             "background:white; border:3px solid #64b5f6; border-radius:16px; "
             "box-shadow: 0 6px 16px rgba(33, 150, 243, 0.2);"
         ):
-            ui.label("⚙️ Choisir la méthode de scaling").style(
+            ui.label(" Choisir la méthode de scaling").style(
                 "font-weight:700; font-size:22px; color:#01579b; margin-bottom:24px; text-align:center;"
             )
             
@@ -6527,7 +7326,7 @@ def dimension_reduction_page():
         
         # Section B : Options
         with ui.card().classes("w-full max-w-6xl p-8 mb-8"):
-            ui.label("⚙️ Configuration de la Réduction").style(
+            ui.label(" Configuration de la Réduction").style(
                 "font-weight:700; font-size:20px; color:#2c3e50; margin-bottom:16px;"
             )
             
@@ -7617,7 +8416,7 @@ def algorithm_config_page():
                             ui.label(f"• Dimension : {' Réduite' if compat['reduction'] else ' Peut affecter performance'}").style("font-size:14px;")
                             ui.label(f"• Missing : {' Aucune' if compat['missing'] == 0 else '❌ Présentes'}").style("font-size:14px;")
                     
-                    ui.label("⚙️ HYPERPARAMÈTRES").style("font-weight:700; font-size:18px; margin-top:16px; margin-bottom:12px;")
+                    ui.label(" HYPERPARAMÈTRES").style("font-weight:700; font-size:18px; margin-top:16px; margin-bottom:12px;")
                     
                     knn_config = state["algo_configs"]["knn"]
                     
@@ -7730,7 +8529,7 @@ def algorithm_config_page():
                             ui.label(f"• Missing : {' OK' if compat['missing'] == 0 else ' sklearn ne gère pas nativement'}").style("font-size:14px;")
                             ui.label("• Outliers :  Robuste").style("font-size:14px;")
                     
-                    ui.label("⚙️ HYPERPARAMÈTRES").style("font-weight:700; font-size:18px; margin-top:16px; margin-bottom:12px;")
+                    ui.label(" HYPERPARAMÈTRES").style("font-weight:700; font-size:18px; margin-top:16px; margin-bottom:12px;")
                     
                     dt_config = state["algo_configs"]["decision_tree"]
                     
@@ -7872,7 +8671,7 @@ def algorithm_config_page():
                             ui.label("• Corrélations :  Viole hypothèse d'indépendance").style("font-size:14px;")
                             ui.label(f"• Missing : {' OK' if compat['missing'] == 0 else '❌ À gérer avant'}").style("font-size:14px;")
                     
-                    ui.label("⚙️ HYPERPARAMÈTRES").style("font-weight:700; font-size:18px; margin-top:16px; margin-bottom:12px;")
+                    ui.label(" HYPERPARAMÈTRES").style("font-weight:700; font-size:18px; margin-top:16px; margin-bottom:12px;")
                     
                     nb_config = state["algo_configs"]["naive_bayes"]
                     
@@ -7981,7 +8780,7 @@ def algorithm_config_page():
                 if state.get("validation_strategy") == "cv":
                     with cv_options_container:
                         with ui.card().classes("w-full p-4").style("background:#cde4ff;"):
-                            ui.label("⚙️ Paramètres Cross-Validation :").style("font-weight:600; margin-bottom:8px;")
+                            ui.label(" Paramètres Cross-Validation :").style("font-weight:600; margin-bottom:8px;")
                             
                             with ui.row().classes("w-full items-center gap-4"):
                                 ui.label("Nombre de folds :").style("width:200px;")
