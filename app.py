@@ -826,6 +826,8 @@ def user_decisions_page():
         state["apply_smote"] = smote_cb.value
 
         ui.notify("✅ Décisions enregistrées avec succès !", color="positive")
+         
+        ui.run_javascript("setTimeout(() => window.location.href='/supervised/preprocessing2', 1000);")
 
     def go_to_split():
         on_confirm()
@@ -1113,7 +1115,7 @@ def user_decisions_page():
 
             # Info exclusions
             with ui.card().classes("w-full mt-6").style(
-                "background:#12344f !important; padding:20px !important; border-radius:12px !important; "
+                "background:#134b78 !important; padding:20px !important; border-radius:12px !important; "
                 "border-left:4px solid #01335A  !important; box-shadow:none !important;"
             ):
                 ui.label("💡 Exclusions automatiques détectées :").style(
