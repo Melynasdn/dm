@@ -822,18 +822,50 @@ def user_decisions_page():
 
         state["target_column"] = target_col
 
+        # Sauvegarder les types
         for col_name, widget in column_type_widgets.items():
             state.setdefault("columns_types", {})[col_name] = widget.value
 
+        # Sauvegarder les exclusions
+        columns_to_exclude = {}
         for col_name, cb in column_exclude_widgets.items():
-            state.setdefault("columns_exclude", {})[col_name] = cb.value
+            columns_to_exclude[col_name] = cb.value
+        
+        state["columns_exclude"] = columns_to_exclude
+
+        # CRITIQUE: Appliquer immédiatement les exclusions sur raw_df ET split
+        cols_to_drop = [col for col, exclude in columns_to_exclude.items() if exclude and col in df.columns and col != target_col]
+        
+        if cols_to_drop:
+            print(f"\n🗑️ EXCLUSION DE {len(cols_to_drop)} COLONNES:")
+            print(f"   → Colonnes: {cols_to_drop}")
+            
+            # 1. Supprimer du raw_df
+            current_df = state["raw_df"].copy()
+            current_df = current_df.drop(columns=cols_to_drop, errors='ignore')
+            state["raw_df"] = current_df
+            print(f"   ✅ raw_df: {current_df.shape}")
+            
+            # 2. Supprimer du split si existe
+            split_data = state.get("split", {})
+            if split_data:
+                for split_key in ["X_train", "X_val", "X_test"]:
+                    if split_key in split_data:
+                        split_df = split_data[split_key]
+                        cols_in_split = [c for c in cols_to_drop if c in split_df.columns]
+                        if cols_in_split:
+                            split_data[split_key] = split_df.drop(columns=cols_in_split, errors='ignore')
+                            print(f"   ✅ {split_key}: {split_data[split_key].shape}")
+                
+                state["split"] = split_data
+            
+            ui.notify(f"🗑️ {len(cols_to_drop)} colonne(s) exclue(s)", color="info", timeout=2000)
 
         state["apply_smote"] = smote_cb.value
 
         ui.notify("✅ Décisions enregistrées avec succès !", color="positive")
          
         ui.run_javascript("setTimeout(() => window.location.href='/supervised/preprocessing2', 1000);")
-
     def go_to_split():
         on_confirm()
         ui.run_javascript("setTimeout(() => window.location.href='/supervised/preprocessing2', 500);")
@@ -2038,7 +2070,7 @@ def outliers_analysis_page():
             return []
 
     def treat_outliers(df_data, col, method, indices_to_treat):
-        """Applique le traitement des outliers"""
+        """Applique le traitement des outliers - CORRECTION TYPE SAFE"""
         df_result = df_data.copy()
         
         if method == 'none' or not indices_to_treat:
@@ -2049,24 +2081,54 @@ def outliers_analysis_page():
         if not valid_indices:
             return df_result
         
+        # Stocker le type d'origine
+        original_dtype = df_result[col].dtype
+        is_integer_type = pd.api.types.is_integer_dtype(original_dtype)
+        
         if method == 'remove':
             df_result = df_result.drop(valid_indices, errors='ignore')
+        
         elif method == 'cap':
             Q1 = df_result[col].quantile(0.25)
             Q3 = df_result[col].quantile(0.75)
             IQR = Q3 - Q1
             lower = Q1 - 1.5 * IQR
             upper = Q3 + 1.5 * IQR
-            df_result.loc[valid_indices, col] = df_result.loc[valid_indices, col].clip(lower, upper)
+            
+            # Appliquer le capping
+            clipped_values = df_result.loc[valid_indices, col].clip(lower, upper)
+            
+            # Si type entier, arrondir
+            if is_integer_type:
+                clipped_values = clipped_values.round().astype(original_dtype)
+            
+            df_result.loc[valid_indices, col] = clipped_values
+        
         elif method == 'median':
             median_val = df_result[col].median()
-            df_result.loc[valid_indices, col] = median_val
+            
+            # Si type entier, arrondir la médiane
+            if is_integer_type:
+                median_val = round(median_val)
+                df_result[col] = df_result[col].astype('float64')  # Conversion temporaire
+                df_result.loc[valid_indices, col] = median_val
+                df_result[col] = df_result[col].astype(original_dtype)  # Reconversion
+            else:
+                df_result.loc[valid_indices, col] = median_val
+        
         elif method == 'mean':
             mean_val = df_result[col].mean()
-            df_result.loc[valid_indices, col] = mean_val
+            
+            # Si type entier, arrondir la moyenne
+            if is_integer_type:
+                mean_val = round(mean_val)
+                df_result[col] = df_result[col].astype('float64')  # Conversion temporaire
+                df_result.loc[valid_indices, col] = mean_val
+                df_result[col] = df_result[col].astype(original_dtype)  # Reconversion
+            else:
+                df_result.loc[valid_indices, col] = mean_val
         
         return df_result
-
     def create_adaptive_visualization(col_name, data_series, outlier_indices, var_type):
         """Crée des visualisations adaptées au type de variable"""
         
@@ -2169,7 +2231,7 @@ def outliers_analysis_page():
                         'continuous': '#01335A',
                         'discrete': '#9b59b6',
                         'binary': '#01335A',
-                        'constant': '#95a5a6'
+                        'constant': '#01335A !important'
                     }.get(var_type, '#7f8c8d')
                     
                     type_label = {
@@ -5651,6 +5713,10 @@ Les variables catégorielles doivent être **transformées en valeurs numérique
                 "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white !important; "
                 "border-radius:12px !important; height:52px !important; min-width:160px !important;"
             )
+
+
+
+
 # ----------------- PAGE 3.8 : TRANSFORMATIONS DE DISTRIBUTIONS -----------------
 
 @ui.page('/supervised/distribution_transform')
@@ -5679,7 +5745,7 @@ def distribution_transform_page():
                 "font-size:18px !important; color:#c0392b !important; font-weight:600 !important;"
             )
             ui.button(
-                " Retour à l'Upload",
+                "🔙 Retour à l'Upload",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")
             ).style(
                 "background:#01335A !important; color:white !important; padding:12px 32px !important; "
@@ -5687,7 +5753,7 @@ def distribution_transform_page():
             )
         return
     
-    #  CORRECTION : Synchroniser le split avec raw_df
+    # 🔄 CORRECTION : Synchroniser le split avec raw_df
     if split and "X_train" in split:
         try:
             new_cols = [c for c in df.columns if c not in split["X_train"].columns and c != target_col]
@@ -5703,10 +5769,10 @@ def distribution_transform_page():
                                 split[key][col] = df.loc[indices, col]
                 
                 state["split"] = split
-                print(f" {len(new_cols)} nouvelles features synchronisées")
+                print(f"✅ {len(new_cols)} nouvelles features synchronisées")
         
         except Exception as e:
-            print(f" Erreur synchronisation : {e}")
+            print(f"❌ Erreur synchronisation : {e}")
     
     # Préparer df_train
     df_train = None
@@ -5719,7 +5785,7 @@ def distribution_transform_page():
                 if target_col is not None and target_col not in df_train.columns:
                     df_train[target_col] = ytr
             except Exception as e:
-                print(f" Erreur création df_train : {e}")
+                print(f"❌ Erreur création df_train : {e}")
                 df_train = None
     
     if df_train is None:
@@ -5733,6 +5799,7 @@ def distribution_transform_page():
     state.setdefault("fitted_transformers", {})
     
     # ---------- HELPERS ----------
+    
     def calculate_skewness_kurtosis(col):
         """Calcule skewness et kurtosis"""
         if col not in df_train.columns:
@@ -5747,7 +5814,7 @@ def distribution_transform_page():
             kurt = float(stats.kurtosis(data))
             return skew, kurt
         except Exception as e:
-            print(f" Erreur calcul skew/kurt pour {col}: {e}")
+            print(f"❌ Erreur calcul skew/kurt pour {col}: {e}")
             return 0, 0
     
     def get_skewness_level(skew):
@@ -5795,7 +5862,7 @@ def distribution_transform_page():
         if params is None:
             params = {}
         
-        #  CORRECTION : Gérer les différents types de data
+        # 🔧 CORRECTION : Gérer les différents types de data
         if isinstance(data, pd.Series):
             data = data.values
         
@@ -5826,7 +5893,7 @@ def distribution_transform_page():
             
             elif method == "Box-Cox":
                 if (data_clean <= 0).any():
-                    print(f" Box-Cox impossible : valeurs ≤ 0")
+                    print(f"⚠️ Box-Cox impossible : valeurs ≤ 0")
                     return data_clean, None
                 transformed, lambda_param = boxcox(data_clean)
                 return transformed, {"lambda": float(lambda_param)}
@@ -5849,7 +5916,7 @@ def distribution_transform_page():
         
         # Naive Bayes
         if abs_skew < 0.5:
-            impacts["Naive Bayes"] = ("", "Distribution normale", "#27ae60")
+            impacts["Naive Bayes"] = ("✅", "Distribution normale", "#27ae60")
         elif abs_skew < 1.5:
             impacts["Naive Bayes"] = ("🟡", "Assume normalité (légèrement violée)", "#01335A")
         else:
@@ -5857,14 +5924,14 @@ def distribution_transform_page():
         
         # KNN
         if abs_skew < 0.5:
-            impacts["KNN"] = ("", "Distances équilibrées", "#27ae60")
+            impacts["KNN"] = ("✅", "Distances équilibrées", "#27ae60")
         elif abs_skew < 1.5:
             impacts["KNN"] = ("🟡", "Distances légèrement biaisées", "#01335A")
         else:
             impacts["KNN"] = ("🟡", "Distances biaisées vers extrêmes", "#01335A")
         
         # C4.5
-        impacts["Decision Tree"] = ("", "Robuste aux distributions", "#27ae60")
+        impacts["Decision Tree"] = ("✅", "Robuste aux distributions", "#27ae60")
         
         return impacts
     
@@ -5926,7 +5993,7 @@ def distribution_transform_page():
                 row=2, col=1
             )
         except Exception as e:
-            print(f" Erreur Q-Q plot original: {e}")
+            print(f"❌ Erreur Q-Q plot original: {e}")
         
         # Q-Q Plot transformé
         try:
@@ -5942,7 +6009,7 @@ def distribution_transform_page():
                 row=2, col=2
             )
         except Exception as e:
-            print(f" Erreur Q-Q plot transformé: {e}")
+            print(f"❌ Erreur Q-Q plot transformé: {e}")
         
         # Calculs skewness
         try:
@@ -5973,10 +6040,55 @@ def distribution_transform_page():
         
         return fig, skew_transformed, transform_params
     
+    def show_transformed_data_preview():
+        """Affiche un aperçu (head) des données transformées."""
+        try:
+            strategies = state.get("transform_strategy", {})
+            params_dict = state.get("transform_params", {})
+            
+            if not strategies:
+                ui.notify("⚠️ Aucune transformation configurée.", color="warning")
+                return
+            
+            # Créer un dataframe temporaire avec les transformations appliquées
+            df_preview = df_train.copy()
+            
+            for col, method in strategies.items():
+                if method != "Aucune" and col in df_preview.columns:
+                    col_params = params_dict.get(col, {})
+                    transformed_data, _ = apply_transform(df_preview[col].values, method, col_params)
+                    if transformed_data is not None:
+                        # Gérer la différence de taille
+                        if len(transformed_data) == len(df_preview):
+                            df_preview[col] = transformed_data
+                        else:
+                            new_col = pd.Series(index=df_preview.index, dtype=float)
+                            mask = ~df_preview[col].isna() & ~np.isinf(df_preview[col])
+                            new_col[mask] = transformed_data
+                            df_preview[col] = new_col
+            
+            # Création de la fenêtre
+            with ui.dialog() as dialog, ui.card().style(
+                "min-width:700px; max-height:80vh; overflow:auto; padding:20px;"
+            ):
+                ui.label("📊 Aperçu des données transformées").style(
+                    "font-weight:700; font-size:20px; margin-bottom:10px;"
+                )
+                ui.html(df_preview.head().to_html(classes="table table-striped"), sanitize=False)
+                ui.button("Fermer", on_click=dialog.close).classes("mt-4")
+            
+            dialog.open()
+
+        except Exception as e:
+            print("❌ Erreur show_transformed_data_preview:", e)
+            import traceback
+            traceback.print_exc()
+            ui.notify(f"Erreur : {e}", color="negative")
+    
     def open_transform_modal(col_name):
         """Ouvre un modal pour configurer la transformation d'une colonne"""
         if col_name not in df_train.columns:
-            ui.notify(f" Colonne {col_name} introuvable", color="warning")
+            ui.notify(f"⚠️ Colonne {col_name} introuvable", color="warning")
             return
         
         current_method = state.get("transform_strategy", {}).get(col_name, "")
@@ -6036,15 +6148,15 @@ def distribution_transform_page():
                                 "font-size:13px !important; color:#636e72 !important; margin-bottom:4px !important;"
                             )
                             if has_negative:
-                                ui.label(" Négatives").style(
+                                ui.label("⚠️ Négatives").style(
                                     "color:#e74c3c !important; font-weight:600 !important; font-size:16px !important;"
                                 )
                             elif has_zero:
-                                ui.label(" Zéros").style(
+                                ui.label("⚠️ Zéros").style(
                                     "color:#01335A !important; font-weight:600 !important; font-size:16px !important;"
                                 )
                             else:
-                                ui.label(" Toutes > 0").style(
+                                ui.label("✅ Toutes > 0").style(
                                     "color:#27ae60 !important; font-weight:600 !important; font-size:16px !important;"
                                 )
                 
@@ -6117,7 +6229,7 @@ def distribution_transform_page():
                             ui.markdown("""
 **📌 Log Transform : log(x + c)**
 
- Avantages :
+✅ Avantages :
 - Réduit skewness fort
 - Compresse valeurs extrêmes
 
@@ -6141,7 +6253,7 @@ def distribution_transform_page():
                             ui.markdown("""
 **📌 Square Root : sqrt(x)**
 
- Pour skewness modéré (0.5-1.5)
+✅ Pour skewness modéré (0.5-1.5)
 - Plus douce que log
 - Préserve mieux les relations
                             """).style(
@@ -6153,9 +6265,9 @@ def distribution_transform_page():
                             ui.markdown("""
 **📌 Box-Cox Transform (automatique)**
 
- Trouve meilleur λ pour normaliser
+✅ Trouve meilleur λ pour normaliser
 
- Nécessite valeurs strictement > 0
+⚠️ Nécessite valeurs strictement > 0
 
 λ optimal sera calculé automatiquement
                             """).style(
@@ -6172,7 +6284,7 @@ def distribution_transform_page():
                             ui.markdown("""
 **📌 Yeo-Johnson (Box-Cox généralisé)**
 
- Gère valeurs négatives et zéros
+✅ Gère valeurs négatives et zéros
 
 λ optimal sera calculé automatiquement
                             """).style(
@@ -6184,7 +6296,7 @@ def distribution_transform_page():
                             ui.markdown("""
 **📌 Aucune transformation**
 
- Garder distribution originale
+✅ Garder distribution originale
 
 Recommandé si : C4.5 uniquement ou distribution déjà normale
                             """).style(
@@ -6236,7 +6348,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                         state.setdefault("transform_strategy", {})[col_name] = method
                         state.setdefault("transform_params", {})[col_name] = params
                         
-                        ui.notify(f" Transformation configurée pour {col_name}", color="positive")
+                        ui.notify(f"✅ Transformation configurée pour {col_name}", color="positive")
                         dialog.close()
                         
                         # Rafraîchir le tableau
@@ -6255,14 +6367,14 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
         split_data = state.get("split", {})
         
         if not strategies:
-            ui.notify(" Aucune transformation configurée", color="warning")
+            ui.notify("⚠️ Aucune transformation configurée", color="warning")
             return
         
         with ui.dialog() as dialog, ui.card().style(
             "padding:32px !important; border-radius:16px !important; "
             "box-shadow:0 10px 40px rgba(0,0,0,0.15) !important;"
         ):
-            ui.label(" Confirmation").style(
+            ui.label("✅ Confirmation").style(
                 "font-weight:700 !important; font-size:20px !important; "
                 "color:#01335A !important; margin-bottom:16px !important;"
             )
@@ -6300,7 +6412,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                                 )
                                 if transformed_data is not None and transform_info is not None:
                                     transformers[col] = {"method": method, "params": transform_info}
-                                    print(f" Fitted {method} pour {col}")
+                                    print(f"✅ Fitted {method} pour {col}")
                         
                         state["fitted_transformers"] = transformers
                         
@@ -6312,7 +6424,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                                 params = info["params"]
                                 transformed_data, _ = apply_transform(df_result[col].values, method, params)
                                 if transformed_data is not None:
-                                    #  CORRECTION : Gérer la différence de taille
+                                    # 🔧 CORRECTION : Gérer la différence de taille
                                     if len(transformed_data) == len(df_result):
                                         df_result[col] = transformed_data
                                     else:
@@ -6346,7 +6458,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                             
                             state["split"] = split_data
                         
-                        ui.notify(" Transformations appliquées avec succès!", color="positive")
+                        ui.notify("✅ Transformations appliquées avec succès!", color="positive")
                         dialog.close()
                         ui.run_javascript("setTimeout(() => window.location.href='/supervised/scaling', 1000);")
                     
@@ -6381,7 +6493,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                 state.setdefault("transform_params", {})[col] = params
                 count += 1
         
-        ui.notify(f" {count} recommandations appliquées", color="positive")
+        ui.notify(f"✅ {count} recommandations appliquées", color="positive")
         ui.run_javascript("setTimeout(() => window.location.reload(), 500);")
     
     # ---------- UI ----------
@@ -6404,7 +6516,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
             "background:white !important; border-radius:16px !important; padding:32px !important; "
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
-            ui.label(" Analyse des distributions").style(
+            ui.label("📊 Analyse des distributions").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:20px !important;"
             )
@@ -6420,11 +6532,11 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                     "background:#e8f5e9 !important; padding:20px !important; "
                     "border-radius:12px !important; border-left:4px solid #4caf50 !important;"
                 ):
-                    ui.label(" Aucune feature nécessitant transformation").style(
+                    ui.label("✅ Aucune feature nécessitant transformation").style(
                         "color:#1b5e20 !important; font-weight:600 !important; font-size:16px !important;"
                     )
                     ui.label("Vous pouvez passer à l'étape suivante").style(
-                        "color:#2e7d32 !important; margin-top:4px !important; font-size:14px !important;"
+                        "color:#12344f !important; margin-top:4px !important; font-size:14px !important;"
                     )
             else:
                 with ui.row().classes("w-full gap-8 items-center justify-around mb-4"):
@@ -6467,7 +6579,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                 "background:white !important; border-radius:16px !important; padding:32px !important; "
                 "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
             ):
-                ui.label("Configuration des transformations").style(
+                ui.label("🔧 Configuration des transformations").style(
                     "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                     "margin-bottom:16px !important;"
                 )
@@ -6488,47 +6600,48 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                         "Configuré": current or "-"
                     })
                 
+                # Créer le tableau
                 table = ui.table(
                     columns=[
                         {"name": "Feature", "label": "Feature", "field": "Feature", "align": "left"},
-                        {"name": "Type", "label": "Type", "field": "Type", "align": "left"},
-                        {"name": "Missing", "label": "Missing", "field": "Missing", "align": "center"},
-                        {"name": "% Missing", "label": "% Missing", "field": "% Missing", "align": "center"},
+                        {"name": "Skewness", "label": "Skewness", "field": "Skewness", "align": "center"},
+                        {"name": "Kurtosis", "label": "Kurtosis", "field": "Kurtosis", "align": "center"},
                         {"name": "Niveau", "label": "Niveau", "field": "Niveau", "align": "center"},
-                        {"name": "Stratégie", "label": "Stratégie", "field": "Stratégie", "align": "center"}
+                        {"name": "Recommandé", "label": "Recommandé", "field": "Recommandé", "align": "center"},
+                        {"name": "Configuré", "label": "Configuré", "field": "Configuré", "align": "center"}
                     ],
                     rows=rows,
                     row_key="Feature"
                 ).props("flat bordered").style(
                     "width:100% !important; cursor:pointer !important;"
                 )
-                # Gestionnaire de clic sur une ligne
+                
+                # 🔧 CORRECTION : Gestionnaire de clic robuste
                 def handle_row_click(e):
                     """Gestionnaire de clic sur une ligne du tableau"""
                     try:
-                        # e.args contient les arguments de l'événement
-                        # e.args[1] contient les données de la ligne cliquée
                         if e and hasattr(e, 'args') and len(e.args) > 1:
                             row_data = e.args[1]
                             if isinstance(row_data, dict) and "Feature" in row_data:
-                                open_feature_modal(row_data["Feature"])
+                                feature_name = row_data["Feature"]
+                                print(f"✅ Clic détecté sur : {feature_name}")
+                                open_transform_modal(feature_name)
+                            else:
+                                print(f"⚠️ row_data invalide: {row_data}")
+                        else:
+                            print(f"⚠️ Structure d'événement inattendue: {e}")
                     except Exception as err:
                         print(f"❌ Erreur handle_row_click: {err}")
-                        print(f"Event data: {e}")
-            
-                # Attacher l'événement après la création du tableau
+                        import traceback
+                        traceback.print_exc()
+                
+                # Attacher l'événement
                 table.on('row-click', handle_row_click)
-
+                
                 ui.label("💡 Cliquez sur une ligne pour configurer la transformation").style(
                     "font-size:13px !important; color:#636e72 !important; margin-top:12px !important; "
                     "font-style:italic !important;"
                 )
-                
-                def handle_row_click(e):
-                    if e and "row" in e and "Feature" in e["row"]:
-                        open_transform_modal(e["row"]["Feature"])
-                
-                table.on("row-click", handle_row_click)
                 
                 # Recommandations par algo
                 if selected_algos:
@@ -6547,7 +6660,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                         
                         if "KNN" in selected_algos:
                             ui.label("🟡 KNN : Transformation utile (stabilise distances)").style(
-                                "font-size:14px !important; color:#01335A !important; margin-bottom:4px !important;"
+                                "font-size:14px !important; color:#f39c12 !important; margin-bottom:4px !important;"
                             )
                         
                         if "Decision Tree" in selected_algos or "C4.5" in selected_algos:
@@ -6558,15 +6671,23 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                 # Boutons actions
                 with ui.row().classes("w-full gap-3 mt-6"):
                     ui.button(
-                        "✨ Appliquer recommandations",
-                        on_click=apply_recommended
+                        "📊 Aperçu données transformées",
+                        on_click=show_transformed_data_preview
                     ).style(
-                        "background:#01335A !important; color:white !important; border-radius:8px !important; "
+                        "background:#3498db !important; color:white !important; border-radius:8px !important; "
                         "padding:10px 20px !important; text-transform:none !important; font-weight:500 !important;"
                     )
                     
                     ui.button(
-                        " Appliquer & Continuer",
+                        "✨ Appliquer recommandations",
+                        on_click=apply_recommended
+                    ).style(
+                        "background:#27ae60 !important; color:white !important; border-radius:8px !important; "
+                        "padding:10px 20px !important; text-transform:none !important; font-weight:500 !important;"
+                    )
+                    
+                    ui.button(
+                        "✓ Appliquer & Continuer",
                         on_click=apply_all_transforms
                     ).style(
                         "background:#01335A !important; color:white !important; border-radius:8px !important; "
@@ -6596,6 +6717,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
 
 
 
+
 # ----------------- PAGE 3.9 : FEATURE SCALING -----------------
 
 
@@ -6603,25 +6725,36 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
 def feature_scaling_page():
     """
     Page complète pour le Feature Scaling avec détection intelligente des variables continues
-    Style: Nuances de bleu élégantes
+    Design moderne unifié avec #01335A
     """
-   
+    import pandas as pd
+    import numpy as np
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler, MaxAbsScaler
     
     # ---------- CONTEXTE ----------
     df = state.get("raw_df", None)
+    split = state.get("split", None)
+    columns_exclude = state.get("columns_exclude", {}) or {}
+    target_col = state.get("target_column", None)
+    selected_algos = state.get("selected_algos", [])
+    
     if df is None:
-        with ui.column().classes("items-center justify-center w-full h-screen").style("background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);"):
-            ui.label("❌ Aucun dataset chargé.").style("font-size:18px; color:#01579b; font-weight:600;")
-            ui.button(" Retour à l'Upload", on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")).style(
-                "background:#0277bd; color:white; font-weight:600; padding:12px 24px; border-radius:8px;"
+        with ui.column().classes("items-center justify-center w-full h-screen"):
+            ui.label("❌ Aucun dataset chargé.").style(
+                "font-size:18px !important; color:#c0392b !important; font-weight:600 !important;"
+            )
+            ui.button(
+                "🔙 Retour à l'Upload",
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")
+            ).style(
+                "background:#01335A !important; color:white !important; padding:12px 32px !important; "
+                "border-radius:8px !important; margin-top:20px !important;"
             )
         return
     
     df_train = df.copy()
-    target_col = state.get("target_column", None)
-    columns_exclude = state.get("columns_exclude", {}) or {}
-    selected_algos = state.get("selected_algos", [])
-    
     active_cols = [c for c in df.columns if not columns_exclude.get(c, False) and c != target_col]
     
     # ---------- DÉTECTION INTELLIGENTE DES VARIABLES CONTINUES ----------
@@ -6633,29 +6766,45 @@ def feature_scaling_page():
         categorical_encoded = []
         
         for col in columns:
-            if not pd.api.types.is_numeric_dtype(df[col]):
-                continue
+            try:
+                if not pd.api.types.is_numeric_dtype(df[col]):
+                    continue
+                
+                unique_values = df[col].nunique()
+                data = df[col].dropna()
+                
+                if len(data) == 0:
+                    continue
+                
+                # Critères pour identifier une variable catégorielle encodée
+                is_binary = unique_values == 2
+                is_small_discrete = unique_values <= 10
+                
+                # Vérifier si toutes les valeurs sont des entiers
+                try:
+                    all_integers = bool((data == data.astype(int)).all())
+                except:
+                    all_integers = False
+                
+                # Calculer la range de manière sûre
+                try:
+                    data_range = float(data.max()) - float(data.min())
+                    small_range = data_range < 10
+                except:
+                    small_range = False
+                
+                # Si c'est binaire (0/1) ou petit nombre de valeurs discrètes → catégorielle
+                if is_binary or (is_small_discrete and all_integers and small_range):
+                    categorical_encoded.append(col)
+                else:
+                    continuous.append(col)
             
-            unique_values = df[col].nunique()
-            data = df[col].dropna()
-            
-            if len(data) == 0:
-                continue
-            
-            # Critères pour identifier une variable catégorielle encodée
-            is_binary = unique_values == 2
-            is_small_discrete = unique_values <= 10
-            all_integers = all(data == data.astype(int))
-            small_range = (data.max() - data.min()) < 10
-            
-            # Si c'est binaire (0/1) ou petit nombre de valeurs discrètes → catégorielle
-            if is_binary or (is_small_discrete and all_integers and small_range):
-                categorical_encoded.append(col)
-            else:
+            except Exception as e:
+                print(f"⚠️ Erreur lors de l'analyse de {col}: {e}")
+                # En cas d'erreur, considérer comme continue par défaut
                 continuous.append(col)
         
         return continuous, categorical_encoded
-    
     num_cols, cat_encoded = detect_continuous_features(df_train, active_cols)
     
     # ---------- FONCTIONS ----------
@@ -6749,7 +6898,7 @@ def feature_scaling_page():
                     go.Box(
                         y=original_data,
                         name="Original",
-                        marker_color='#42a5f5',
+                        marker_color='#01335A',
                         showlegend=(idx == 0)
                     ),
                     row=1, col=idx+1
@@ -6760,315 +6909,403 @@ def feature_scaling_page():
                     go.Box(
                         y=scaled_data,
                         name="Scaled",
-                        marker_color='#01579b',
+                        marker_color='#27ae60',
                         showlegend=(idx == 0)
                     ),
                     row=2, col=idx+1
                 )
                 
             except Exception as e:
-                print(f"Erreur visualisation {col}: {e}")
+                print(f"❌ Erreur visualisation {col}: {e}")
                 continue
         
         fig.update_layout(
             height=600,
             showlegend=True,
-            title_text=f" Comparaison AVANT/APRÈS - {method.upper()}",
+            title_text=f"<b>Comparaison AVANT/APRÈS - {method.upper()}</b>",
             title_font_size=20,
             title_x=0.5,
-            paper_bgcolor='#e3f2fd',
-            plot_bgcolor='white'
+            paper_bgcolor='white',
+            plot_bgcolor='#f8f9fa',
+            font=dict(family="Inter, sans-serif", color="#2c3e50")
         )
         
         return fig
-    
-    def preview_scaling(method):
-        """Prévisualise le scaling sans l'appliquer"""
-        fig = create_comparison_plot(method)
-        if fig:
-            plot_container.clear()
-            with plot_container:
-                ui.plotly(fig).classes("w-full")
-        else:
-            plot_container.clear()
-            with plot_container:
-                ui.label(" Aucune visualisation disponible").style("color:#01579b; font-size:16px;")
-    
-    def apply_scaling(method):
-        ensure_original_saved()
-        scalers = {
-            "standard": StandardScaler(),
-            "minmax": MinMaxScaler(),
-            "robust": RobustScaler(),
-            "maxabs": MaxAbsScaler()
-        }
-        
-        if method == "none":
-            state["scaling_method"] = "none"
-            ui.notify("✓ Aucun scaling appliqué", color="positive")
-            ui.run_javascript("setTimeout(() => window.location.href='/supervised/dimension_reduction', 1000);")
-            return
-        
-        split = state.get("split", {})
-
-        with ui.dialog() as dialog, ui.card().classes("p-6").style("background:white; border-radius:16px;"):
-            ui.label(" Confirmer l'application").style("font-weight:700; font-size:18px; color:#01579b;")
-            ui.label(f"Appliquer **{method.upper()}** sur {len(num_cols)} features continues ?").style("margin-top:8px; color:#0277bd;")
-        
-            with ui.row().classes("w-full justify-end gap-2 mt-4"):
-                ui.button("Annuler", on_click=dialog.close).style(
-                    "background:#90caf9; color:#01579b; font-weight:600; padding:8px 20px; border-radius:8px;"
-                )
-            
-                def do_apply():
-                    try:
-                        scaler = scalers[method]
-                    
-                        #  CORRECTION : FIT sur X_train uniquement
-                        if split and "X_train" in split:
-                            X_train_for_fit = split["X_train"][num_cols].copy()
-                        else:
-                            X_train_for_fit = df_train[num_cols].copy()
-                    
-                        #  FIT sur train
-                        scaler.fit(X_train_for_fit)
-                    
-                        #  TRANSFORM sur chaque split
-                        if split:
-                            for key in ["X_train", "X_val", "X_test"]:
-                                if key in split and isinstance(split[key], pd.DataFrame):
-                                    split[key][num_cols] = scaler.transform(split[key][num_cols])
-                    
-                        state["scaling_method"] = method
-                        state["fitted_scaler"] = scaler  # Sauvegarder le scaler fitté
-                        state["scaled_columns"] = num_cols
-                    
-                        ui.notify(f"✓ Scaling appliqué sans data leakage!", color="positive")
-                        dialog.close()
-                        ui.run_javascript("setTimeout(() => window.location.href='/supervised/dimension_reduction', 1000);")
-                
-                    except Exception as e:
-                        ui.notify(f"❌ Erreur: {str(e)}", color="negative")
-            
-                ui.button("✓ Confirmer", on_click=do_apply).style(
-                    "background:linear-gradient(135deg, #0277bd 0%, #01579b 100%); "
-                    "color:white; font-weight:600; padding:8px 24px; border-radius:8px;"
-                )
-    
-        dialog.open()
-
     
     # ---------- ANALYSE ----------
     features_info = analyze_features()
     recommended = get_recommendation()
     
     # ---------- INTERFACE ----------
-    with ui.column().classes("w-full items-center p-8").style(
-        "background: white; min-height:100vh;"
+    with ui.column().classes("w-full items-center").style(
+        "background:#f0f2f5 !important; min-height:100vh !important; padding:48px 24px !important; "
+        "font-family:'Inter', sans-serif !important;"
     ):
-        # Header
-        ui.label("🔵 FEATURE SCALING").style(
-            "font-weight:700; font-size:32px; color:#01579b; margin-bottom:8px; text-align:center;"
+        # HEADER
+        ui.label("Feature Scaling").style(
+            "font-weight:700 !important; font-size:36px !important; color:#01335A !important; "
+            "margin-bottom:8px !important; text-align:center !important; letter-spacing:-0.5px !important;"
         )
-        ui.label("Normalisation/Standardisation des features continues").style(
-            "font-size:18px; color:#0277bd; margin-bottom:32px; text-align:center;"
+        ui.label("Normalisation et standardisation des features continues").style(
+            "font-size:16px !important; color:#636e72 !important; margin-bottom:48px !important; "
+            "text-align:center !important; font-weight:400 !important;"
         )
         
         # Info détection intelligente
-        with ui.card().classes("w-full max-w-6xl p-6 mb-8").style(
-            "background:white; border-left:5px solid #2196f3; border-radius:12px; box-shadow: 0 4px 12px rgba(33, 150, 243, 0.15);"
+        with ui.card().classes("w-full max-w-6xl mb-6").style(
+            "background:white !important; border-radius:16px !important; padding:32px !important; "
+            "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
-            ui.label("🔍 Détection Intelligente").style("font-weight:700; font-size:18px; color:#01579b; margin-bottom:12px;")
-            with ui.row().classes("w-full gap-8"):
+            ui.label("🔍 Détection Intelligente").style(
+                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
+                "margin-bottom:20px !important;"
+            )
+            with ui.row().classes("w-full gap-8 items-start"):
                 with ui.column().classes("flex-1"):
-                    ui.label(f" **{len(num_cols)} features continues** détectées").style("font-size:15px; margin-bottom:4px; color:#0277bd;")
+                    ui.label(f"✅ {len(num_cols)} features continues détectées").style(
+                        "font-size:15px !important; margin-bottom:8px !important; color:#2c3e50 !important; "
+                        "font-weight:600 !important;"
+                    )
                     if num_cols:
                         ui.label(f"→ {', '.join(num_cols[:5])}{'...' if len(num_cols) > 5 else ''}").style(
-                            "font-size:13px; color:#42a5f5;"
+                            "font-size:13px !important; color:#636e72 !important;"
                         )
                 
                 with ui.column().classes("flex-1"):
-                    ui.label(f" **{len(cat_encoded)} variables catégorielles** encodées").style("font-size:15px; margin-bottom:4px; color:#0277bd;")
+                    ui.label(f"📊 {len(cat_encoded)} variables catégorielles encodées").style(
+                        "font-size:15px !important; margin-bottom:8px !important; color:#2c3e50 !important; "
+                        "font-weight:600 !important;"
+                    )
                     if cat_encoded:
                         ui.label(f"→ {', '.join(cat_encoded[:5])}{'...' if len(cat_encoded) > 5 else ''}").style(
-                            "font-size:13px; color:#42a5f5;"
+                            "font-size:13px !important; color:#636e72 !important;"
                         )
-                        ui.label("→ Seront préservées (pas de scaling)").style("font-size:12px; color:#0288d1; font-style:italic;")
+                        ui.label("→ Seront préservées (pas de scaling)").style(
+                            "font-size:12px !important; color:#7f8c8d !important; font-style:italic !important; "
+                            "margin-top:4px !important;"
+                        )
         
-        # Objectif
-        with ui.card().classes("w-full max-w-6xl p-6 mb-8").style(
-            "background:linear-gradient(135deg, #e1f5fe 0%, #b3e5fc 100%); "
-            "border-left:5px solid #0288d1; border-radius:12px; box-shadow: 0 4px 12px rgba(2, 136, 209, 0.15);"
-        ):
-            ui.label(" Objectif principal").style("font-weight:700; font-size:18px; color:#01579b; margin-bottom:12px;")
-            with ui.row().classes("w-full gap-8"):
-                with ui.column().classes("flex-1"):
-                    ui.label("🔴 **CRITIQUE** pour KNN").style("font-size:15px; font-weight:600; margin-bottom:4px; color:#0277bd;")
-                    ui.label("→ Les distances sont biaisées par les échelles différentes").style("font-size:13px; color:#0288d1;")
+        # Objectif par algorithme
+        if selected_algos:
+            with ui.card().classes("w-full max-w-6xl mb-6").style(
+                "background:#fff9e6 !important; padding:32px !important; "
+                "border-radius:16px !important; border-left:4px solid #f39c12 !important; "
+                "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
+            ):
+                ui.label("💡 Impact sur vos algorithmes").style(
+                    "font-weight:700 !important; font-size:22px !important; color:#856404 !important; "
+                    "margin-bottom:20px !important;"
+                )
                 
-                with ui.column().classes("flex-1"):
-                    ui.label("🟢 **INUTILE** pour C4.5").style("font-size:15px; font-weight:600; margin-bottom:4px; color:#0277bd;")
-                    ui.label("→ Arbres de décision insensibles aux échelles").style("font-size:13px; color:#0288d1;")
+                if "KNN" in selected_algos:
+                    ui.label("🔴 KNN : Scaling CRITIQUE").style(
+                        "font-size:15px !important; font-weight:600 !important; margin-bottom:4px !important; "
+                        "color:#e74c3c !important;"
+                    )
+                    ui.label("→ Les distances sont biaisées par les échelles différentes").style(
+                        "font-size:13px !important; color:#636e72 !important; margin-bottom:12px !important;"
+                    )
                 
-                with ui.column().classes("flex-1"):
-                    ui.label("🔵 **OPTIONNEL** pour Naive Bayes").style("font-size:15px; font-weight:600; margin-bottom:4px; color:#0277bd;")
-                    ui.label("→ Dépend de la distribution des données").style("font-size:13px; color:#0288d1;")
+                if "Decision Tree" in selected_algos or "C4.5" in selected_algos:
+                    ui.label("🟢 Decision Tree : Scaling INUTILE").style(
+                        "font-size:15px !important; font-weight:600 !important; margin-bottom:4px !important; "
+                        "color:#27ae60 !important;"
+                    )
+                    ui.label("→ Arbres de décision insensibles aux échelles").style(
+                        "font-size:13px !important; color:#636e72 !important; margin-bottom:12px !important;"
+                    )
+                
+                if "Gaussian Naive Bayes" in selected_algos or "Naive Bayes" in selected_algos:
+                    ui.label("🟡 Naive Bayes : Scaling OPTIONNEL").style(
+                        "font-size:15px !important; font-weight:600 !important; margin-bottom:4px !important; "
+                        "color:#f39c12 !important;"
+                    )
+                    ui.label("→ Dépend de la distribution des données").style(
+                        "font-size:13px !important; color:#636e72 !important;"
+                    )
         
         # Analyse des features continues
-        with ui.card().classes("w-full max-w-6xl p-6 mb-8").style(
-            "background:white; border-radius:12px; box-shadow: 0 4px 12px rgba(1, 87, 155, 0.1);"
+        with ui.card().classes("w-full max-w-6xl mb-6").style(
+            "background:white !important; border-radius:16px !important; padding:32px !important; "
+            "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
-            ui.label(" Analyse des features continues").style(
-                "font-weight:700; font-size:20px; color:#01579b; margin-bottom:16px;"
+            ui.label("📊 Analyse des features continues").style(
+                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
+                "margin-bottom:20px !important;"
             )
             
             if features_info:
-                # Tableau amélioré avec nuances de bleu
-                table_html = """<div style="background:linear-gradient(135deg, #01579b 0%, #0277bd 100%); border-radius:12px; padding:20px; overflow-x:auto; box-shadow: 0 4px 12px rgba(1, 87, 155, 0.3);">
-                <table style="width:100%; color:#e3f2fd; font-family:'Segoe UI', sans-serif; font-size:13px; border-collapse:collapse;">
-                    <thead>
-                        <tr style="border-bottom:2px solid #42a5f5;">
-                            <th style="text-align:left; padding:12px; color:#90caf9; font-weight:600;">Feature</th>
-                            <th style="text-align:right; padding:12px; color:#90caf9;">Min</th>
-                            <th style="text-align:right; padding:12px; color:#90caf9;">Max</th>
-                            <th style="text-align:right; padding:12px; color:#90caf9;">Range</th>
-                            <th style="text-align:right; padding:12px; color:#90caf9;">Mean</th>
-                            <th style="text-align:right; padding:12px; color:#90caf9;">Std</th>
-                            <th style="text-align:center; padding:12px; color:#90caf9;">Outliers</th>
-                        </tr>
-                    </thead>
-                    <tbody>"""
-                
+                # Créer un tableau avec les données
+                rows = []
                 for f in features_info:
-                    out = "🔴" if f["outliers"] else "🟢"
-                    # Highlight pour range > 1000
-                    range_color = "#64b5f6" if f["range"] > 1000 else "#e3f2fd"
-                    table_html += f"""
-                        <tr style="border-bottom:1px solid #1565c0;">
-                            <td style="padding:10px; font-weight:600; color:#bbdefb;">{f['name'][:20]}</td>
-                            <td style="text-align:right; padding:10px;">{f['min']:.2f}</td>
-                            <td style="text-align:right; padding:10px;">{f['max']:.2f}</td>
-                            <td style="text-align:right; padding:10px; color:{range_color}; font-weight:700;">{f['range']:.2f}</td>
-                            <td style="text-align:right; padding:10px;">{f['mean']:.2f}</td>
-                            <td style="text-align:right; padding:10px;">{f['std']:.2f}</td>
-                            <td style="text-align:center; padding:10px; font-size:16px;">{out}</td>
-                        </tr>"""
+                    rows.append({
+                        "Feature": f["name"][:20],
+                        "Min": f"{f['min']:.2f}",
+                        "Max": f"{f['max']:.2f}",
+                        "Range": f"{f['range']:.2f}",
+                        "Mean": f"{f['mean']:.2f}",
+                        "Std": f"{f['std']:.2f}",
+                        "Outliers": "🔴" if f["outliers"] else "🟢"
+                    })
                 
-                table_html += """
-                    </tbody>
-                </table>
-                </div>"""
-                ui.html(table_html, sanitize=False)
+                table = ui.table(
+                    columns=[
+                        {"name": "Feature", "label": "Feature", "field": "Feature", "align": "left"},
+                        {"name": "Min", "label": "Min", "field": "Min", "align": "right"},
+                        {"name": "Max", "label": "Max", "field": "Max", "align": "right"},
+                        {"name": "Range", "label": "Range", "field": "Range", "align": "right"},
+                        {"name": "Mean", "label": "Mean", "field": "Mean", "align": "right"},
+                        {"name": "Std", "label": "Std", "field": "Std", "align": "right"},
+                        {"name": "Outliers", "label": "Outliers", "field": "Outliers", "align": "center"}
+                    ],
+                    rows=rows,
+                    row_key="Feature"
+                ).props("flat bordered").style("width:100% !important;")
+                
+                ui.label("💡 Les features avec Range > 1000 bénéficieront fortement du scaling").style(
+                    "font-size:13px !important; color:#636e72 !important; margin-top:12px !important; "
+                    "font-style:italic !important;"
+                )
             else:
-                with ui.column().classes("items-center p-8"):
-                    ui.label("❌ Aucune feature continue détectée").style("color:#0277bd; font-size:16px; font-weight:600;")
-                    ui.label("Toutes les features sont catégorielles ou binaires").style("color:#42a5f5; font-size:14px;")
+                with ui.card().classes("w-full").style(
+                    "background:#e8f5e9 !important; padding:20px !important; "
+                    "border-radius:12px !important; border-left:4px solid #4caf50 !important;"
+                ):
+                    ui.label("✅ Aucune feature continue détectée").style(
+                        "color:#1b5e20 !important; font-weight:600 !important; font-size:16px !important;"
+                    )
+                    ui.label("Toutes les features sont catégorielles ou binaires").style(
+                        "color:#12344f !important; margin-top:4px !important; font-size:14px !important;"
+                    )
         
-        # Sélecteur de méthode
-        with ui.card().classes("w-full max-w-5xl p-8 mb-8").style(
-            "background:white; border:3px solid #64b5f6; border-radius:16px; "
-            "box-shadow: 0 6px 16px rgba(33, 150, 243, 0.2);"
+        # Sélecteur de méthode avec recommandation
+        with ui.card().classes("w-full max-w-6xl mb-6").style(
+            "background:white !important; border-radius:16px !important; padding:32px !important; "
+            "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
-            ui.label(" Choisir la méthode de scaling").style(
-                "font-weight:700; font-size:22px; color:#01579b; margin-bottom:24px; text-align:center;"
+            ui.label("🔧 Configuration du scaling").style(
+                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
+                "margin-bottom:20px !important;"
             )
             
-            # Select avec options
+            # Recommandation
+            method_names = {
+                "standard": "StandardScaler (Z-score)",
+                "minmax": "MinMaxScaler ([0,1])",
+                "robust": "RobustScaler (résistant aux outliers)",
+                "maxabs": "MaxAbsScaler ([-1,1])",
+                "none": "Aucun scaling"
+            }
+            
+            method_explanations = {
+                "standard": "✅ Standardise avec mean=0 et std=1\n✅ Optimal pour la plupart des algorithmes\n❌ Sensible aux outliers",
+                "minmax": "✅ Normalise dans l'intervalle [0,1]\n✅ Préserve les relations\n❌ Très sensible aux outliers",
+                "robust": "✅ Utilise médiane et IQR\n✅ Résistant aux valeurs extrêmes\n✅ Recommandé si outliers détectés",
+                "maxabs": "✅ Normalise dans [-1,1]\n✅ Pour données sparse\n❌ Sensible aux outliers",
+                "none": "✅ Conserve les données brutes\n✅ Si échelles déjà similaires"
+            }
+            
+            with ui.card().classes("w-full mb-4").style(
+                "background:#e3f2fd !important; padding:20px !important; "
+                "border-radius:12px !important; border-left:4px solid #2196f3 !important;"
+            ):
+                ui.label(f"💡 Recommandation : {method_names[recommended]}").style(
+                    "font-weight:600 !important; color:#01335A !important; font-size:16px !important; "
+                    "margin-bottom:8px !important;"
+                )
+                
+                # Explication de la recommandation
+                if recommended == "robust":
+                    outlier_count = len([f for f in features_info if f['outliers']])
+                    ui.label(f"🔴 {outlier_count} feature(s) avec outliers détectés").style(
+                        "font-size:14px !important; color:#2c3e50 !important; margin-bottom:4px !important;"
+                    )
+                elif recommended == "standard":
+                    ui.label("✅ Pas d'outliers majeurs détectés").style(
+                        "font-size:14px !important; color:#2c3e50 !important; margin-bottom:4px !important;"
+                    )
+                elif recommended == "none":
+                    ui.label("✅ Échelles déjà similaires").style(
+                        "font-size:14px !important; color:#2c3e50 !important; margin-bottom:4px !important;"
+                    )
+            
+            # Sélecteur
             method_select = ui.select(
                 label="Sélectionnez une méthode",
                 options={
-                    "standard": " StandardScaler (Z-score, mean=0, std=1)",
+                    "standard": "📊 StandardScaler (Z-score, mean=0, std=1)",
                     "minmax": "📏 MinMaxScaler (normalise [0,1])",
                     "robust": "🛡️ RobustScaler (robuste aux outliers)",
                     "maxabs": "📐 MaxAbsScaler (sparse data, [-1,1])",
                     "none": "⏭️ Aucun scaling (raw data)"
-                }
-            ).props("dense outlined").classes("w-full").style("max-width:600px; margin:0 auto 20px;")
+                },
+                value=recommended
+            ).props("outlined").classes("w-full mb-4")
             
-            # Définir valeur par défaut
-            method_select.value = recommended
+            # Zone d'explication dynamique
+            explanation_container = ui.column().classes("w-full mb-4")
+            
+            def update_explanation():
+                explanation_container.clear()
+                method = method_select.value
+                with explanation_container:
+                    with ui.card().classes("w-full").style(
+                        "background:#f8f9fa !important; padding:16px !important; "
+                        "border-radius:8px !important;"
+                    ):
+                        ui.markdown(f"**{method_names.get(method, '')}**\n\n{method_explanations.get(method, '')}").style(
+                            "font-size:13px !important; color:#2c3e50 !important;"
+                        )
+            
+            method_select.on_value_change(lambda: update_explanation())
+            update_explanation()
+            
+            # Zone de visualisation
+            plot_container = ui.column().classes("w-full")
+            
+            def preview_scaling():
+                """Prévisualise le scaling sans l'appliquer"""
+                method = method_select.value
+                fig = create_comparison_plot(method)
+                plot_container.clear()
+                with plot_container:
+                    if fig:
+                        ui.plotly(fig).classes("w-full")
+                    else:
+                        ui.label("⚠️ Aucune visualisation disponible pour cette méthode").style(
+                            "color:#636e72 !important; font-size:14px !important; text-align:center !important;"
+                        )
             
             # Bouton prévisualisation
             ui.button(
                 "👁️ Prévisualiser",
-                on_click=lambda: preview_scaling(method_select.value)
+                on_click=preview_scaling
             ).style(
-                "background:linear-gradient(135deg, #42a5f5 0%, #2196f3 100%); color:white; font-weight:600; "
-                "height:48px; width:200px; border-radius:10px; margin:0 auto; display:block; "
-                "box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);"
+                "background:#3498db !important; color:white !important; border-radius:8px !important; "
+                "padding:10px 24px !important; text-transform:none !important; font-weight:600 !important; "
+                "width:100% !important;"
             )
-            
-            method_select.on_value_change(lambda e: state.update({"scaling_method": e.value}))
         
-        # Zone de visualisation
-        plot_container = ui.column().classes("w-full max-w-6xl mb-8")
-        
-        # Recommandation intelligente
-        with ui.card().classes("w-full max-w-5xl p-8 mb-12").style(
-            "background:linear-gradient(135deg, #e1f5fe 0%, #b3e5fc 100%); "
-            "border:4px solid #0288d1; border-radius:20px; "
-            "box-shadow:0 8px 24px rgba(2, 136, 209, 0.3);"
-        ):
-            method_names = {
-                "standard": "StandardScaler",
-                "minmax": "MinMaxScaler", 
-                "robust": "RobustScaler",
-                "maxabs": "MaxAbsScaler",
-                "none": "Aucun scaling"
-            }
-            
-            ui.label("🤖 RECOMMANDATION INTELLIGENTE").style(
-                "font-weight:800; font-size:24px; color:#01579b; text-align:center; margin-bottom:20px;"
-            )
-            
-            ui.label(f"**{method_names[recommended]}**").style(
-                "font-weight:700; font-size:28px; color:#0277bd; text-align:center; margin-bottom:16px;"
-            )
-            
-            # Explication de la recommandation
-            explanations = {
-                "standard": "✓ Pas d'outliers majeurs détectés\n✓ Données normalement distribuées\n✓ Optimal pour KNN et régression",
-                "robust": f" Outliers détectés dans vos données\n✓ Résistant aux valeurs extrêmes\n✓ Préserve la structure centrale\n✓ Recommandé pour {len([f for f in features_info if f['outliers']])} features avec outliers",
-                "none": "✓ Toutes les features ont des échelles similaires\n✓ Pas de normalisation nécessaire"
-            }
-            
-            ui.label(explanations.get(recommended, "")).style(
-                "font-size:15px; color:#0288d1; text-align:center; white-space:pre-line; margin-bottom:20px;"
-            )
-            
-            with ui.row().classes("w-full justify-center gap-6"):
-                ui.button(
-                    " Appliquer la recommandation",
-                    on_click=lambda: (
-                        method_select.set_value(recommended),
-                        apply_scaling(recommended)
+        # Boutons d'action
+        with ui.row().classes("w-full max-w-6xl gap-3 justify-center mt-8 mb-8"):
+            def apply_scaling():
+                """Applique le scaling sélectionné"""
+                method = method_select.value
+                
+                if method == "none":
+                    state["scaling_method"] = "none"
+                    ui.notify("✅ Aucun scaling appliqué", color="positive")
+                    ui.run_javascript("setTimeout(() => window.location.href='/supervised/dimension_reduction', 1000);")
+                    return
+                
+                with ui.dialog() as dialog, ui.card().style(
+                    "padding:32px !important; border-radius:16px !important; "
+                    "box-shadow:0 10px 40px rgba(0,0,0,0.15) !important;"
+                ):
+                    ui.label("✅ Confirmation").style(
+                        "font-weight:700 !important; font-size:20px !important; "
+                        "color:#01335A !important; margin-bottom:16px !important;"
                     )
-                ).style(
-                    "background:linear-gradient(135deg, #0277bd 0%, #01579b 100%); "
-                    "color:white; font-weight:700; height:56px; padding:0 40px; border-radius:12px; "
-                    "box-shadow: 0 6px 16px rgba(1, 87, 155, 0.4);"
-                )
-        
-        # Navigation
-        with ui.row().classes("w-full max-w-5xl justify-between mt-16"):
+                    ui.label(f"Appliquer {method_names[method]} sur {len(num_cols)} features continues ?").style(
+                        "margin-bottom:8px !important; color:#2c3e50 !important; font-size:14px !important;"
+                    )
+                    
+                    with ui.row().classes("w-full justify-end gap-3 mt-6"):
+                        ui.button("Annuler", on_click=dialog.close).props("flat").style(
+                            "color:#7f8c8d !important; text-transform:none !important;"
+                        )
+                        
+                        def confirm_and_next():
+                            try:
+                                scalers = {
+                                    "standard": StandardScaler(),
+                                    "minmax": MinMaxScaler(),
+                                    "robust": RobustScaler(),
+                                    "maxabs": MaxAbsScaler()
+                                }
+                                
+                                scaler = scalers[method]
+                                
+                                # FIT sur X_train uniquement
+                                if split and "X_train" in split:
+                                    X_train_for_fit = split["X_train"][num_cols].copy()
+                                else:
+                                    X_train_for_fit = df_train[num_cols].copy()
+                                
+                                # FIT sur train
+                                scaler.fit(X_train_for_fit)
+                                
+                                # TRANSFORM sur raw_df
+                                df[num_cols] = scaler.transform(df[num_cols])
+                                state["raw_df"] = df
+                                
+                                # TRANSFORM sur chaque split
+                                if split:
+                                    for key in ["X_train", "X_val", "X_test"]:
+                                        if key in split and isinstance(split[key], pd.DataFrame):
+                                            split[key][num_cols] = scaler.transform(split[key][num_cols])
+                                    state["split"] = split
+                                
+                                state["scaling_method"] = method
+                                state["fitted_scaler"] = scaler
+                                state["scaled_columns"] = num_cols
+                                
+                                ui.notify("✅ Scaling appliqué avec succès!", color="positive")
+                                dialog.close()
+                                ui.run_javascript("setTimeout(() => window.location.href='/supervised/dimension_reduction', 1000);")
+                            
+                            except Exception as e:
+                                ui.notify(f"❌ Erreur : {str(e)}", color="negative")
+                                print(f"Erreur détaillée : {e}")
+                                import traceback
+                                traceback.print_exc()
+                        
+                        ui.button("Confirmer & Continuer", on_click=confirm_and_next).style(
+                            "background:#01335A !important; color:white !important; border-radius:8px !important; "
+                            "padding:10px 24px !important; text-transform:none !important; font-weight:600 !important;"
+                        )
+                
+                dialog.open()
+            
             ui.button(
-                " Étape précédente",
-                on_click=lambda: ui.run_javascript("window.location.href='/supervised/distribution_transform'")
+                "✨ Appliquer recommandation",
+                on_click=lambda: (method_select.set_value(recommended), apply_scaling())
             ).style(
-                "background:#90caf9; color:#01579b; font-weight:600; "
-                "height:60px; width:260px; border-radius:16px; font-size:16px; "
-                "box-shadow: 0 4px 12px rgba(144, 202, 249, 0.3);"
+                "background:#27ae60 !important; color:white !important; border-radius:8px !important; "
+                "padding:12px 32px !important; text-transform:none !important; font-weight:600 !important; "
+                "min-width:200px !important;"
             )
             
             ui.button(
                 "✓ Appliquer & Continuer",
-                on_click=lambda: apply_scaling(method_select.value)
+                on_click=apply_scaling
             ).style(
-                "background:linear-gradient(135deg, #0277bd 0%, #01579b 100%); "
-                "color:white; font-weight:700; height:60px; width:320px; "
-                "border-radius:16px; font-size:16px; "
-                "box-shadow: 0 6px 16px rgba(1, 87, 155, 0.4);"
+                "background:#01335A !important; color:white !important; border-radius:8px !important; "
+                "padding:12px 32px !important; text-transform:none !important; font-weight:600 !important; "
+                "min-width:200px !important;"
             )
+        
+        # Navigation
+        with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
+            ui.button(
+                "← Précédent",
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/distribution_transform'")
+            ).style(
+                "background:white !important; color:#01335A !important; font-weight:500 !important; "
+                "border-radius:8px !important; height:48px !important; min-width:140px !important; "
+                "font-size:14px !important; text-transform:none !important; "
+                "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
+            )
+            
+            ui.button(
+                "Suivant →",
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/dimension_reduction'")
+            ).style(
+                "background:#01335A !important; color:white !important; font-weight:600 !important; "
+                "border-radius:8px !important; height:48px !important; min-width:140px !important; "
+                "font-size:14px !important; text-transform:none !important;"
+            )
+
 
 
 
@@ -7313,7 +7550,7 @@ def dimension_reduction_page():
                     )
             
             # Recommandations
-            with ui.card().classes("w-full p-4").style("background:#cde4ff; border-left:4px solid #ffc107;"):
+            with ui.card().classes("w-full p-4").style("background:#cde4ff; border-left:4px solid #01335A;"):
                 ui.label(" Recommandations par algorithme").style("font-weight:700; font-size:16px; margin-bottom:12px;")
                 ui.label(f"• **KNN** : Ratio idéal > 50 {'' if ratio > 50 else ' Curse of dimensionality'}").style("font-size:14px; margin-bottom:6px;")
                 ui.label("• **C4.5** : Pas de limite stricte ").style("font-size:14px; margin-bottom:6px;")
@@ -7424,10 +7661,10 @@ def dimension_reduction_page():
                                         
                                         with ui.card().classes("w-full p-4 mb-6").style("background:#e8f5e8; border-left:4px solid #1c365c;"):
                                             ui.label(f"💡 **Recommandation** : {n_for_95} composantes (≥95% variance)").style(
-                                                "font-size:15px; font-weight:600; color:#2e7d32;"
+                                                "font-size:15px; font-weight:600; color:#12344f;"
                                             )
                                             ui.label(f"Impact : {n_features} → {n_for_95} features (réduction {(1-n_for_95/n_features)*100:.0f}%)").style(
-                                                "font-size:14px; color:#2e7d32; margin-top:4px;"
+                                                "font-size:14px; color:#12344f; margin-top:4px;"
                                             )
                                     
                                     # Visualisation 2D
@@ -7512,7 +7749,7 @@ def dimension_reduction_page():
         
         # Section Décision Finale
         with ui.card().classes("w-full max-w-5xl p-8 mb-12").style(
-            "background:linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%); "
+            "background:#cde4ff !important; "
             "border:4px solid #1c365c; border-radius:20px;"
         ):
             ui.label("💡 Décision Finale").style(
@@ -7520,7 +7757,7 @@ def dimension_reduction_page():
             )
             
             ui.label("**Recommandation pour vos algorithmes** :").style(
-                "font-size:16px; color:#2e7d32; font-weight:600; margin-bottom:12px;"
+                "font-size:16px; color:#12344f; font-weight:600; margin-bottom:12px;"
             )
             
             ui.label("🔵 **KNN** : PCA recommandée (améliore vitesse et précision)").style("font-size:14px; margin-bottom:6px;")
@@ -7532,7 +7769,7 @@ def dimension_reduction_page():
                     "⏭️ Passer (pas de réduction)",
                     on_click=skip_reduction
                 ).style(
-                    "background:#95a5a6; color:white; font-weight:600; "
+                    "background:#01335A !important; color:white; font-weight:600; "
                     "height:56px; padding:0 32px; border-radius:12px; font-size:16px;"
                 )
                 
@@ -7543,7 +7780,7 @@ def dimension_reduction_page():
                         state.get("n_components", 10)
                     )
                 ).style(
-                    "background:linear-gradient(135deg, #1c365c 0%, #45a049 100%); "
+                    "background:#01335A !important; "
                     "color:white; font-weight:700; height:56px; padding:0 40px; border-radius:12px; font-size:16px;"
                 ).bind_enabled_from(enable_switch, 'value')
         
@@ -7553,7 +7790,7 @@ def dimension_reduction_page():
                 " Étape précédente",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/scaling'")
             ).style(
-                "background:#95a5a6; color:white; font-weight:600; "
+                "background:#01335A !important; color:white; font-weight:600; "
                 "height:60px; width:260px; border-radius:16px; font-size:16px;"
             )
 
@@ -7783,12 +8020,7 @@ def recap_validation_page():
         except Exception as e:
             ui.notify(f"❌ Erreur lors du téléchargement : {str(e)}", color="negative")
     
-    def generate_pdf_report():
-        """Génère un rapport PDF du preprocessing"""
-        ui.notify("📄 Génération du rapport PDF...", color="info")
-        # TODO: Implémenter génération PDF avec reportlab
-        ui.notify(" Fonctionnalité en développement", color="warning")
-    
+
     def open_step_selector():
         """Ouvre un dialog pour sélectionner une étape à modifier"""
         steps = [
@@ -7830,65 +8062,76 @@ def recap_validation_page():
         dialog.open()
     
     def validate_and_continue():
-        """Valide le preprocessing et prépare pour les algorithmes"""
-        with ui.dialog() as dialog, ui.card().classes("w-full max-w-3xl p-6"):
-            ui.label(" Validation du Pipeline").style("font-weight:700; font-size:20px; margin-bottom:16px;")
-            
-            # Progress
-            progress_container = ui.column().classes("w-full")
-            
-            with progress_container:
-                ui.label("Préparation des données pour training...").style("font-size:16px; margin-bottom:12px;")
-                
-                progress_bar = ui.linear_progress(value=0).classes("w-full mb-4")
-                status_label = ui.label("")
-                
-                async def run_validation():
-                    # Simulation des étapes
-                    steps_validation = [
-                        ("Vérification intégrité données", 0.2),
-                        ("Application pipeline sur Validation set", 0.4),
-                        ("Application pipeline sur Test set", 0.6),
-                        ("Sauvegarde du pipeline", 0.8),
-                        ("Préparation algorithmes", 1.0)
-                    ]
-                    
-                    for step, value in steps_validation:
-                        status_label.set_text(f"✓ {step}")
-                        progress_bar.set_value(value)
-                        await asyncio.sleep(0.5)
-                    
-                    # Sauvegarder état validé
-                    state["preprocessing_validated"] = True
-                    state["validation_timestamp"] = datetime.now().isoformat()
-                    
-                    ui.notify(" Pipeline validé avec succès !", color="positive")
-                    
-                    # Afficher résumé final
-                    progress_container.clear()
-                    with progress_container:
-                        ui.label(" Validation complète !").style(
-                            "font-weight:700; font-size:20px; color:#01335A; margin-bottom:16px;"
-                        )
-                        
-                        with ui.card().classes("w-full p-4 mb-4").style("background:#4e88d4;"):
-                            ui.label("Prêt à lancer les algorithmes :").style("font-weight:600; margin-bottom:8px;")
-                            selected_algos = state.get("selected_algos", [])
-                            for algo in selected_algos:
-                                ui.label(f"• {algo}").style("font-size:14px;")
-                        
-                        ui.button(
-                            "▶️ Passer à la Page Algorithmes",
-                            on_click=lambda: (dialog.close(), ui.run_javascript("window.location.href='/supervised/algorithm_config'"))
-                        ).style(
-                            "background:linear-gradient(135deg, #01335A 0%, #229954 100%); "
-                            "color:white; font-weight:700; height:56px; width:100%; border-radius:12px; margin-top:12px;"
-                        )
-                
-                # Lancer la validation
-                ui.timer(0.1, run_validation, once=True)
+        """Valide le preprocessing et passe à la configuration des algorithmes"""
         
-        dialog.open()
+        # VALIDATION PREPROCESSING: Vérifier que les données sont bien préparées
+        if split is None:
+            ui.notify("❌ Effectuez d'abord le split Train/Val/Test", color="negative")
+            return
+        
+        X_train = split.get("X_train", pd.DataFrame())
+        
+        if X_train.empty:
+            ui.notify("❌ Dataset d'entraînement vide", color="negative")
+            return
+        
+        # Détecter les colonnes non-numériques
+        non_numeric_cols = []
+        for col in X_train.columns:
+            if X_train[col].dtype == 'object' or X_train[col].dtype.name == 'category':
+                non_numeric_cols.append(col)
+        
+        if non_numeric_cols:
+            cols_str = ", ".join(non_numeric_cols[:5])
+            if len(non_numeric_cols) > 5:
+                cols_str += f" (et {len(non_numeric_cols)-5} autres)"
+            
+            ui.notify(
+                f"❌ ERREUR: Colonnes non-numériques détectées: {cols_str}. "
+                f"Retournez à la page 'Encodage' pour encoder ces colonnes.",
+                color="negative",
+                timeout=8000,
+                position="top"
+            )
+            return
+        
+        # Vérifier colonnes ID potentielles (avertissement uniquement)
+        id_pattern_cols = []
+        for col in X_train.columns:
+            col_lower = col.lower()
+            # Cardinalité très élevée = probable identifiant
+            if X_train[col].nunique() / len(X_train) > 0.95:
+                id_pattern_cols.append(col)
+        
+        if id_pattern_cols:
+            ui.notify(
+                f"⚠️ ATTENTION: Colonnes à haute cardinalité détectées: {', '.join(id_pattern_cols[:3])}. "
+                f"Ce sont peut-être des identifiants. Retournez à 'Configuration' pour les exclure si nécessaire.",
+                color="warning",
+                timeout=6000,
+                position="top"
+            )
+            # Ne pas bloquer, juste avertir
+        
+        # Vérifier valeurs manquantes
+        missing_count = X_train.isna().sum().sum()
+        if missing_count > 0:
+            ui.notify(
+                f"⚠️ ATTENTION: {missing_count} valeurs manquantes détectées dans X_train. "
+                f"Retournez à 'Gestion Missing' si nécessaire.",
+                color="warning",
+                timeout=5000
+            )
+        
+        # Tout est OK - Sauvegarder timestamp de validation preprocessing
+        state["preprocessing_validated"] = True
+        state["preprocessing_validation_timestamp"] = datetime.now().isoformat()
+        
+        ui.notify("✅ Preprocessing validé ! Passez à la configuration des algorithmes.", color="positive")
+        
+        # Rediriger vers la page de configuration des algorithmes
+        ui.run_javascript("setTimeout(() => window.location.href='/supervised/algorithm_config', 1000);")
+    
     
     def reset_preprocessing():
         """Recommencer tout le preprocessing"""
@@ -8031,17 +8274,10 @@ def recap_validation_page():
                     " Télécharger Dataset Preprocessé",
                     on_click=download_preprocessed_data
                 ).style(
-                    "background:#01335A; color:white; font-weight:600; "
+                    "background:#01335A !important; color:white; font-weight:600; "
                     "height:48px; padding:0 24px; border-radius:10px;"
                 )
                 
-                ui.button(
-                    "📄 Générer Rapport PDF",
-                    on_click=generate_pdf_report
-                ).style(
-                    "background:#9b59b6; color:white; font-weight:600; "
-                    "height:48px; padding:0 24px; border-radius:10px;"
-                )
         
         # Section F : Décisions Finales
         with ui.card().classes("w-full max-w-6xl p-8 mb-12").style(
@@ -8052,16 +8288,12 @@ def recap_validation_page():
                 "font-weight:800; font-size:24px; color:#1c365c; text-align:center; margin-bottom:20px;"
             )
             
-            ui.label("Votre pipeline de preprocessing est prêt !").style(
-                "font-size:16px; color:#2e7d32; text-align:center; margin-bottom:20px;"
-            )
-            
             with ui.row().classes("w-full justify-center gap-4"):
                 ui.button(
                     "️ Modifier une Étape",
                     on_click=open_step_selector
                 ).style(
-                    "background:#95a5a6; color:white; font-weight:600; "
+                    "background:#01335A !important; color:white; font-weight:600; "
                     "height:56px; padding:0 32px; border-radius:12px; font-size:16px;"
                 )
                 
@@ -8069,7 +8301,7 @@ def recap_validation_page():
                     "🔄 Recommencer",
                     on_click=reset_preprocessing
                 ).style(
-                    "background:#e74c3c; color:white; font-weight:600; "
+                    "background:#01335A !important; color:white; font-weight:600; "
                     "height:56px; padding:0 32px; border-radius:12px; font-size:16px;"
                 )
                 
@@ -8077,7 +8309,7 @@ def recap_validation_page():
                     " Valider et Continuer",
                     on_click=validate_and_continue
                 ).style(
-                    "background:linear-gradient(135deg, #01335A 0%, #229954 100%); "
+                    "background:#01335A !important; "
                     "color:white; font-weight:700; height:56px; padding:0 40px; border-radius:12px; font-size:16px;"
                 )
         
@@ -8086,7 +8318,7 @@ def recap_validation_page():
             ui.button(
                 " Étape précédente",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/dimension_reduction'")
-            ).style("background:#95a5a6; color:white; font-weight:600; height:50px; width:220px; border-radius:10px;")
+            ).style("background:#01335A !important; color:white; font-weight:600; height:50px; width:220px; border-radius:10px;")
 
 
 
@@ -8330,7 +8562,7 @@ def algorithm_config_page():
                 ui.label(f"Missing: {compat['missing']}").style("font-size:14px;")
         
         # ==================== SÉLECTION ALGORITHMES ====================
-        with ui.card().classes("w-full max-w-6xl p-6 mb-8").style("background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);"):
+        with ui.card().classes("w-full max-w-6xl p-6 mb-8").style("background:#01335A !important; border-radius:16px;"):
             ui.label(" SÉLECTION DES ALGORITHMES À ENTRAÎNER").style(
                 "font-weight:700; font-size:24px; color:white; margin-bottom:16px; text-align:center;"
             )
@@ -8479,7 +8711,7 @@ def algorithm_config_page():
                             knn_algo.on_value_change(lambda e: state["algo_configs"]["knn"].update({"algorithm": e.value}))
                     
                     # Estimation performances
-                    with ui.card().classes("w-full p-4 mt-4").style("background:#cde4ff;"):
+                    with ui.card().classes("w-full p-4 mt-4").style("background:#cde4ff !important;"):
                         ui.label("⏱️ Estimation Performances").style("font-weight:700; margin-bottom:8px;")
                         ui.label(f"• Temps training : < 0.1s (lazy learner - pas d'entraînement réel)").style("font-size:14px;")
                         pred_time = (compat['n_samples'] * compat['n_features']) / 100000
@@ -8491,7 +8723,7 @@ def algorithm_config_page():
                     with ui.row().classes("w-full justify-end gap-2 mt-4"):
                         ui.button("🔄 Réinitialiser", on_click=lambda: reset_config("knn")).props("flat")
                         ui.button("💡 Appliquer Recommandation", on_click=lambda: apply_recommended_config("knn")).style(
-                            "background:#01335A; color:white;"
+                            "background:#01335A !important; color:white;"
                         )
         
         # ==================== CARTE 2: DECISION TREE ====================
@@ -8629,7 +8861,7 @@ def algorithm_config_page():
                     with ui.row().classes("w-full justify-end gap-2 mt-4"):
                         ui.button("🔄 Réinitialiser", on_click=lambda: reset_config("decision_tree")).props("flat")
                         ui.button("💡 Appliquer Recommandation", on_click=lambda: apply_recommended_config("decision_tree")).style(
-                            "background:#01335A; color:white;"
+                            "background:#01335A !important; color:white;"
                         )
         
         
@@ -8732,8 +8964,8 @@ def algorithm_config_page():
                         )
                     
                     # Estimation performances
-                    with ui.card().classes("w-full p-4 mt-4").style("background:#4e88d4;"):
-                        ui.label("⚡ Performances").style("font-weight:700; margin-bottom:8px;")
+                    with ui.card().classes("w-full p-4 mt-4").style("background:;"):
+                        ui.label("⚡ Performances").style("font-weight:700; marg#cde4ff !importantin-bottom:8px;")
                         ui.label("• Temps training : < 0.1s (le plus rapide de tous)").style("font-size:14px;")
                         ui.label("• Temps prédiction : < 0.01s (très rapide)").style("font-size:14px;")
                         ui.label("• Mémoire : Très faible (~quelques KB)").style("font-size:14px;")
@@ -8743,11 +8975,11 @@ def algorithm_config_page():
                     with ui.row().classes("w-full justify-end gap-2 mt-4"):
                         ui.button("🔄 Réinitialiser", on_click=lambda: reset_config("naive_bayes")).props("flat")
                         ui.button("💡 Config par défaut", on_click=lambda: apply_recommended_config("naive_bayes")).style(
-                            "background:#01335A; color:white;"
+                            "background:#01335A !important; color:white;"
                         )
         
         # ==================== SECTION: STRATÉGIE DE VALIDATION ====================
-        with ui.card().classes("w-full max-w-6xl p-6 mb-6").style("background:#4e88d4; border:2px solid #1c365c;"):
+        with ui.card().classes("w-full max-w-6xl p-6 mb-6").style("background:#cde4ff !important; border:2px solid #1c365c;"):
             ui.label(" STRATÉGIE DE VALIDATION").style(
                 "font-weight:700; font-size:24px; color:#2c3e50; margin-bottom:16px;"
             )
@@ -8840,7 +9072,7 @@ def algorithm_config_page():
         
         # ==================== RÉCAPITULATIF FINAL ====================
         with ui.card().classes("w-full max-w-6xl p-6 mb-8").style(
-            "background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius:16px;"
+            " border-radius:16px;"
         ):
             ui.label("📋 RÉCAPITULATIF CONFIGURATION").style(
                 "font-weight:700; font-size:24px; color:white; margin-bottom:16px; text-align:center;"
@@ -8898,14 +9130,14 @@ def algorithm_config_page():
                 " Retour au Récapitulatif",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/recap_validation'")
             ).style(
-                "background:#95a5a6; color:white; font-weight:600; height:56px; padding:0 32px; border-radius:12px; font-size:16px;"
+                "background:#01335A !important; color:white; font-weight:600; height:56px; padding:0 32px; border-radius:12px; font-size:16px;"
             )
             
             ui.button(
                 " Valider et Lancer l'Entraînement",
                 on_click=validate_and_continue
             ).style(
-                "background:linear-gradient(135deg, #01335A 0%, #229954 100%); "
+                "background:#01335A !important "
                 "color:white; font-weight:700; height:56px; padding:0 40px; border-radius:12px; font-size:16px;"
             )
 
@@ -8940,7 +9172,7 @@ def feature_importance_page():
     if df is None or split is None or target_col is None:
         with ui.column().classes("items-center justify-center w-full h-screen"):
             ui.label("❌ Données non disponibles. Complétez d'abord les étapes précédentes.").style(
-                "font-size:18px; color:#c0392b; font-weight:600;"
+                "font-size:18px !important; color:#c0392b !important; font-weight:600 !important;"
             )
             ui.button(" Retour", on_click=lambda: ui.run_javascript("window.location.href='/supervised/algorithm_config'"))
         return
@@ -8951,7 +9183,7 @@ def feature_importance_page():
     
     if X_train is None or y_train is None:
         with ui.column().classes("items-center justify-center w-full h-screen"):
-            ui.label("❌ Split non disponible.").style("font-size:18px; color:#c0392b; font-weight:600;")
+            ui.label("❌ Split non disponible.").style("font-size:18px !important; color:#c0392b !important; font-weight:600 !important;")
         return
     
     active_features = [c for c in X_train.columns if not columns_exclude.get(c, False)]
@@ -8983,7 +9215,7 @@ def feature_importance_page():
                         "test_stat": 0,
                         "p_value": 1,
                         "signif": "",
-                        "signif_color": "#95a5a6"
+                        "signif_color": "#01335A !important"
                     })
                     continue
                 
@@ -9081,7 +9313,7 @@ def feature_importance_page():
                     signif_color = "#01335A"
                 else:
                     signif = ""
-                    signif_color = "#95a5a6"
+                    signif_color = "#666666"
                 
                 results.append({
                     "feature": feature,
@@ -9102,7 +9334,7 @@ def feature_importance_page():
                     "test_stat": 0,
                     "p_value": 1,
                     "signif": "",
-                    "signif_color": "#95a5a6"
+                    "signif_color": "#666666"
                 })
         
         # Normaliser importance relative (0-100%)
@@ -9152,8 +9384,15 @@ def feature_importance_page():
         
         fig = go.Figure()
         
-        colors = ['#01335A' if imp > 60 else '#01335A' if imp > 30 else '#e74c3c' 
-                  for imp in df_importance["importance"]]
+        # Gradient de nuances de #01335A
+        colors = []
+        for imp in df_importance["importance"]:
+            if imp > 60:
+                colors.append('#01335A')
+            elif imp > 30:
+                colors.append('#023d6b')
+            else:
+                colors.append('#04507c')
         
         fig.add_trace(go.Bar(
             y=df_importance["feature"],
@@ -9172,7 +9411,7 @@ def feature_importance_page():
             height=max(400, len(df_importance) * 30),
             yaxis={'categoryorder': 'total ascending'},
             showlegend=False,
-            paper_bgcolor='#f8f9fa',
+            paper_bgcolor='#f5f7fa',
             plot_bgcolor='white'
         )
         
@@ -9191,7 +9430,8 @@ def feature_importance_page():
                 fig.add_trace(go.Box(
                     y=X_feature[mask],
                     name=f"Classe {class_val}",
-                    boxmean='sd'
+                    boxmean='sd',
+                    marker_color='#01335A'
                 ))
             
             fig.update_layout(
@@ -9199,7 +9439,7 @@ def feature_importance_page():
                 yaxis_title=feature_name,
                 xaxis_title="Classe",
                 height=400,
-                paper_bgcolor='#f8f9fa',
+                paper_bgcolor='#f5f7fa',
                 plot_bgcolor='white'
             )
         else:
@@ -9216,7 +9456,7 @@ def feature_importance_page():
                 xaxis_title=feature_name,
                 yaxis_title=target_col,
                 height=400,
-                paper_bgcolor='#f8f9fa',
+                paper_bgcolor='#f5f7fa',
                 plot_bgcolor='white'
             )
         
@@ -9277,56 +9517,56 @@ def feature_importance_page():
     mi_results = calculate_mutual_information()
     
     # ---------- INTERFACE ----------
-    with ui.column().classes("w-full items-center p-8").style("background-color:#f8f9fa; min-height:100vh;"):
+    with ui.column().classes("w-full items-center p-8").style("background-color:#f5f7fa !important; min-height:100vh !important;"):
         
         # ==================== HEADER ====================
         ui.label(" ANALYSE D'IMPORTANCE DES FEATURES").style(
-            "font-weight:700; font-size:32px; color:#2c3e50; margin-bottom:8px; text-align:center;"
+            "font-weight:700 !important; font-size:32px !important; color:#01335A !important; margin-bottom:8px !important; text-align:center !important;"
         )
         ui.label(f"Analyse préliminaire pour guider la modélisation ({task_type})").style(
-            "font-size:18px; color:#7f8c8d; margin-bottom:32px; text-align:center;"
+            "font-size:18px !important; color:#023d6b !important; margin-bottom:32px !important; text-align:center !important;"
         )
         
         # Info dataset
-        with ui.card().classes("w-full max-w-6xl p-4 mb-6").style("background:#e3f2fd; border-left:5px solid #2196f3;"):
+        with ui.card().classes("w-full max-w-6xl p-4 mb-6").style("background:#ffffff !important; border:2px solid #01335A !important; border-radius:12px !important;"):
             with ui.row().classes("w-full gap-8 items-center"):
-                ui.label(" Dataset :").style("font-weight:700; font-size:16px;")
-                ui.label(f"Features: {len(active_features)}").style("font-size:14px;")
-                ui.label(f"Samples: {len(X_train):,}").style("font-size:14px;")
-                ui.label(f"Target: {target_col}").style("font-size:14px;")
-                ui.label(f"Type: {task_type}").style("font-size:14px;")
+                ui.label(" Dataset :").style("font-weight:700 !important; font-size:16px !important; color:#01335A !important;")
+                ui.label(f"Features: {len(active_features)}").style("font-size:14px !important; color:#023d6b !important;")
+                ui.label(f"Samples: {len(X_train):,}").style("font-size:14px !important; color:#023d6b !important;")
+                ui.label(f"Target: {target_col}").style("font-size:14px !important; color:#023d6b !important;")
+                ui.label(f"Type: {task_type}").style("font-size:14px !important; color:#023d6b !important;")
         
         # ==================== SECTION A : IMPORTANCE UNIVARIÉE ====================
-        with ui.card().classes("w-full max-w-6xl p-6 mb-8"):
+        with ui.card().classes("w-full max-w-6xl p-6 mb-8").style("background:#ffffff !important; border-radius:12px !important; box-shadow:0 2px 8px rgba(1,51,90,0.1) !important;"):
             ui.label(" SECTION A : IMPORTANCE UNIVARIÉE").style(
-                "font-weight:700; font-size:24px; color:#2c3e50; margin-bottom:16px;"
+                "font-weight:700 !important; font-size:24px !important; color:#01335A !important; margin-bottom:16px !important;"
             )
             
             ui.label("Méthode : Tests Statistiques Adaptés au Type de Feature").style(
-                "font-size:16px; color:#7f8c8d; margin-bottom:12px;"
+                "font-size:16px !important; color:#023d6b !important; margin-bottom:12px !important;"
             )
             
             # Info méthode
-            with ui.card().classes("w-full p-3 mb-4").style("background:#4e88d4; border-left:3px solid #1c365c;"):
-                ui.label(" Méthodes utilisées :").style("font-weight:600; margin-bottom:6px;")
-                ui.label("• Chi² + Cramér's V : Variables catégorielles/binaires").style("font-size:13px;")
-                ui.label("• ANOVA F + Eta² : Variables continues (classification)").style("font-size:13px;")
-                ui.label("• Pearson : Variables continues (régression)").style("font-size:13px;")
+            with ui.card().classes("w-full p-3 mb-4").style("background:#e8f0f7 !important; border-left:3px solid #01335A !important; border-radius:8px !important;"):
+                ui.label(" Méthodes utilisées :").style("font-weight:600 !important; color:#01335A !important; margin-bottom:6px !important;")
+                ui.label("• Chi² + Cramér's V : Variables catégorielles/binaires").style("font-size:13px !important; color:#023d6b !important;")
+                ui.label("• ANOVA F + Eta² : Variables continues (classification)").style("font-size:13px !important; color:#023d6b !important;")
+                ui.label("• Pearson : Variables continues (régression)").style("font-size:13px !important; color:#023d6b !important;")
             
             # Tableau détaillé
             if len(univariate_results) > 0:
                 # Créer tableau HTML stylisé
                 table_html = """
-                <div style="background:#1a1a1a; border-radius:12px; padding:20px; overflow-x:auto; margin-bottom:24px;">
-                <table style="width:100%; color:#00ff88; font-family:monospace; font-size:13px; border-collapse:collapse;">
+                <div style="background:#01335A !important; border-radius:12px !important; padding:20px !important; overflow-x:auto !important; margin-bottom:24px !important;">
+                <table style="width:100% !important; color:#ffffff !important; font-family:monospace !important; font-size:13px !important; border-collapse:collapse !important;">
                     <thead>
-                        <tr style="border-bottom:2px solid #00ff88;">
-                            <th style="text-align:left; padding:12px; color:#00ffff;">Feature</th>
-                            <th style="text-align:center; padding:12px;">Assoc. Target</th>
-                            <th style="text-align:center; padding:12px;">Test</th>
-                            <th style="text-align:center; padding:12px;">Test Stat</th>
-                            <th style="text-align:center; padding:12px;">Signif.</th>
-                            <th style="text-align:left; padding:12px;">Importance</th>
+                        <tr style="border-bottom:2px solid #ffffff !important;">
+                            <th style="text-align:left !important; padding:12px !important; color:#ffffff !important;">Feature</th>
+                            <th style="text-align:center !important; padding:12px !important; color:#ffffff !important;">Assoc. Target</th>
+                            <th style="text-align:center !important; padding:12px !important; color:#ffffff !important;">Test</th>
+                            <th style="text-align:center !important; padding:12px !important; color:#ffffff !important;">Test Stat</th>
+                            <th style="text-align:center !important; padding:12px !important; color:#ffffff !important;">Signif.</th>
+                            <th style="text-align:left !important; padding:12px !important; color:#ffffff !important;">Importance</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -9340,13 +9580,13 @@ def feature_importance_page():
                     feature_display = row['feature'][:25] + "..." if len(row['feature']) > 25 else row['feature']
                     
                     table_html += f"""
-                        <tr style="border-bottom:1px solid #333;">
-                            <td style="padding:10px; font-weight:600;">{feature_display}</td>
-                            <td style="text-align:center; padding:10px;">{row['corr']:.3f} {icon}</td>
-                            <td style="text-align:center; padding:10px; color:#ffa500;">{row['test_name']}</td>
-                            <td style="text-align:center; padding:10px;">{row['test_stat']:.2f}</td>
-                            <td style="text-align:center; padding:10px; color:{row['signif_color']}; font-weight:700;">{row['signif']}</td>
-                            <td style="padding:10px;">{bar} {row['importance']}%</td>
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.2) !important;">
+                            <td style="padding:10px !important; font-weight:600 !important; color:#ffffff !important;">{feature_display}</td>
+                            <td style="text-align:center !important; padding:10px !important; color:#ffffff !important;">{row['corr']:.3f} {icon}</td>
+                            <td style="text-align:center !important; padding:10px !important; color:#d4e1ed !important;">{row['test_name']}</td>
+                            <td style="text-align:center !important; padding:10px !important; color:#ffffff !important;">{row['test_stat']:.2f}</td>
+                            <td style="text-align:center !important; padding:10px !important; color:{row['signif_color']} !important; font-weight:700 !important;">{row['signif']}</td>
+                            <td style="padding:10px !important; color:#ffffff !important;">{bar} {row['importance']}%</td>
                         </tr>
                     """
                 
@@ -9359,43 +9599,43 @@ def feature_importance_page():
                 ui.html(table_html, sanitize=False)
                 
                 # Légende significativité
-                with ui.card().classes("w-full p-4 mb-4").style("background:#cde4ff;"):
-                    ui.label("📖 Légende Significativité (p-value) :").style("font-weight:700; margin-bottom:8px;")
-                    ui.label("*** p < 0.001 (Très significatif) - Forte évidence d'association").style("font-size:14px; color:#01335A;")
-                    ui.label("** p < 0.01 (Significatif) - Bonne évidence d'association").style("font-size:14px; color:#01335A;")
-                    ui.label("* p < 0.05 (Marginalement significatif) - Évidence modérée").style("font-size:14px; color:#01335A;")
-                    ui.label("(vide) p >= 0.05 (Non significatif) - Pas d'évidence d'association").style("font-size:14px; color:#95a5a6;")
+                with ui.card().classes("w-full p-4 mb-4").style("background:#e8f0f7 !important; border-radius:8px !important;"):
+                    ui.label("📖 Légende Significativité (p-value) :").style("font-weight:700 !important; color:#01335A !important; margin-bottom:8px !important;")
+                    ui.label("*** p < 0.001 (Très significatif) - Forte évidence d'association").style("font-size:14px !important; color:#023d6b !important;")
+                    ui.label("** p < 0.01 (Significatif) - Bonne évidence d'association").style("font-size:14px !important; color:#023d6b !important;")
+                    ui.label("* p < 0.05 (Marginalement significatif) - Évidence modérée").style("font-size:14px !important; color:#023d6b !important;")
+                    ui.label("(vide) p >= 0.05 (Non significatif) - Pas d'évidence d'association").style("font-size:14px !important; color:#666666 !important;")
                 
                 # Observations
                 high_importance = univariate_results[univariate_results["importance"] > 60]
                 medium_importance = univariate_results[(univariate_results["importance"] >= 30) & (univariate_results["importance"] <= 60)]
                 low_importance = univariate_results[univariate_results["importance"] < 20]
                 
-                with ui.card().classes("w-full p-4 mb-4").style("background:#4e88d4; border-left:4px solid #1c365c;"):
-                    ui.label("💡 Observations :").style("font-weight:700; margin-bottom:8px;")
+                with ui.card().classes("w-full p-4 mb-4").style("background:#e8f0f7 !important; border-left:4px solid #01335A !important; border-radius:8px !important;"):
+                    ui.label("💡 Observations :").style("font-weight:700 !important; color:#01335A !important; margin-bottom:8px !important;")
                     
                     if len(high_importance) > 0:
                         features_str = ", ".join(high_importance["feature"].head(5).tolist())
                         if len(high_importance) > 5:
                             features_str += f" (+ {len(high_importance)-5} autres)"
-                        ui.label(f"• 🟢 {len(high_importance)} features très prédictives (importance > 60%) : {features_str}").style("font-size:14px; margin-bottom:4px;")
+                        ui.label(f"• 🟢 {len(high_importance)} features très prédictives (importance > 60%) : {features_str}").style("font-size:14px !important; color:#023d6b !important; margin-bottom:4px !important;")
                     
                     if len(medium_importance) > 0:
-                        ui.label(f"• 🟡 {len(medium_importance)} features moyennement prédictives (30-60%)").style("font-size:14px; margin-bottom:4px;")
+                        ui.label(f"• 🟡 {len(medium_importance)} features moyennement prédictives (30-60%)").style("font-size:14px !important; color:#023d6b !important; margin-bottom:4px !important;")
                     
                     if len(low_importance) > 0:
-                        ui.label(f"• 🔴 {len(low_importance)} features faiblement prédictives (< 20%)").style("font-size:14px; margin-bottom:4px;")
+                        ui.label(f"• 🔴 {len(low_importance)} features faiblement prédictives (< 20%)").style("font-size:14px !important; color:#023d6b !important; margin-bottom:4px !important;")
                     
                     # Recommandation nombre features
                     recommended_n = len(univariate_results[univariate_results["importance"] >= 30])
                     if recommended_n > 0:
                         ui.label(f"• 💡 Recommandation : Conserver les {recommended_n} features (importance >= 30%) pour un bon compromis").style(
-                            "font-size:14px; font-weight:600; color:#2e7d32; margin-top:8px;"
+                            "font-size:14px !important; font-weight:600 !important; color:#01335A !important; margin-top:8px !important;"
                         )
                 
                 # Barplot horizontal
                 ui.label(" Visualisation des Importances").style(
-                    "font-weight:700; font-size:20px; margin-top:20px; margin-bottom:12px;"
+                    "font-weight:700 !important; font-size:20px !important; color:#01335A !important; margin-top:20px !important; margin-bottom:12px !important;"
                 )
                 
                 barplot_fig = create_importance_barplot(univariate_results, "Importance Univariée des Features")
@@ -9414,7 +9654,7 @@ def feature_importance_page():
                             scatter_container.clear()
                             with scatter_container:
                                 ui.label(f" Relation : {feature_clicked} vs {target_col}").style(
-                                    "font-weight:700; font-size:18px; margin-bottom:12px;"
+                                    "font-weight:700 !important; font-size:18px !important; color:#01335A !important; margin-bottom:12px !important;"
                                 )
                                 
                                 scatter_fig = create_scatter_feature_vs_target(feature_clicked)
@@ -9425,32 +9665,32 @@ def feature_importance_page():
                 barplot_plot.on("plotly_click", handle_bar_click)
                 
                 ui.label("💡 Cliquez sur une barre pour voir la relation avec la target").style(
-                    "font-size:13px; color:#7f8c8d; margin-top:8px; text-align:center;"
+                    "font-size:13px !important; color:#023d6b !important; margin-top:8px !important; text-align:center !important;"
                 )
             
             else:
-                ui.label(" Aucune feature disponible pour l'analyse").style("color:#01335A; font-size:16px;")
+                ui.label(" Aucune feature disponible pour l'analyse").style("color:#666666 !important; font-size:16px !important;")
         
         # ==================== SECTION B : MUTUAL INFORMATION ====================
         if len(mi_results) > 0:
-            with ui.card().classes("w-full max-w-6xl p-6 mb-8"):
+            with ui.card().classes("w-full max-w-6xl p-6 mb-8").style("background:#ffffff !important; border-radius:12px !important; box-shadow:0 2px 8px rgba(1,51,90,0.1) !important;"):
                 ui.label("🔄 SECTION B : IMPORTANCE MULTIVARIÉE (MUTUAL INFORMATION)").style(
-                    "font-weight:700; font-size:24px; color:#2c3e50; margin-bottom:16px;"
+                    "font-weight:700 !important; font-size:24px !important; color:#01335A !important; margin-bottom:16px !important;"
                 )
                 
                 ui.label("Méthode : Mutual Information (capture relations non-linéaires)").style(
-                    "font-size:16px; color:#7f8c8d; margin-bottom:20px;"
+                    "font-size:16px !important; color:#023d6b !important; margin-bottom:20px !important;"
                 )
                 
                 # Tableau MI
                 table_html_mi = """
-                <div style="background:#1a1a1a; border-radius:12px; padding:20px; overflow-x:auto; margin-bottom:24px;">
-                <table style="width:100%; color:#00ff88; font-family:monospace; font-size:13px; border-collapse:collapse;">
+                <div style="background:#01335A !important; border-radius:12px !important; padding:20px !important; overflow-x:auto !important; margin-bottom:24px !important;">
+                <table style="width:100% !important; color:#ffffff !important; font-family:monospace !important; font-size:13px !important; border-collapse:collapse !important;">
                     <thead>
-                        <tr style="border-bottom:2px solid #00ff88;">
-                            <th style="text-align:left; padding:12px; color:#00ffff;">Feature</th>
-                            <th style="text-align:center; padding:12px;">MI Score</th>
-                            <th style="text-align:left; padding:12px;">Importance Relative</th>
+                        <tr style="border-bottom:2px solid #ffffff !important;">
+                            <th style="text-align:left !important; padding:12px !important; color:#ffffff !important;">Feature</th>
+                            <th style="text-align:center !important; padding:12px !important; color:#ffffff !important;">MI Score</th>
+                            <th style="text-align:left !important; padding:12px !important; color:#ffffff !important;">Importance Relative</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -9461,10 +9701,10 @@ def feature_importance_page():
                     feature_display = row['feature'][:25] + "..." if len(row['feature']) > 25 else row['feature']
                     
                     table_html_mi += f"""
-                        <tr style="border-bottom:1px solid #333;">
-                            <td style="padding:10px; font-weight:600;">{feature_display}</td>
-                            <td style="text-align:center; padding:10px;">{row['mi_score']:.4f}</td>
-                            <td style="padding:10px;">{bar} {row['importance']}%</td>
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.2) !important;">
+                            <td style="padding:10px !important; font-weight:600 !important; color:#ffffff !important;">{feature_display}</td>
+                            <td style="text-align:center !important; padding:10px !important; color:#ffffff !important;">{row['mi_score']:.4f}</td>
+                            <td style="padding:10px !important; color:#ffffff !important;">{bar} {row['importance']}%</td>
                         </tr>
                     """
                 
@@ -9477,18 +9717,18 @@ def feature_importance_page():
                 ui.html(table_html_mi, sanitize=False)
                 
                 # Info MI
-                with ui.card().classes("w-full p-4").style("background:#e3f2fd;"):
+                with ui.card().classes("w-full p-4").style("background:#e8f0f7 !important; border-radius:8px !important;"):
                     ui.label("💡 Mutual Information (Avantages)").style(
-                        "font-weight:700; margin-bottom:8px;"
+                        "font-weight:700 !important; color:#01335A !important; margin-bottom:8px !important;"
                     )
-                    ui.label("→ Capture relations non-linéaires (complète l'analyse univariée)").style("font-size:14px;")
-                    ui.label("→ Pas d'hypothèse sur la distribution des données").style("font-size:14px;")
-                    ui.label("→ Fonctionne avec variables continues ET catégorielles").style("font-size:14px;")
-                    ui.label("→ Détecte interactions complexes avec la target").style("font-size:14px;")
+                    ui.label("→ Capture relations non-linéaires (complète l'analyse univariée)").style("font-size:14px !important; color:#023d6b !important;")
+                    ui.label("→ Pas d'hypothèse sur la distribution des données").style("font-size:14px !important; color:#023d6b !important;")
+                    ui.label("→ Fonctionne avec variables continues ET catégorielles").style("font-size:14px !important; color:#023d6b !important;")
+                    ui.label("→ Détecte interactions complexes avec la target").style("font-size:14px !important; color:#023d6b !important;")
                 
                 # Barplot MI
                 ui.label(" Visualisation MI Scores").style(
-                    "font-weight:700; font-size:20px; margin-top:20px; margin-bottom:12px;"
+                    "font-weight:700 !important; font-size:20px !important; color:#01335A !important; margin-top:20px !important; margin-bottom:12px !important;"
                 )
                 
                 mi_barplot = create_importance_barplot(mi_results, "Mutual Information Scores")
@@ -9496,95 +9736,95 @@ def feature_importance_page():
         
         # ==================== SECTION C : RECOMMANDATIONS ====================
         with ui.card().classes("w-full max-w-6xl p-6 mb-8").style(
-            "background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius:16px;"
+            "background:#01335A !important; border-radius:16px !important;"
         ):
             ui.label("💡 RECOMMANDATIONS AVANT TRAINING").style(
-                "font-weight:700; font-size:24px; color:white; margin-bottom:16px; text-align:center;"
+                "font-weight:700 !important; font-size:24px !important; color:#ffffff !important; margin-bottom:16px !important; text-align:center !important;"
             )
             
             ui.label("Basé sur l'analyse d'importance :").style(
-                "font-size:16px; color:white; text-align:center; margin-bottom:20px;"
+                "font-size:16px !important; color:#d4e1ed !important; text-align:center !important; margin-bottom:20px !important;"
             )
             
             if len(univariate_results) > 0:
                 # Options
                 with ui.column().classes("w-full gap-4"):
                     # Option 1 : Garder toutes
-                    with ui.card().classes("p-6"):
+                    with ui.card().classes("p-6").style("background:#ffffff !important; border-radius:12px !important;"):
                         ui.label(f"Option 1 : Garder toutes les features ({len(active_features)})").style(
-                            "font-weight:700; font-size:18px; margin-bottom:12px;"
+                            "font-weight:700 !important; font-size:18px !important; color:#01335A !important; margin-bottom:12px !important;"
                         )
                         
                         with ui.row().classes("gap-6 mb-4"):
                             with ui.column().classes("flex-1"):
-                                ui.label(" Avantages").style("font-weight:600; color:#01335A; margin-bottom:6px;")
-                                ui.label("• Maximise information disponible").style("font-size:14px;")
-                                ui.label("• Pas de risque de perte d'info").style("font-size:14px;")
-                                ui.label("• Laisse l'algo choisir").style("font-size:14px;")
+                                ui.label(" Avantages").style("font-weight:600 !important; color:#01335A !important; margin-bottom:6px !important;")
+                                ui.label("• Maximise information disponible").style("font-size:14px !important; color:#023d6b !important;")
+                                ui.label("• Pas de risque de perte d'info").style("font-size:14px !important; color:#023d6b !important;")
+                                ui.label("• Laisse l'algo choisir").style("font-size:14px !important; color:#023d6b !important;")
                             
                             with ui.column().classes("flex-1"):
-                                ui.label("❌ Inconvénients").style("font-weight:600; color:#e74c3c; margin-bottom:6px;")
-                                ui.label("• Risque léger de bruit").style("font-size:14px;")
-                                ui.label("• Training plus lent").style("font-size:14px;")
-                                ui.label("• Overfitting possible").style("font-size:14px;")
+                                ui.label("❌ Inconvénients").style("font-weight:600 !important; color:#666666 !important; margin-bottom:6px !important;")
+                                ui.label("• Risque léger de bruit").style("font-size:14px !important; color:#666666 !important;")
+                                ui.label("• Training plus lent").style("font-size:14px !important; color:#666666 !important;")
+                                ui.label("• Overfitting possible").style("font-size:14px !important; color:#666666 !important;")
                         
                         ui.button(
                             " Continuer avec toutes les features",
                             on_click=skip_to_training
                         ).style(
-                            "background:#01335A; color:white; font-weight:600; height:48px; width:100%; border-radius:8px;"
+                            "background:#01335A !important; color:#ffffff !important; font-weight:600 !important; height:48px !important; width:100% !important; border-radius:8px !important;"
                         )
                     
                     # Option 2 : Réduire Top N
                     recommended_n = len(univariate_results[univariate_results["importance"] >= 30])
                     
                     if recommended_n > 0 and recommended_n < len(active_features):
-                        with ui.card().classes("p-6"):
+                        with ui.card().classes("p-6").style("background:#ffffff !important; border-radius:12px !important;"):
                             ui.label(f"Option 2 : Réduire à Top {recommended_n} features (importance >= 30%)").style(
-                                "font-weight:700; font-size:18px; margin-bottom:12px;"
+                                "font-weight:700 !important; font-size:18px !important; color:#01335A !important; margin-bottom:12px !important;"
                             )
                             
                             top_features = univariate_results[univariate_results["importance"] >= 30]["feature"].tolist()
                             ui.label(f"Features conservées : {', '.join(top_features[:5])}{'...' if len(top_features) > 5 else ''}").style(
-                                "font-size:13px; color:#636e72; margin-bottom:12px;"
+                                "font-size:13px !important; color:#023d6b !important; margin-bottom:12px !important;"
                             )
                             
                             with ui.row().classes("gap-6 mb-4"):
                                 with ui.column().classes("flex-1"):
-                                    ui.label(" Avantages").style("font-weight:600; color:#01335A; margin-bottom:6px;")
-                                    ui.label("• Élimine bruit potentiel").style("font-size:14px;")
-                                    ui.label("• Accélère training").style("font-size:14px;")
-                                    ui.label("• Réduit overfitting").style("font-size:14px;")
+                                    ui.label(" Avantages").style("font-weight:600 !important; color:#01335A !important; margin-bottom:6px !important;")
+                                    ui.label("• Élimine bruit potentiel").style("font-size:14px !important; color:#023d6b !important;")
+                                    ui.label("• Accélère training").style("font-size:14px !important; color:#023d6b !important;")
+                                    ui.label("• Réduit overfitting").style("font-size:14px !important; color:#023d6b !important;")
                                 
                                 with ui.column().classes("flex-1"):
-                                    ui.label("❌ Inconvénients").style("font-weight:600; color:#e74c3c; margin-bottom:6px;")
+                                    ui.label("❌ Inconvénients").style("font-weight:600 !important; color:#666666 !important; margin-bottom:6px !important;")
                                     low_features = univariate_results[univariate_results["importance"] < 30]
                                     n_removed = len(low_features)
-                                    ui.label(f"• Supprime {n_removed} features").style("font-size:14px;")
-                                    ui.label("• Risque léger de sous-apprentissage").style("font-size:14px;")
+                                    ui.label(f"• Supprime {n_removed} features").style("font-size:14px !important; color:#666666 !important;")
+                                    ui.label("• Risque léger de sous-apprentissage").style("font-size:14px !important; color:#666666 !important;")
                             
                             ui.button(
                                 f"✂️ Réduire à Top {recommended_n} features [Recommandé]",
                                 on_click=lambda: apply_feature_selection(recommended_n)
                             ).style(
-                                "background:#01335A; color:white; font-weight:600; height:48px; width:100%; border-radius:8px;"
+                                "background:#01335A !important; color:#ffffff !important; font-weight:600 !important; height:48px !important; width:100% !important; border-radius:8px !important;"
                             )
                     
                     # Option 3 : Custom
-                    with ui.card().classes("p-6"):
+                    with ui.card().classes("p-6").style("background:#ffffff !important; border-radius:12px !important;"):
                         ui.label("Option 3 : Sélection personnalisée").style(
-                            "font-weight:700; font-size:18px; margin-bottom:12px;"
+                            "font-weight:700 !important; font-size:18px !important; color:#01335A !important; margin-bottom:12px !important;"
                         )
                         
                         with ui.row().classes("w-full items-center gap-4 mb-4"):
-                            ui.label("Nombre de features à conserver :").style("font-weight:600; width:250px;")
+                            ui.label("Nombre de features à conserver :").style("font-weight:600 !important; color:#01335A !important; width:250px !important;")
                             custom_n_slider = ui.slider(
                                 min=1, 
                                 max=len(active_features), 
                                 value=min(recommended_n if recommended_n > 0 else len(active_features), len(active_features)), 
                                 step=1
                             ).classes("flex-1")
-                            custom_n_label = ui.label(f"{custom_n_slider.value}").style("font-weight:700; width:60px;")
+                            custom_n_label = ui.label(f"{custom_n_slider.value}").style("font-weight:700 !important; color:#01335A !important; width:60px !important;")
                             
                             def update_custom_n(e):
                                 custom_n_label.set_text(f"{int(e.value)}")
@@ -9595,14 +9835,14 @@ def feature_importance_page():
                             "✂️ Appliquer sélection personnalisée",
                             on_click=lambda: apply_feature_selection(int(custom_n_slider.value))
                         ).style(
-                            "background:#9b59b6; color:white; font-weight:600; height:48px; width:100%; border-radius:8px;"
+                            "background:#023d6b !important; color:#ffffff !important; font-weight:600 !important; height:48px !important; width:100% !important; border-radius:8px !important;"
                         )
         
         # ==================== COMPARAISON MÉTHODES ====================
         if len(mi_results) > 0 and len(univariate_results) > 0:
-            with ui.card().classes("w-full max-w-6xl p-6 mb-8"):
+            with ui.card().classes("w-full max-w-6xl p-6 mb-8").style("background:#ffffff !important; border-radius:12px !important; box-shadow:0 2px 8px rgba(1,51,90,0.1) !important;"):
                 ui.label(" COMPARAISON DES MÉTHODES").style(
-                    "font-weight:700; font-size:24px; color:#2c3e50; margin-bottom:16px;"
+                    "font-weight:700 !important; font-size:24px !important; color:#01335A !important; margin-bottom:16px !important;"
                 )
                 
                 # Merge univariate et MI
@@ -9629,7 +9869,7 @@ def feature_importance_page():
                     x=comparison_df["feature"],
                     y=comparison_df["multivariate"],
                     name="Multivariée (MI)",
-                    marker_color='#e74c3c'
+                    marker_color='#023d6b'
                 ))
                 
                 fig.update_layout(
@@ -9639,19 +9879,19 @@ def feature_importance_page():
                     barmode='group',
                     height=500,
                     showlegend=True,
-                    paper_bgcolor='#f8f9fa',
+                    paper_bgcolor='#f5f7fa',
                     plot_bgcolor='white'
                 )
                 
                 ui.plotly(fig).classes("w-full")
                 
                 # Interprétation
-                with ui.card().classes("w-full p-4 mt-4").style("background:#4e88d4;"):
-                    ui.label("💡 Interprétation :").style("font-weight:700; margin-bottom:8px;")
-                    ui.label("• Si les deux méthodes donnent des résultats similaires → Relations linéaires/monotones dominantes").style("font-size:14px;")
-                    ui.label("• Si MI > Analyse univariée → Relations non-linéaires importantes").style("font-size:14px;")
-                    ui.label("• Features avec MI élevé mais score univarié faible → Interactions complexes").style("font-size:14px;")
-                    ui.label("• Consensus entre les deux méthodes → Features robustement importantes").style("font-size:14px;")
+                with ui.card().classes("w-full p-4 mt-4").style("background:#e8f0f7 !important; border-radius:8px !important;"):
+                    ui.label("💡 Interprétation :").style("font-weight:700 !important; color:#01335A !important; margin-bottom:8px !important;")
+                    ui.label("• Si les deux méthodes donnent des résultats similaires → Relations linéaires/monotones dominantes").style("font-size:14px !important; color:#023d6b !important;")
+                    ui.label("• Si MI > Analyse univariée → Relations non-linéaires importantes").style("font-size:14px !important; color:#023d6b !important;")
+                    ui.label("• Features avec MI élevé mais score univarié faible → Interactions complexes").style("font-size:14px !important; color:#023d6b !important;")
+                    ui.label("• Consensus entre les deux méthodes → Features robustement importantes").style("font-size:14px !important; color:#023d6b !important;")
         
         # ==================== NAVIGATION ====================
         with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
@@ -9659,9 +9899,8 @@ def feature_importance_page():
                 " Retour Config Algos",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/algorithm_config'")
             ).style(
-                "background:#95a5a6; color:white; font-weight:600; height:56px; padding:0 32px; border-radius:12px; font-size:16px;"
+                "background:#01335A !important; color:#ffffff !important; font-weight:600 !important; height:56px !important; padding:0 32px !important; border-radius:12px !important; font-size:16px !important;"
             )
-
 
 
 
@@ -9982,7 +10221,7 @@ def training_page():
             # Progress bar et status pour cet algo
             algo_info = algo_mapping.get(algo, {})
             algo_icon = algo_info.get("icon", "")
-            algo_color = algo_info.get("color", "#95a5a6")
+            algo_color = algo_info.get("color", "#01335A !important")
             
             # Créer carte de training
             with training_cards_container:
@@ -10130,7 +10369,7 @@ def training_page():
                 " Retour Feature Importance",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/feature_importance'")
             ).style(
-                "background:#95a5a6; color:white; font-weight:600; height:50px; padding:0 24px; border-radius:10px;"
+                "background:#01335A !important; color:white; font-weight:600; height:50px; padding:0 24px; border-radius:10px;"
             )
 
 
@@ -10493,7 +10732,7 @@ def results_page():
             
             # Meilleur modèle
             best_model = df_comparison.iloc[0]
-            with ui.card().classes("w-full p-4").style("background:linear-gradient(135deg, #01335A 0%, #229954 100%);"):
+            with ui.card().classes("w-full p-4").style("background:#01335A !important;"):
                 ui.label(f"🥇 Meilleur modèle baseline : {best_model['Modèle']}").style(
                     "font-weight:700; font-size:18px; color:white; margin-bottom:4px;"
                 )
@@ -10710,7 +10949,7 @@ def results_page():
         
         # ==================== RECOMMANDATIONS ====================
         with ui.card().classes("w-full max-w-6xl p-6 mb-8").style(
-            "background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);"
+            "background:#01335A !important;"
         ):
             ui.label("💡 RECOMMANDATIONS POUR AMÉLIORER").style(
                 "font-weight:700; font-size:24px; color:white; margin-bottom:16px; text-align:center;"
@@ -10753,7 +10992,7 @@ def results_page():
                 " Retour au Training",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/training'")
             ).style(
-                "background:#95a5a6; color:white; font-weight:600; height:56px; padding:0 32px; border-radius:12px; font-size:16px;"
+                "background:#01335A !important; color:white; font-weight:600; height:56px; padding:0 32px; border-radius:12px; font-size:16px;"
             )
             
             ui.button(
@@ -10782,592 +11021,6 @@ def results_page():
 
 
 
-
-
-
-
-
-
-
-# ----------------- PAGE ALGOS (MODIFIÉE POUR SCIKIT-LEARN) -----------------
-@ui.page('/algos')
-def algos_page():
-    if state.get('X') is None:
-        ui.notify(" Prétraitement nécessaire", color='warning')
-        ui.run_javascript("window.location.href='/preprocess'")
-        return
-
-    X = state['X']
-
-    ui.add_head_html("""
-    <style>
-        body {
-            background-color: #f5f6fa;
-        }
-        .algo-title {
-            font-size: 26px;
-            font-weight: 700;
-            color: #2c3e50;
-        }
-        .section-title {
-            font-size: 18px;
-            font-weight: 600;
-            color: #2c3e50;
-        }
-        .algo-card {
-            width: 320px;
-        }
-    </style>
-    """)
-
-    with ui.column().classes("w-full min-h-screen items-center py-10 gap-8"):
-        ui.label(" Algorithmes de Clustering").classes("algo-title")
-        ui.label("Configurez les paramètres et lancez l'analyse").classes("text-gray-500")
-
-        with ui.row().classes("gap-8 flex-wrap justify-center"):
-            # -------- KMEANS AVEC ELBOW --------
-            with ui.card().classes("p-6 shadow-md rounded-xl algo-card"):
-                ui.label("KMeans (Scikit-learn)").classes("section-title mb-3")
-                k_kmeans = ui.number("Nombre de clusters", value=3, min=2)
-                kmeans_auto = ui.switch("Utiliser Elbow Method (auto)", value=True)
-                kmeans_chk = ui.switch("Activer", value=True)
-
-            # -------- KMEDOIDS AVEC ELBOW --------
-            with ui.card().classes("p-6 shadow-md rounded-xl algo-card"):
-                ui.label("KMedoids (Scikit-learn-extra)").classes("section-title mb-3")
-                k_kmed = ui.number("Nombre de clusters", value=3, min=2)
-                kmed_auto = ui.switch("Utiliser Elbow Method (auto)", value=True)
-                kmed_chk = ui.switch("Activer", value=True)
-
-            # -------- DBSCAN --------
-            diag = diagnose_dbscan(X)
-            with ui.card().classes("p-6 shadow-md rounded-xl algo-card"):
-                ui.label("DBSCAN (Scikit-learn)").classes("section-title mb-1")
-                ui.label(
-                    f"💡 eps suggéré : {diag['suggested_eps']:.2f}"
-                ).classes("text-sm text-gray-500 mb-3")
-
-                eps_label = ui.label(f"Epsilon (eps) : {max(0.5, diag['suggested_eps']):.2f}")
-                eps_val = ui.slider(
-                    min=0.1, 
-                    max=5, 
-                    step=0.1,
-                    value=max(0.5, diag['suggested_eps'])
-                ).props('label-always')
-                eps_val.on_value_change(lambda e: eps_label.set_text(f"Epsilon (eps) : {e.value:.2f}"))
-
-                min_samples = ui.number("min_samples", value=3, min=2)
-                dbscan_chk = ui.switch("Activer", value=True)
-            
-            # -------- AGNES (AgglomerativeClustering) --------
-            with ui.card().classes("p-6 shadow-md rounded-xl algo-card"):
-                ui.label("AgglomerativeClustering (Scikit-learn)").classes("section-title mb-3")
-                agnes_k = ui.number("Nombre de clusters", value=3, min=2)
-                agnes_link = ui.select(
-                    ['ward', 'complete', 'average', 'single'], # Ajout de 'single' pour sklearn
-                    value='ward',
-                    label="Linkage"
-                )
-                agnes_chk = ui.switch("Activer", value=True)
-
-            # -------- DIANA (Non directement en sklearn) --------
-            with ui.card().classes("p-6 shadow-md rounded-xl algo-card"):
-                ui.label("DIANA (Implémentation Custom)").classes("section-title mb-3")
-                diana_k = ui.number("Nombre de clusters", value=3, min=2)
-                diana_chk = ui.switch("Activer", value=False) # Désactivé par défaut car l'implémentation DIANACustom est perdue.
-
-        ui.separator().classes("my-6 w-[900px]")
-
-        with ui.row().classes("gap-6"):
-            ui.button(
-                " Retour Prétraitement",
-                on_click=lambda: ui.run_javascript("window.location.href='/preprocess'")
-            ).classes("w-64 h-11")
-
-            btn_run = ui.button(" Lancer les algorithmes").classes("w-64 h-11")
-
-        def run_all():
-            results = {}
-            elbow_images = {}
-            optimal_ks = {}
-
-            try:
-                state['X_pca'] = PCA(n_components=2).fit_transform(X)
-            except:
-                state['X_pca'] = None
-
-            # -------- KMEANS (Scikit-learn) --------
-            if kmeans_chk.value:
-                if kmeans_auto.value:
-                    ui.notify("Calcul Elbow Method pour KMeans...", color='info')
-                    elbow_img, optimal_k = plot_elbow_curve(X, max_k=10, algo='kmeans')
-                    elbow_images['kmeans_elbow'] = elbow_img
-                    optimal_ks['kmeans'] = optimal_k
-                    k_to_use = optimal_k
-                    ui.notify(f"K optimal KMeans: {optimal_k}", color='positive')
-                else:
-                    k_to_use = int(k_kmeans.value)
-                
-                # Utilisation de KMeans de scikit-learn
-                km = KMeans(n_clusters=k_to_use, random_state=0, n_init='auto')
-                labels = km.fit_predict(X)
-                results['kmeans'] = {
-                    'labels': labels,
-                    'silhouette': silhouette_score(X, labels) if len(np.unique(labels)) > 1 else np.nan,
-                    'davies_bouldin': davies_bouldin_score(X, labels) if len(np.unique(labels)) > 1 else np.nan,
-                    'calinski_harabasz': calinski_harabasz_score(X, labels) if len(np.unique(labels)) > 1 else np.nan,
-                    'n_clusters': len(np.unique(labels)),
-                    'used_elbow': kmeans_auto.value,
-                    'k_used': k_to_use
-                }
-
-            # -------- KMEDOIDS (Scikit-learn-extra) --------
-            if kmed_chk.value:
-                if kmed_auto.value:
-                    ui.notify("Calcul Elbow Method pour KMedoids...", color='info')
-                    elbow_img, optimal_k = plot_elbow_curve(X, max_k=10, algo='kmedoids')
-                    elbow_images['kmedoids_elbow'] = elbow_img
-                    optimal_ks['kmedoids'] = optimal_k
-                    k_to_use = optimal_k
-                    ui.notify(f"K optimal KMedoids: {optimal_k}", color='positive')
-                else:
-                    k_to_use = int(k_kmed.value)
-                
-                # Utilisation de KMedoids de scikit-learn-extra
-                kmed = KMedoids(n_clusters=k_to_use, random_state=0, method='pam')
-                labels = kmed.fit_predict(X)
-                results['kmedoids'] = {
-                    'labels': labels,
-                    'silhouette': silhouette_score(X, labels) if len(np.unique(labels)) > 1 else np.nan,
-                    'davies_bouldin': davies_bouldin_score(X, labels) if len(np.unique(labels)) > 1 else np.nan,
-                    'calinski_harabasz': calinski_harabasz_score(X, labels) if len(np.unique(labels)) > 1 else np.nan,
-                    'n_clusters': len(np.unique(labels)),
-                    'used_elbow': kmed_auto.value,
-                    'k_used': k_to_use
-                }
-
-            # -------- DBSCAN (Scikit-learn) --------
-            if dbscan_chk.value:
-                # Utilisation de DBSCAN de scikit-learn
-                dbs = DBSCAN(eps=float(eps_val.value), min_samples=int(min_samples.value))
-                labels = dbs.fit(X).labels_
-                valid_clusters = [l for l in np.unique(labels) if l != -1]
-                results['dbscan'] = {
-                    'labels': labels,
-                    'n_clusters': len(valid_clusters),
-                    'n_noise': np.sum(labels == -1)
-                }
-
-            # -------- AGNES (AgglomerativeClustering de Scikit-learn) --------
-            if agnes_chk.value:
-                # Utilisation de AgglomerativeClustering de scikit-learn
-                # Le linkage 'ward' ne fonctionne qu'avec la métrique 'euclidean'.
-                linkage_used = agnes_link.value
-                if linkage_used == 'ward':
-                     # AgglomerativeClustering n'a pas de .fit_predict, seulement .fit_predict en un coup
-                    ag = AgglomerativeClustering(n_clusters=int(agnes_k.value), linkage=linkage_used, metric='euclidean')
-                else:
-                    ag = AgglomerativeClustering(n_clusters=int(agnes_k.value), linkage=linkage_used)
-                
-                labels = ag.fit_predict(X)
-                results['agnes'] = {
-                    'labels': labels,
-                    'silhouette': silhouette_score(X, labels) if len(np.unique(labels)) > 1 else np.nan,
-                    'davies_bouldin': davies_bouldin_score(X, labels) if len(np.unique(labels)) > 1 else np.nan,
-                    'calinski_harabasz': calinski_harabasz_score(X, labels) if len(np.unique(labels)) > 1 else np.nan,
-                    'n_clusters': len(np.unique(labels))
-                }
-            
-            # -------- DIANA (Custom - Conservé si la fonction diana_linkage est utilisée pour le dendrogramme) --------
-            # NOTE: L'implémentation DIANACustom est perdue. On simule avec une implémentation.
-            # L'implémentation DIANA n'existe pas dans scikit-learn.
-            # J'ai désactivé par défaut le switch dans l'UI car vous devez soit fournir DianaCustom, soit utiliser une autre méthode.
-            if diana_chk.value:
-                # Simuler une implémentation perdue avec Agglomerative pour éviter un crash.
-                # REMPLACEZ CECI PAR UNE VRAIE IMPLÉMENTATION DIANA SI VOUS EN AVEZ UNE.
-                ui.notify("DIANA (Implémentation Custom) : Veuillez réintégrer la classe DianaCustom ou utiliser un autre algo.", color='warning', timeout=5000)
-                labels = np.array([random.randint(0, int(diana_k.value)-1) for _ in range(X.shape[0])]) 
-                results['diana'] = {
-                    'labels': labels,
-                    'silhouette': silhouette_score(X, labels) if len(np.unique(labels)) > 1 else np.nan,
-                    'davies_bouldin': davies_bouldin_score(X, labels) if len(np.unique(labels)) > 1 else np.nan,
-                    'calinski_harabasz': calinski_harabasz_score(X, labels) if len(np.unique(labels)) > 1 else np.nan,
-                    'n_clusters': len(np.unique(labels))
-                }
-
-
-            # Stocker dans state AVANT la redirection
-            state['results'].update(results)
-            state['results'].update(elbow_images)
-            state['optimal_k'] = optimal_ks
-            
-            ui.notify("Clustering terminé ✓", color='positive')
-            ui.run_javascript("window.location.href='/results'")
-
-        btn_run.on_click(run_all)
-
-# ----------------- FONCTIONS POUR DENDROGRAMME -----------------
-# ... (fig_to_base64, diana_linkage, plot_grouped_histogram, generate_dendrogram restent inchangées)
-
-def fig_to_base64(fig):
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", bbox_inches="tight", dpi=120)
-    plt.close(fig)
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode("utf-8")
-
-# Fonction diana_linkage conservée pour le dendrogramme DIANA, mais pas DianaCustom.
-# C'est une implémentation de SciPy/Numpy.
-def diana_linkage(X):
-    n = X.shape[0]
-    if n < 2:
-        return np.array([])
-    
-    from scipy.spatial.distance import pdist, squareform
-    dist_matrix = squareform(pdist(X, metric='euclidean'))
-    linkage_matrix = []
-    cluster_id = n
-    active_clusters = {i: [i] for i in range(n)}
-    
-    while len(active_clusters) > 1:
-        max_diameter = -1
-        cluster_to_split = None
-        
-        for cid, members in active_clusters.items():
-            if len(members) > 1:
-                diameter = 0
-                for i in members:
-                    for j in members:
-                        if i < j:
-                            diameter = max(diameter, dist_matrix[i, j])
-                if diameter > max_diameter:
-                    max_diameter = diameter
-                    cluster_to_split = cid
-        
-        if cluster_to_split is None:
-            break
-        
-        members = active_clusters[cluster_to_split]
-        max_avg_dist = -1
-        splinter = None
-        
-        for member in members:
-            avg_dist = np.mean([dist_matrix[member, other] 
-                               for other in members if other != member])
-            if avg_dist > max_avg_dist:
-                max_avg_dist = avg_dist
-                splinter = member
-        
-        remaining = [m for m in members if m != splinter]
-        
-        # Le format attendu pour dendrogram() est [idx1, idx2, distance, nombre_echantillons]
-        if len(remaining) == 1:
-             # Si il ne reste qu'un seul élément dans remaining, on le fusionne avec splinter.
-             # Cependant, DIANA est divisif, donc la construction du linkage est délicate
-             # et souvent non standard comme pour AGNES.
-             # Je simplifie ici pour le dendrogramme. La distance doit être la max_avg_dist.
-             # Cela ne reflète pas toujours la réalité du processus DIANA exact.
-             idx2 = remaining[0]
-        elif len(remaining) > 1:
-             # Trouvez la plus petite distance entre le nouveau cluster et un cluster existant
-             # dans active_clusters
-             idx2 = cluster_id
-             cluster_id += 1
-        else: # Si remaining est vide, on arrête.
-            break
-
-        # Je fais une approximation ici, car l'implémentation de diana_linkage pour 
-        # dendrogram() est complexe.
-        # Pour des résultats précis, il est préférable d'utiliser une librairie 
-        # implémentant DIANA/fanny/mona.
-        if len(remaining) > 0:
-            linkage_matrix.append([
-                splinter if splinter < n else splinter,
-                idx2 if idx2 < n else idx2,
-                max_avg_dist,
-                len(members)
-            ])
-
-
-    # Ancienne logique, retirée car ne suit pas le format scipy:
-    # linkage_matrix.append([
-    #     splinter if splinter < n else splinter,
-    #     cluster_id if len(remaining) > 1 else remaining[0],
-    #     max_avg_dist,
-    #     len(members)
-    # ])
-    
-    return np.array(linkage_matrix) if linkage_matrix else np.array([])
-
-def plot_grouped_histogram(metrics_dict, title):
-    algos = list(metrics_dict.keys())
-    n_algos = len(algos)
-    
-    silhouettes = [metrics_dict[a].get("silhouette") for a in algos]
-    davies = [metrics_dict[a].get("davies_bouldin") for a in algos]
-    calinski = [metrics_dict[a].get("calinski_harabasz") for a in algos]
-    
-    silhouettes = [s if s != "N/A" else None for s in silhouettes]
-    davies = [d if d != "N/A" else None for d in davies]
-    calinski = [c if c != "N/A" else None for c in calinski]
-    
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-    x = np.arange(n_algos)
-    width = 0.6
-    
-    colors = ['#3b82f6', '#8b5cf6', '#ec4899']
-    
-    valid_sil = [s if s is not None else 0 for s in silhouettes]
-    axes[0].bar(x, valid_sil, width, color=colors[0], alpha=0.8)
-    axes[0].set_ylabel('Score', fontsize=12, fontweight='bold')
-    axes[0].set_title('Silhouette ↑', fontsize=14, fontweight='bold')
-    axes[0].set_xticks(x)
-    axes[0].set_xticklabels([a.upper() for a in algos], rotation=45, ha='right')
-    axes[0].grid(axis='y', alpha=0.3, linestyle='--')
-    axes[0].set_ylim([-1, 1])
-    
-    valid_dav = [d if d is not None else 0 for d in davies]
-    axes[1].bar(x, valid_dav, width, color=colors[1], alpha=0.8)
-    axes[1].set_ylabel('Score', fontsize=12, fontweight='bold')
-    axes[1].set_title('Davies-Bouldin ↓', fontsize=14, fontweight='bold')
-    axes[1].set_xticks(x)
-    axes[1].set_xticklabels([a.upper() for a in algos], rotation=45, ha='right')
-    axes[1].grid(axis='y', alpha=0.3, linestyle='--')
-    
-    valid_cal = [c if c is not None else 0 for c in calinski]
-    axes[2].bar(x, valid_cal, width, color=colors[2], alpha=0.8)
-    axes[2].set_ylabel('Score', fontsize=12, fontweight='bold')
-    axes[2].set_title('Calinski-Harabasz ↑', fontsize=14, fontweight='bold')
-    axes[2].set_xticks(x)
-    axes[2].set_xticklabels([a.upper() for a in algos], rotation=45, ha='right')
-    axes[2].grid(axis='y', alpha=0.3, linestyle='--')
-    
-    plt.suptitle(title, fontsize=16, fontweight='bold', y=1.02)
-    plt.tight_layout()
-    
-    base64_str = fig_to_base64(fig)
-    return f"data:image/png;base64,{base64_str}"
-
-def generate_dendrogram(X, algo="agnes"):
-    X = np.array(X)
-    
-    if X.shape[0] < 2:
-        return None
-    
-    fig, ax = plt.subplots(figsize=(14, 8))
-    
-    try:
-        if algo.lower() == "agnes":
-            X_scaled = StandardScaler().fit_transform(X)
-            # Lien Ward par défaut
-            Z = linkage(X_scaled, method='ward') 
-            dendrogram(Z, ax=ax, color_threshold=0.7*max(Z[:,2]))
-            ax.set_title("Dendrogramme - AGNES (Ward) - Scipy", fontsize=16, fontweight='bold', pad=20)
-            
-        elif algo.lower() == "diana":
-            X_scaled = StandardScaler().fit_transform(X)
-            # Utilisation de l'implémentation diana_linkage custom
-            Z = diana_linkage(X_scaled)
-            
-            if Z.size > 0 and Z.shape[1] == 4:
-                dendrogram(Z, ax=ax, color_threshold=0.7*max(Z[:,2]))
-                ax.set_title("Dendrogramme - DIANA (Divisif)", fontsize=16, fontweight='bold', pad=20)
-            else:
-                ax.text(0.5, 0.5, "Impossible de créer le dendrogramme DIANA", 
-                       ha="center", va="center", fontsize=14)
-                ax.set_title("Dendrogramme - DIANA", fontsize=16, fontweight='bold', pad=20)
-        
-        ax.set_xlabel("Échantillons", fontsize=13, fontweight='bold')
-        ax.set_ylabel("Distance", fontsize=13, fontweight='bold')
-        ax.grid(True, alpha=0.3, axis='y', linestyle='--')
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        plt.tight_layout()
-        
-        base64_str = fig_to_base64(fig)
-        return f"data:image/png;base64,{base64_str}"
-            
-    except Exception as e:
-        print(f"Erreur: {e}")
-        plt.close(fig)
-        return None
-
-# ============== PAGE RESULTS (AVEC ELBOW) ==============
-@ui.page('/results')
-def results_page():
-    if not state.get('results'):
-        ui.notify(" Aucun résultat", color='warning')
-        ui.run_javascript("window.location.href='/algos'")
-        return
-
-    results = state['results']
-    X = state.get('X')
-    X_pca = state.get('X_pca')
-    
-    # Debug: vérifier ce qui est dans results
-    print("DEBUG - Clés dans state['results']:", list(results.keys()))
-    print("DEBUG - optimal_k:", state.get('optimal_k', {}))
-
-    # Calcul des métriques
-    metrics_dict = {}
-    for algo, res in results.items():
-        if algo.endswith('_elbow'):
-            continue
-            
-        labels = res.get('labels')
-        m = {}
-
-        if labels is not None and X is not None:
-            mask = labels != -1
-            m["n_clusters"] = len(set(labels[mask])) if mask.sum() > 0 else 0
-            m["n_noise"] = list(labels).count(-1) if -1 in labels else 0
-
-            if m["n_clusters"] > 1:
-                # Utiliser uniquement les points non-bruit pour les métriques internes si DBSCAN
-                X_masked = X[mask]
-                labels_masked = labels[mask]
-                
-                m["silhouette"] = round(float(silhouette_score(X_masked, labels_masked)), 3)
-                m["davies_bouldin"] = round(float(davies_bouldin_score(X_masked, labels_masked)), 3)
-                m["calinski_harabasz"] = round(float(calinski_harabasz_score(X_masked, labels_masked)), 2)
-            else:
-                m["silhouette"] = "N/A"
-                m["davies_bouldin"] = "N/A"
-                m["calinski_harabasz"] = "N/A"
-
-        metrics_dict[algo] = m
-        res.update(m)
-
-    # Tableau comparatif
-    with ui.card().classes("w-full shadow-2xl p-6 mb-8"):
-        ui.label(" Tableau Comparatif des Métriques").classes("text-2xl font-bold mb-4 text-gray-800")
-        
-        rows = [{**{'algo': algo.upper()}, **m} for algo, m in metrics_dict.items()]
-        ui.table(
-            rows=rows,
-            columns=[
-                {"name": "algo", "label": "Algorithme", "field": "algo", "align": "left"},
-                {"name": "n_clusters", "label": "Clusters", "field": "n_clusters", "align": "center"},
-                {"name": "n_noise", "label": "Bruit", "field": "n_noise", "align": "center"},
-                {"name": "silhouette", "label": "Silhouette ↑", "field": "silhouette", "align": "center"},
-                {"name": "davies_bouldin", "label": "Davies-Bouldin ↓", "field": "davies_bouldin", "align": "center"},
-                {"name": "calinski_harabasz", "label": "Calinski-Harabasz ↑", "field": "calinski_harabasz", "align": "center"},
-            ],
-        ).classes("w-full").props("flat bordered").style("font-size: 15px;")
-
-    # Histogramme comparatif
-    with ui.card().classes("w-full shadow-2xl p-6 mb-10"):
-        ui.label(" Comparaison Visuelle des Métriques").classes("text-2xl font-bold mb-4 text-gray-800")
-        hist_img = plot_grouped_histogram(metrics_dict, "Comparaison des métriques")
-        ui.image(hist_img).classes("mx-auto").style("width: 100%; max-width: 1000px; height: auto; border-radius: 8px;")
-
-    # Détail par algorithme
-    for idx, (algo, res) in enumerate(results.items()):
-        if algo.endswith('_elbow'):
-            continue
-
-        ui.separator().classes("my-8")
-        
-        colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981']
-        color = colors[idx % len(colors)]
-        
-        with ui.element('div').classes('w-full p-5 rounded-lg mb-6').style(
-            f'background: linear-gradient(135deg, {color}22 0%, {color}11 100%); border-left: 4px solid {color};'
-        ):
-            ui.label(f"{algo.upper()}").classes("text-3xl font-bold").style(f'color: {color};')
-            
-            # Afficher si Elbow a été utilisé
-            if res.get('used_elbow'):
-                optimal_k = state['optimal_k'].get(algo)
-                ui.label(f"✨ K optimal déterminé par Elbow Method: {optimal_k}").classes(
-                    "text-lg text-green-600 font-semibold mt-2"
-                )
-
-        m = metrics_dict[algo]
-
-        # Résumé des métriques
-        with ui.card().classes("shadow-lg p-6 mb-6 w-full").style("border-top: 3px solid " + color):
-            ui.label("📌 Résumé des Métriques").classes("text-xl font-bold mb-4 text-gray-800")
-            
-            with ui.row().classes("gap-4 w-full justify-center items-stretch"):
-                with ui.card().classes("p-4 bg-gray-50 text-center flex-1"):
-                    ui.label("Clusters").classes("text-sm text-gray-600 font-semibold mb-2")
-                    ui.label(str(m["n_clusters"])).classes("text-3xl font-bold").style(f'color: {color};')
-                
-                with ui.card().classes("p-4 bg-gray-50 text-center flex-1"):
-                    ui.label("Points de bruit").classes("text-sm text-gray-600 font-semibold mb-2")
-                    ui.label(str(m["n_noise"])).classes("text-3xl font-bold text-orange-600")
-                
-                with ui.card().classes("p-4 bg-gray-50 text-center flex-1"):
-                    ui.label("Silhouette ↑").classes("text-sm text-gray-600 font-semibold mb-2")
-                    ui.label(str(m["silhouette"])).classes("text-2xl font-bold text-green-600")
-                
-                with ui.card().classes("p-4 bg-gray-50 text-center flex-1"):
-                    ui.label("Davies-Bouldin ↓").classes("text-sm text-gray-600 font-semibold mb-2")
-                    ui.label(str(m["davies_bouldin"])).classes("text-2xl font-bold text-blue-600")
-                
-                with ui.card().classes("p-4 bg-gray-50 text-center flex-1"):
-                    ui.label("Calinski-Harabasz ↑").classes("text-sm text-gray-600 font-semibold mb-2")
-                    ui.label(str(m["calinski_harabasz"])).classes("text-2xl font-bold text-purple-600")
-
-        # Visualisations - Afficher Elbow en premier si disponible
-        with ui.column().classes("gap-8 mb-8 w-full"):
-            
-            # Graphique Elbow si disponible - AFFICHAGE PRIORITAIRE
-            elbow_key = f'{algo}_elbow'
-            has_elbow = res.get('used_elbow') and elbow_key in state['results']
-            
-            # Debug
-            print(f"DEBUG {algo}: used_elbow={res.get('used_elbow')}, elbow_key={elbow_key}, has_elbow={has_elbow}")
-            if has_elbow:
-                print(f"  Image Elbow trouvée pour {algo}")
-            
-            if has_elbow:
-                with ui.card().classes("shadow-lg p-6 w-full"):
-                    ui.label("📉 Méthode du Coude (Elbow Method)").classes("text-2xl font-bold mb-4 text-gray-800")
-                    optimal_k_val = state.get('optimal_k', {}).get(algo, res.get('k_used', 'N/A'))
-                    ui.label(
-                        f"✨ K optimal trouvé : {optimal_k_val} clusters"
-                    ).classes("text-lg text-green-700 font-semibold mb-3")
-                    
-                    elbow_img = state['results'][elbow_key]
-                    ui.image(elbow_img).classes("w-full mx-auto").style(
-                        "max-width: 900px; height: auto; display: block; border-radius: 8px;"
-                    )
-            
-            # Deuxième ligne : PCA et Dendrogramme côte à côte
-            num_cols = 1
-            if algo.lower() in ["agnes", "diana"]:
-                num_cols = 2
-                
-            with ui.grid(columns=num_cols).classes("gap-8 w-full"):
-                # PCA
-                with ui.card().classes("shadow-lg p-6"):
-                    ui.label("🎨 Visualisation PCA").classes("text-2xl font-bold mb-4 text-gray-800")
-                    if X_pca is None:
-                        ui.label("PCA non disponible").classes("text-gray-500 text-center py-10")
-                    else:
-                        img64 = scatter_plot_2d(X_pca, res['labels'], f"{algo.upper()} - PCA")
-                        ui.image(img64).classes("w-full mx-auto").style(
-                            "max-width: 100%; height: auto; display: block; border-radius: 8px;"
-                        )
-
-                # Dendrogramme
-                if algo.lower() in ["agnes", "diana"]:
-                    with ui.card().classes("shadow-lg p-6"):
-                        ui.label("🌳 Dendrogramme").classes("text-2xl font-bold mb-4 text-gray-800")
-                        try:
-                            dendro64 = generate_dendrogram(X, algo)
-                            if dendro64:
-                                ui.image(dendro64).classes("w-full mx-auto").style(
-                                    "max-width: 100%; height: auto; display: block; border-radius: 8px;"
-                                )
-                            else:
-                                ui.label(" Impossible de générer le dendrogramme").classes(
-                                    "text-orange-600 text-center py-10"
-                                )
-                        except Exception as e:
-                            ui.label(f"❌ Erreur : {e}").classes("text-red-600 text-center py-10")
 
 # LANCEMENT
 if __name__ in {"__main__", "__mp_main__"}:
