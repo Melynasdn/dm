@@ -2466,7 +2466,7 @@ def outliers_analysis_page():
                         ui.label("lignes").style("font-size:14px; color:#7f8c8d;")
                     
                     with ui.card().classes("flex-1").style(
-                        "background:#4e88d4; padding:24px; border-radius:12px; border:1px solid #c8e6c9;"
+                        "background:#f8f9fa; padding:24px; border-radius:12px; border:1px solid #c8e6c9;"
                     ):
                         ui.label("Après traitement").style("font-weight:600; font-size:14px; color:#7f8c8d; margin-bottom:12px;")
                         ui.label(f"{df_treated.shape[0]:,}").style("font-size:32px; font-weight:700; color:#01335A;")
@@ -2646,7 +2646,7 @@ def outliers_analysis_page():
                 "← Précédent",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/preprocessing2'")
             ).style(
-                "background:white; color:#01335A; font-weight:500; border-radius:8px; "
+                "background:#01335A !important; color:white; font-weight:500; border-radius:8px; "
                 "height:48px; min-width:140px; font-size:14px; text-transform:none; box-shadow:0 2px 8px rgba(0,0,0,0.08);"
             )
             
@@ -2654,7 +2654,7 @@ def outliers_analysis_page():
                 "Suivant →",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/multivariate_analysis'")
             ).style(
-                "background:#01335A; color:white; font-weight:600; border-radius:8px; "
+                "background:#01335A !important; color:white; font-weight:600; border-radius:8px; "
                 "height:48px; min-width:140px; font-size:14px; text-transform:none;"
             )
 
