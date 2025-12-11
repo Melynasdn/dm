@@ -1046,6 +1046,7 @@ def user_decisions_page():
                         "font-size:13px !important; color:#636e72 !important; margin-top:4px !important;"
                     )
 
+
         # ---------- CONFIGURATION DES TYPES ----------
         column_type_widgets = {}
         column_exclude_widgets = {}
