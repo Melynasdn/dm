@@ -824,7 +824,7 @@ def user_decisions_page():
 
         n_unique = df[target_col].nunique(dropna=True)
         if n_unique > 20:
-            target_warning.text = "⚠️ Plus de 20 valeurs uniques → Cela semble être une régression"
+            target_warning.text = "⚠️ Plus de 20 valeurs uniques  Cela semble être une régression"
             imbalance_label.text = ""
             smote_cb.disable()
         else:
@@ -874,7 +874,7 @@ def user_decisions_page():
         
         if cols_to_drop:
             print(f"\n🗑️ EXCLUSION DE {len(cols_to_drop)} COLONNES:")
-            print(f"   → Colonnes: {cols_to_drop}")
+            print(f"    Colonnes: {cols_to_drop}")
             
             # 1. Supprimer du raw_df
             current_df = state["raw_df"].copy()
@@ -1219,7 +1219,7 @@ def user_decisions_page():
             )
 
             ui.button(
-                "Suivant →", 
+                "Suivant ", 
                 on_click=go_to_split
             ).style(
                 "background:#01335A !important; color:white !important; font-weight:600 !important; "
@@ -1527,7 +1527,7 @@ def split_page():
                                             "background:white !important; padding:4px 12px !important; border-radius:6px !important;"
                                         )
                                 
-                                ui.label("→ Les distributions peuvent varier légèrement").style(
+                                ui.label(" Les distributions peuvent varier légèrement").style(
                                     "font-size:12px !important; color:#856404 !important; margin-top:4px !important; font-style:italic !important;"
                                 )
                             
@@ -1641,7 +1641,7 @@ def split_page():
                                                 "font-size:13px !important; text-align:center !important;"
                                             )
                                         
-                                        ui.label("→").style("font-size:20px !important; color:#4caf50 !important;")
+                                        ui.label("").style("font-size:20px !important; color:#4caf50 !important;")
                                         
                                         ui.label(period).style(
                                             "font-weight:600 !important; font-size:14px !important; "
@@ -2398,7 +2398,7 @@ def univariate_analysis_page():
         # --- NAVIGATION ---
         with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
             ui.button(
-                "← Précédent",
+                " Précédent",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/split'")
             ).style(
                 "background:white !important; color:#01335A !important; font-weight:500 !important; "
@@ -2408,7 +2408,7 @@ def univariate_analysis_page():
             )
             
             ui.button(
-                "Détection des Outliers →",
+                "Détection des Outliers ",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/outliers_analysis'")
             ).style(
                 "background:#01335A !important; color:white !important; font-weight:600 !important; "
@@ -3202,7 +3202,7 @@ def outliers_analysis_page():
         # NAVIGATION
         with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
             ui.button(
-                "← Précédent",
+                " Précédent",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/split'")
             ).style(
                 "background:#01335A !important; color:white; font-weight:500; border-radius:8px; "
@@ -3210,7 +3210,7 @@ def outliers_analysis_page():
             )
             
             ui.button(
-                "Suivant →",
+                "Suivant ",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/multivariate_analysis'")
             ).style(
                 "background:#01335A !important; color:white; font-weight:600; border-radius:8px; "
@@ -4021,7 +4021,7 @@ def multivariate_analysis_page():
         # NAVIGATION
         with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
             ui.button(
-                "← Précédent",
+                " Précédent",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/split'")
             ).style(
                 "background:white !important; color:#01335A !important; font-weight:500 !important; "
@@ -4031,7 +4031,7 @@ def multivariate_analysis_page():
             )
             
             ui.button(
-                "Suivant →",
+                "Suivant ",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/missing_values'")
             ).style(
                 "background:#01335A !important; color:white !important; font-weight:600 !important; "
@@ -4453,7 +4453,7 @@ Les valeurs manquantes non traitées peuvent **gravement affecter** les performa
                 # Boutons d'action
                 with ui.row().classes("w-full justify-end gap-3 mt-6"):
                     ui.button(
-                        "← Retour à la configuration",
+                        " Retour à la configuration",
                         on_click=dialog.close
                     ).style(
                         "background:#01335A !important; color:white !important; "
@@ -4470,7 +4470,7 @@ Les valeurs manquantes non traitées peuvent **gravement affecter** les performa
                         )
                     
                     ui.button(
-                        "Continuer quand même →",
+                        "Continuer quand même ",
                         on_click=continue_anyway
                     ).style(
                         "background:#f39c12 !important; color:white !important; "
@@ -4553,12 +4553,12 @@ Les valeurs manquantes non traitées peuvent **gravement affecter** les performa
                         method = current_strat.get("method", "none")
                         
                         if method == "none":
-                            ui.label(f"• {col} : Aucune stratégie configurée → Configurez une méthode").style(
+                            ui.label(f"• {col} : Aucune stratégie configurée  Configurez une méthode").style(
                                 "color:#e74c3c !important; font-size:13px !important;"
                             )
                         elif method == "forward_fill" or method == "backward_fill":
                             ui.label(
-                                f"• {col} : Fill méthode peut laisser des NaN en début/fin → "
+                                f"• {col} : Fill méthode peut laisser des NaN en début/fin  "
                                 "Essayez median/mode/constant"
                             ).style(
                                 "color:#f39c12 !important; font-size:13px !important;"
@@ -4814,7 +4814,7 @@ Les valeurs manquantes non traitées peuvent **gravement affecter** les performa
             after_missing = df_preview[active_cols].isna().sum().sum()
             
             preview_info.set_text(
-                f"📊 Preview généré : {before_missing} valeurs manquantes → {after_missing} après imputation | {len(missing_indices)} lignes affichées"
+                f"📊 Preview généré : {before_missing} valeurs manquantes  {after_missing} après imputation | {len(missing_indices)} lignes affichées"
             )
             
             # Affichage des tableaux BEFORE/AFTER
@@ -5292,7 +5292,7 @@ Les valeurs manquantes non traitées peuvent **gravement affecter** les performa
         # --- Navigation ---
         with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
             ui.button(
-                "← Précédent",
+                " Précédent",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/multivariate_analysis'")
             ).style(
                 "background:white !important; color:#01335A !important; font-weight:500 !important; "
@@ -5302,7 +5302,7 @@ Les valeurs manquantes non traitées peuvent **gravement affecter** les performa
             )
             
             ui.button(
-                "Suivant →",
+                "Suivant ",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/encoding'")
             ).style(
                 "background:#01335A !important; color:white !important; font-weight:600 !important; "
@@ -6200,12 +6200,12 @@ Les variables catégorielles doivent être **transformées en valeurs numérique
         
         # NAVIGATION
         with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-12"):
-            ui.button("← Précédent", on_click=lambda: ui.run_javascript("window.location.href='/supervised/missing_values'")).style(
+            ui.button(" Précédent", on_click=lambda: ui.run_javascript("window.location.href='/supervised/missing_values'")).style(
                 "background:white !important; color:#01335A !important; border:2px solid #01335A !important; "
                 "border-radius:12px !important; height:52px !important; min-width:160px !important;"
             )
             
-            ui.button("Suivant →", on_click=lambda: ui.run_javascript("window.location.href='/supervised/distribution_transform'")).style(
+            ui.button("Suivant ", on_click=lambda: ui.run_javascript("window.location.href='/supervised/distribution_transform'")).style(
                 "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white !important; "
                 "border-radius:12px !important; height:52px !important; min-width:160px !important;"
             )
@@ -6518,7 +6518,7 @@ def distribution_transform_page():
         fig.update_layout(
             height=600,
             showlegend=False,
-            title_text=f"<b>{col}</b> - Skew Original: {skew_original:.2f} → Transformé: {skew_transformed:.2f}",
+            title_text=f"<b>{col}</b> - Skew Original: {skew_original:.2f}  Transformé: {skew_transformed:.2f}",
             paper_bgcolor='white',
             plot_bgcolor='#f8f9fa',
             font=dict(family="Inter, sans-serif", color="#2c3e50")
@@ -7193,7 +7193,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
         # Navigation
         with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
             ui.button(
-                "← Précédent",
+                " Précédent",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/encoding'")
             ).style(
                 "background:white !important; color:#01335A !important; font-weight:500 !important; "
@@ -7203,7 +7203,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
             )
             
             ui.button(
-                "Suivant →",
+                "Suivant ",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/scaling'")
             ).style(
                 "background:#01335A !important; color:white !important; font-weight:600 !important; "
@@ -7289,7 +7289,7 @@ def feature_scaling_page():
                 except:
                     small_range = False
                 
-                # Si c'est binaire (0/1) ou petit nombre de valeurs discrètes → catégorielle
+                # Si c'est binaire (0/1) ou petit nombre de valeurs discrètes  catégorielle
                 if is_binary or (is_small_discrete and all_integers and small_range):
                     categorical_encoded.append(col)
                 else:
@@ -7463,7 +7463,7 @@ def feature_scaling_page():
                         "font-weight:600 !important;"
                     )
                     if num_cols:
-                        ui.label(f"→ {', '.join(num_cols[:5])}{'...' if len(num_cols) > 5 else ''}").style(
+                        ui.label(f" {', '.join(num_cols[:5])}{'...' if len(num_cols) > 5 else ''}").style(
                             "font-size:13px !important; color:#636e72 !important;"
                         )
                 
@@ -7473,10 +7473,10 @@ def feature_scaling_page():
                         "font-weight:600 !important;"
                     )
                     if cat_encoded:
-                        ui.label(f"→ {', '.join(cat_encoded[:5])}{'...' if len(cat_encoded) > 5 else ''}").style(
+                        ui.label(f" {', '.join(cat_encoded[:5])}{'...' if len(cat_encoded) > 5 else ''}").style(
                             "font-size:13px !important; color:#636e72 !important;"
                         )
-                        ui.label("→ Seront préservées (pas de scaling)").style(
+                        ui.label(" Seront préservées (pas de scaling)").style(
                             "font-size:12px !important; color:#7f8c8d !important; font-style:italic !important; "
                             "margin-top:4px !important;"
                         )
@@ -7498,7 +7498,7 @@ def feature_scaling_page():
                         "font-size:15px !important; font-weight:600 !important; margin-bottom:4px !important; "
                         "color:#e74c3c !important;"
                     )
-                    ui.label("→ Les distances sont biaisées par les échelles différentes").style(
+                    ui.label(" Les distances sont biaisées par les échelles différentes").style(
                         "font-size:13px !important; color:#636e72 !important; margin-bottom:12px !important;"
                     )
                 
@@ -7507,7 +7507,7 @@ def feature_scaling_page():
                         "font-size:15px !important; font-weight:600 !important; margin-bottom:4px !important; "
                         "color:#27ae60 !important;"
                     )
-                    ui.label("→ Arbres de décision insensibles aux échelles").style(
+                    ui.label(" Arbres de décision insensibles aux échelles").style(
                         "font-size:13px !important; color:#636e72 !important; margin-bottom:12px !important;"
                     )
                 
@@ -7516,7 +7516,7 @@ def feature_scaling_page():
                         "font-size:15px !important; font-weight:600 !important; margin-bottom:4px !important; "
                         "color:#f39c12 !important;"
                     )
-                    ui.label("→ Dépend de la distribution des données").style(
+                    ui.label(" Dépend de la distribution des données").style(
                         "font-size:13px !important; color:#636e72 !important;"
                     )
         
@@ -7784,7 +7784,7 @@ def feature_scaling_page():
         # Navigation
         with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
             ui.button(
-                "← Précédent",
+                " Précédent",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/distribution_transform'")
             ).style(
                 "background:white !important; color:#01335A !important; font-weight:500 !important; "
@@ -7794,7 +7794,7 @@ def feature_scaling_page():
             )
             
             ui.button(
-                "Suivant →",
+                "Suivant ",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/dimension_reduction'")
             ).style(
                 "background:#01335A !important; color:white !important; font-weight:600 !important; "
@@ -7982,7 +7982,7 @@ def dimension_reduction_page():
                 
                 variance_explained = pca.explained_variance_ratio_.sum() * 100
                 
-                ui.notify(f" PCA appliqué : {n_features} → {n_comp} composantes ({variance_explained:.1f}% variance)", 
+                ui.notify(f" PCA appliqué : {n_features}  {n_comp} composantes ({variance_explained:.1f}% variance)", 
                          color="positive", timeout=3000)
                 
             elif method == "feature_selection":
@@ -8002,7 +8002,7 @@ def dimension_reduction_page():
                 state["reduction_applied"] = True
                 state["reduction_method"] = "feature_selection"
                 
-                ui.notify(f" Feature Selection : {n_features} → {n_comp} features", 
+                ui.notify(f" Feature Selection : {n_features}  {n_comp} features", 
                          color="positive", timeout=3000)
             
             # Mettre à jour colonnes exclues
@@ -8159,7 +8159,7 @@ def dimension_reduction_page():
                                             ui.label(f"💡 **Recommandation** : {n_for_95} composantes (≥95% variance)").style(
                                                 "font-size:15px; font-weight:600; color:#12344f;"
                                             )
-                                            ui.label(f"Impact : {n_features} → {n_for_95} features (réduction {(1-n_for_95/n_features)*100:.0f}%)").style(
+                                            ui.label(f"Impact : {n_features}  {n_for_95} features (réduction {(1-n_for_95/n_features)*100:.0f}%)").style(
                                                 "font-size:14px; color:#12344f; margin-top:4px;"
                                             )
                                     
@@ -9161,7 +9161,7 @@ def algorithm_config_page():
                         knn_neighbors_slider.on_value_change(update_knn_neighbors)
                     
                     ui.label(f"💡 Règle empirique : K = √n_samples ≈ {get_recommended_k()}").style("font-size:13px; color:#01335A; margin-left:250px; margin-bottom:8px;")
-                    ui.label(" K petit → Overfitting | K grand → Underfitting").style("font-size:13px; color:#01335A; margin-left:250px; margin-bottom:16px;")
+                    ui.label(" K petit  Overfitting | K grand  Underfitting").style("font-size:13px; color:#01335A; margin-left:250px; margin-bottom:16px;")
                     
                     # 2. metric
                     with ui.row().classes("w-full items-start gap-4 mb-4"):
@@ -9492,7 +9492,7 @@ def algorithm_config_page():
             
             validation_strategy = ui.radio(
                 options={
-                    "holdout": "Hold-out (Train → Val) - Rapide, déjà splitté  [Recommandé]",
+                    "holdout": "Hold-out (Train  Val) - Rapide, déjà splitté  [Recommandé]",
                     "cv": "Cross-Validation K-Fold sur Train - Plus robuste mais plus lent"
                 },
                 value=state.get("validation_strategy", "holdout")
@@ -10217,10 +10217,10 @@ def feature_importance_page():
                     ui.label("💡 Mutual Information (Avantages)").style(
                         "font-weight:700 !important; color:#01335A !important; margin-bottom:8px !important;"
                     )
-                    ui.label("→ Capture relations non-linéaires (complète l'analyse univariée)").style("font-size:14px !important; color:#023d6b !important;")
-                    ui.label("→ Pas d'hypothèse sur la distribution des données").style("font-size:14px !important; color:#023d6b !important;")
-                    ui.label("→ Fonctionne avec variables continues ET catégorielles").style("font-size:14px !important; color:#023d6b !important;")
-                    ui.label("→ Détecte interactions complexes avec la target").style("font-size:14px !important; color:#023d6b !important;")
+                    ui.label(" Capture relations non-linéaires (complète l'analyse univariée)").style("font-size:14px !important; color:#023d6b !important;")
+                    ui.label(" Pas d'hypothèse sur la distribution des données").style("font-size:14px !important; color:#023d6b !important;")
+                    ui.label(" Fonctionne avec variables continues ET catégorielles").style("font-size:14px !important; color:#023d6b !important;")
+                    ui.label(" Détecte interactions complexes avec la target").style("font-size:14px !important; color:#023d6b !important;")
                 
                 # Barplot MI
                 ui.label(" Visualisation MI Scores").style(
@@ -10384,10 +10384,10 @@ def feature_importance_page():
                 # Interprétation
                 with ui.card().classes("w-full p-4 mt-4").style("background:#e8f0f7 !important; border-radius:8px !important;"):
                     ui.label("💡 Interprétation :").style("font-weight:700 !important; color:#01335A !important; margin-bottom:8px !important;")
-                    ui.label("• Si les deux méthodes donnent des résultats similaires → Relations linéaires/monotones dominantes").style("font-size:14px !important; color:#023d6b !important;")
-                    ui.label("• Si MI > Analyse univariée → Relations non-linéaires importantes").style("font-size:14px !important; color:#023d6b !important;")
-                    ui.label("• Features avec MI élevé mais score univarié faible → Interactions complexes").style("font-size:14px !important; color:#023d6b !important;")
-                    ui.label("• Consensus entre les deux méthodes → Features robustement importantes").style("font-size:14px !important; color:#023d6b !important;")
+                    ui.label("• Si les deux méthodes donnent des résultats similaires  Relations linéaires/monotones dominantes").style("font-size:14px !important; color:#023d6b !important;")
+                    ui.label("• Si MI > Analyse univariée  Relations non-linéaires importantes").style("font-size:14px !important; color:#023d6b !important;")
+                    ui.label("• Features avec MI élevé mais score univarié faible  Interactions complexes").style("font-size:14px !important; color:#023d6b !important;")
+                    ui.label("• Consensus entre les deux méthodes  Features robustement importantes").style("font-size:14px !important; color:#023d6b !important;")
         
         # ==================== NAVIGATION ====================
         with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
@@ -10833,7 +10833,7 @@ def training_page():
                     config_str = ""
                 
                 ui.label(f"  {icon} {name}").style("font-size:15px; font-weight:600; margin-bottom:2px;")
-                ui.label(f"     → {config_str}").style("font-size:13px; color:#7f8c8d; margin-bottom:8px;")
+                ui.label(f"      {config_str}").style("font-size:13px; color:#7f8c8d; margin-bottom:8px;")
         
         # ==================== PROGRESS SECTION ====================
         with ui.card().classes("w-full max-w-6xl p-6 mb-6"):
@@ -11461,19 +11461,19 @@ def results_page():
                     
                     if best_acc < 0.85:
                         ui.label("🔴 Performance modérée (< 85%)").style("font-weight:600; color:#e74c3c; margin-bottom:8px;")
-                        ui.label("→ Essayer Grid Search pour optimiser hyperparamètres").style("font-size:14px;")
-                        ui.label("→ Ajouter plus de features engineering").style("font-size:14px;")
-                        ui.label("→ Collecter plus de données si possible").style("font-size:14px;")
+                        ui.label(" Essayer Grid Search pour optimiser hyperparamètres").style("font-size:14px;")
+                        ui.label(" Ajouter plus de features engineering").style("font-size:14px;")
+                        ui.label(" Collecter plus de données si possible").style("font-size:14px;")
                     
                     elif best_acc < 0.92:
                         ui.label("🟡 Bonne performance (85-92%)").style("font-weight:600; color:#01335A; margin-bottom:8px;")
-                        ui.label("→ Hyperparameter tuning peut encore améliorer").style("font-size:14px;")
-                        ui.label("→ Tester ensemble methods (stacking/blending)").style("font-size:14px;")
+                        ui.label(" Hyperparameter tuning peut encore améliorer").style("font-size:14px;")
+                        ui.label(" Tester ensemble methods (stacking/blending)").style("font-size:14px;")
                     
                     else:
                         ui.label("🟢 Excellente performance (> 92%)").style("font-weight:600; color:#01335A; margin-bottom:8px;")
-                        ui.label("→ Valider sur test set pour confirmer").style("font-size:14px;")
-                        ui.label("→ Surveiller overfitting (comparer train vs val)").style("font-size:14px;")
+                        ui.label(" Valider sur test set pour confirmer").style("font-size:14px;")
+                        ui.label(" Surveiller overfitting (comparer train vs val)").style("font-size:14px;")
                 
                 with ui.card().classes("p-4"):
                     ui.label(" Prochaines Étapes").style("font-weight:700; font-size:18px; margin-bottom:12px;")
@@ -12000,7 +12000,7 @@ def missing_values_page():
     if df is None or features is None:
         with ui.column().style("width:100%; height:100vh; display:flex; align-items:center; justify-content:center;"):
             ui.label("❌ Données manquantes").style("font-size:20px; color:#e74c3c; font-weight:600; margin-bottom:12px;")
-            ui.button("← Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/multivariate_analysis'")).style(
+            ui.button(" Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/multivariate_analysis'")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
             )
         return
@@ -12281,7 +12281,7 @@ def missing_values_page():
                             with ui.card().style("padding:12px 20px; background:#f8f9fa; border-radius:8px; border:2px dashed #bdc3c7;"):
                                 ui.label(f"Original: {df_proc.shape[0]} × {df_proc.shape[1]}").style("color:#7f8c8d; font-size:14px; font-weight:600;")
                             
-                            ui.label("→").style("font-size:24px; color:#01335A;")
+                            ui.label("").style("font-size:24px; color:#01335A;")
                             
                             with ui.card().style("padding:12px 20px; background:#d5f4e6; border-radius:8px; border:2px solid #27ae60;"):
                                 ui.label(f"Après: {df_preview.shape[0]} × {df_preview.shape[1]}").style("color:#27ae60; font-weight:700; font-size:14px;")
@@ -12336,10 +12336,10 @@ def missing_values_page():
             ui.run_javascript("window.location.href='/unsupervised/encoding'")
         
         with ui.row().style("display:flex; justify-content:space-between; width:100%; max-width:900px; margin-top:32px;"):
-            ui.button("← Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/multivariate_analysis'")).style(
+            ui.button(" Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/multivariate_analysis'")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important; transition:all 0.2s !important;"
             )
-            ui.button("Sauvegarder et Continuer →", on_click=save_and_next).style(
+            ui.button("Sauvegarder et Continuer ", on_click=save_and_next).style(
                 "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:250px !important; transition:all 0.2s !important;"
             )
 #----------------- PAGE /unsupervised/encoding -----------------
@@ -12354,7 +12354,7 @@ def encoding_page():
     if df is None:
         with ui.column().style("width:100%; height:100vh; display:flex; align-items:center; justify-content:center;"):
             ui.label("❌ Données manquantes").style("font-size:20px; color:#e74c3c; font-weight:600; margin-bottom:12px;")
-            ui.button("← Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/missing_values'")).style(
+            ui.button(" Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/missing_values'")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
             )
         return
@@ -12492,7 +12492,7 @@ def encoding_page():
                             with ui.card().style("padding:12px 20px; background:#f8f9fa; border-radius:8px; border:2px dashed #bdc3c7;"):
                                 ui.label(f"Original: {df.shape[0]} × {df.shape[1]}").style("color:#7f8c8d; font-size:14px; font-weight:600;")
                             
-                            ui.label("→").style("font-size:24px; color:#01335A;")
+                            ui.label("").style("font-size:24px; color:#01335A;")
                             
                             with ui.card().style("padding:12px 20px; background:#d5f4e6; border-radius:8px; border:2px solid #27ae60;"):
                                 ui.label(f"Après: {temp.shape[0]} × {temp.shape[1]}").style("color:#27ae60; font-weight:700; font-size:14px;")
@@ -12564,10 +12564,10 @@ def encoding_page():
             ui.run_javascript("window.location.href='/unsupervised/anomalies'")
         
         with ui.row().style("display:flex; justify-content:space-between; width:100%; margin-top:32px;"):
-            ui.button("← Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/missing_values'")).style(
+            ui.button(" Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/missing_values'")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important; transition:all 0.2s !important;"
             )
-            ui.button("Sauvegarder et Continuer →", on_click=save_and_next).style(
+            ui.button("Sauvegarder et Continuer ", on_click=save_and_next).style(
                 "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:250px !important; transition:all 0.2s !important;"
             ) 
 # 
@@ -12586,7 +12586,7 @@ def unsupervised_univariate_page():
         with ui.column().style("width:100%; height:100vh; display:flex; align-items:center; justify-content:center;"):
             ui.label("❌ Données manquantes").style("font-size:20px; color:#e74c3c; font-weight:600; margin-bottom:12px;")
             ui.label("Veuillez revenir en arrière et sélectionner les features").style("color:#7f8c8d; margin-bottom:20px;")
-            ui.button("← Retour", on_click=lambda: ui.navigate.to("/unsupervised/user_decisions")).style(
+            ui.button(" Retour", on_click=lambda: ui.navigate.to("/unsupervised/user_decisions")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
             )
         return
@@ -12780,11 +12780,11 @@ def unsupervised_univariate_page():
             ui.navigate.to("/unsupervised/multivariate_analysis")
 
         with ui.row().style("display:flex; justify-content:space-between; width:100%; margin-top:32px;"):
-            ui.button("← Retour", on_click=lambda: ui.navigate.to("/unsupervised/user_decisions")).style(
+            ui.button(" Retour", on_click=lambda: ui.navigate.to("/unsupervised/user_decisions")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important; transition:all 0.2s !important;"
             )
             
-            ui.button("Sauvegarder et Continuer →", on_click=save_and_next).style(
+            ui.button("Sauvegarder et Continuer ", on_click=save_and_next).style(
                 "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:250px !important; transition:all 0.2s !important;"
             )
        
@@ -12803,7 +12803,7 @@ def multivariate_analysis_page():
         with ui.column().style("width:100%; height:100vh; display:flex; align-items:center; justify-content:center;"):
             ui.label("❌ Données manquantes").style("font-size:20px; color:#e74c3c; font-weight:600; margin-bottom:12px;")
             ui.label("Veuillez revenir en arrière et sélectionner les features").style("color:#7f8c8d; margin-bottom:20px;")
-            ui.button("← Retour", on_click=lambda: ui.navigate.to("/unsupervised/univariate_analysis")).style(
+            ui.button(" Retour", on_click=lambda: ui.navigate.to("/unsupervised/univariate_analysis")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
             )
         return
@@ -12815,7 +12815,7 @@ def multivariate_analysis_page():
         with ui.column().style("width:100%; height:100vh; display:flex; align-items:center; justify-content:center;"):
             ui.label("⚠️ Analyse impossible").style("font-size:20px; color:#f39c12; font-weight:600; margin-bottom:12px;")
             ui.label("Il faut au moins 2 variables numériques pour l'analyse multivariée").style("color:#7f8c8d; margin-bottom:20px;")
-            ui.button("← Retour", on_click=lambda: ui.navigate.to("/unsupervised/univariate_analysis")).style(
+            ui.button(" Retour", on_click=lambda: ui.navigate.to("/unsupervised/univariate_analysis")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
             )
         return
@@ -12951,11 +12951,11 @@ def multivariate_analysis_page():
         # BOUTONS DE NAVIGATION
         # ==========================================================
         with ui.row().style("display:flex; justify-content:space-between; width:100%; margin-top:32px;"):
-            ui.button("← Retour", on_click=lambda: ui.navigate.to("/unsupervised/univariate_analysis")).style(
+            ui.button(" Retour", on_click=lambda: ui.navigate.to("/unsupervised/univariate_analysis")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
             )
             
-            ui.button("Appliquer et Continuer →", on_click=apply_decisions).style(
+            ui.button("Appliquer et Continuer ", on_click=apply_decisions).style(
                 "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:250px !important;"
             )
 
@@ -12973,7 +12973,7 @@ def anomalies_page():
     if df is None:
         with ui.column().style("width:100%; height:100vh; display:flex; align-items:center; justify-content:center;"):
             ui.label("❌ Données manquantes").style("font-size:20px; color:#e74c3c; font-weight:600; margin-bottom:12px;")
-            ui.button("← Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/encoding'")).style(
+            ui.button(" Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/encoding'")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
             )
         return
@@ -12984,7 +12984,7 @@ def anomalies_page():
     if not numeric_cols:
         with ui.column().style("width:100%; height:100vh; display:flex; align-items:center; justify-content:center;"):
             ui.label("⚠️ Aucune variable numérique").style("font-size:20px; color:#f39c12; font-weight:600; margin-bottom:12px;")
-            ui.button("← Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/encoding'")).style(
+            ui.button(" Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/encoding'")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
             )
         return
@@ -13241,10 +13241,10 @@ def anomalies_page():
             ui.run_javascript("window.location.href='/unsupervised/normalization'")
         
         with ui.row().style("display:flex; justify-content:space-between; width:100%; margin-top:32px;"):
-            ui.button("← Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/encoding'")).style(
+            ui.button(" Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/encoding'")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important; transition:all 0.2s !important;"
             )
-            ui.button("Appliquer et Continuer →", on_click=save_and_next).style(
+            ui.button("Appliquer et Continuer ", on_click=save_and_next).style(
                 "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:250px !important; transition:all 0.2s !important;"
             )
 # 
@@ -13278,7 +13278,7 @@ def normalization_page():
     if df is None:
         with ui.column().style("width:100%; height:100vh; display:flex; align-items:center; justify-content:center;"):
             ui.label("❌ Données manquantes").style("font-size:20px; color:#e74c3c; font-weight:600; margin-bottom:12px;")
-            ui.button("← Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/anomalies'")).style(
+            ui.button(" Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/anomalies'")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
             )
         return
@@ -13289,7 +13289,7 @@ def normalization_page():
     if not numerical_features:
         with ui.column().style("width:100%; height:100vh; display:flex; align-items:center; justify-content:center;"):
             ui.label("⚠️ Aucune variable numérique").style("font-size:20px; color:#f39c12; font-weight:600; margin-bottom:12px;")
-            ui.button("← Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/anomalies'")).style(
+            ui.button(" Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/anomalies'")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
             )
         return
@@ -13525,10 +13525,10 @@ def normalization_page():
             ui.run_javascript("window.location.href='/unsupervised/pca'")
         
         with ui.row().style("display:flex; justify-content:space-between; width:100%; margin-top:32px;"):
-            ui.button("← Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/anomalies'")).style(
+            ui.button(" Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/anomalies'")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important; transition:all 0.2s !important;"
             )
-            ui.button("Appliquer et Continuer →", on_click=save_and_next).style(
+            ui.button("Appliquer et Continuer ", on_click=save_and_next).style(
                 "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:250px !important; transition:all 0.2s !important;"
             )
 
@@ -13545,7 +13545,7 @@ def pca_page():
     if df is None:
         with ui.column().style("width:100%; height:100vh; display:flex; align-items:center; justify-content:center;"):
             ui.label("❌ Données manquantes").style("font-size:20px; color:#e74c3c; font-weight:600; margin-bottom:12px;")
-            ui.button("← Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/normalization'")).style(
+            ui.button(" Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/normalization'")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
             )
         return
@@ -13556,7 +13556,7 @@ def pca_page():
     if len(numeric_cols) < 2:
         with ui.column().style("width:100%; height:100vh; display:flex; align-items:center; justify-content:center;"):
             ui.label("⚠️ Minimum 2 variables requises").style("font-size:20px; color:#f39c12; font-weight:600; margin-bottom:12px;")
-            ui.button("← Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/normalization'")).style(
+            ui.button(" Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/normalization'")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
             )
         return
@@ -13568,7 +13568,7 @@ def pca_page():
     if len(numeric_df) == 0:
         with ui.column().style("width:100%; height:100vh; display:flex; align-items:center; justify-content:center;"):
             ui.label("❌ Données insuffisantes").style("font-size:20px; color:#e74c3c; font-weight:600; margin-bottom:12px;")
-            ui.button("← Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/normalization'")).style(
+            ui.button(" Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/normalization'")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
             )
         return
@@ -13753,10 +13753,10 @@ def pca_page():
             ui.run_javascript("window.location.href='/unsupervised/summary'")
         
         with ui.row().style("display:flex; justify-content:space-between; width:100%; margin-top:32px;"):
-            ui.button("← Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/normalization'")).style(
+            ui.button(" Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/normalization'")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important; transition:all 0.2s !important;"
             )
-            ui.button("Appliquer et Continuer →", on_click=save_and_next).style(
+            ui.button("Appliquer et Continuer ", on_click=save_and_next).style(
                 "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:250px !important; transition:all 0.2s !important;"
             )
 
@@ -13800,7 +13800,7 @@ def summary_page():
         with ui.column().style("width:100%; height:100vh; display:flex; align-items:center; justify-content:center;"):
             ui.label("❌ Données manquantes").style("font-size:20px; color:#e74c3c; font-weight:600; margin-bottom:12px;")
             ui.label("Veuillez compléter toutes les étapes de prétraitement").style("font-size:14px; color:#7f8c8d; margin-bottom:20px;")
-            ui.button("← Retour à l'accueil", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised'")).style(
+            ui.button(" Retour à l'accueil", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised'")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
             )
         return
@@ -13866,7 +13866,7 @@ def summary_page():
                         ui.label(f"Colonnes : {original_shape[1]}").style("font-size:14px; color:#7f8c8d;")
                     
                     # Flèche
-                    ui.label("→").style("font-size:32px; color:#3498db; font-weight:700;")
+                    ui.label("").style("font-size:32px; color:#3498db; font-weight:700;")
                     
                     # Après
                     with ui.card().style("padding:24px; background:#d5f4e6; flex:1; border-radius:8px; border:2px solid #27ae60;"):
@@ -14042,13 +14042,13 @@ def summary_page():
                         "background:white !important; color:#01335A !important; font-weight:700 !important; border-radius:8px !important; padding:12px 24px !important; font-size:15px !important; cursor:pointer !important;"
                     )
                     
-                    ui.button("🚀 Lancer le Clustering →", on_click=lambda: validate_and_continue(df_final)).style(
+                    ui.button("🚀 Lancer le Clustering ", on_click=lambda: validate_and_continue(df_final)).style(
                         "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white !important; font-weight:700 !important; border-radius:8px !important; padding:12px 28px !important; font-size:15px !important; cursor:pointer !important; box-shadow:0 4px 12px rgba(39,174,96,0.3) !important;"
                     )
         
         # NAVIGATION
         with ui.row().style("display:flex; justify-content:center; width:100%; margin-top:32px;"):
-            ui.button("← Retour à la PCA", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/pca'")).style(
+            ui.button(" Retour à la PCA", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/pca'")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important; transition:all 0.2s !important;"
             )
 # ==========================================================
@@ -14105,7 +14105,7 @@ def algos_page():
         with ui.column().style("width:100%; height:100vh; display:flex; align-items:center; justify-content:center;"):
             ui.label("❌ Dataset non disponible").style("font-size:20px; color:#e74c3c; font-weight:600; margin-bottom:12px;")
             ui.label("Veuillez compléter le prétraitement avant de lancer le clustering").style("font-size:14px; color:#7f8c8d; margin-bottom:20px;")
-            ui.button("← Retour au résumé", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/summary'")).style(
+            ui.button(" Retour au résumé", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/summary'")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
             )
         return
@@ -14368,7 +14368,7 @@ def algos_page():
             ui.run_javascript("window.location.href='/unsupervised/results'")
 
         with ui.row().style("display:flex; justify-content:space-between; width:100%; max-width:900px; margin:0 auto; margin-top:32px;"):
-            ui.button("← Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/summary'")).style(
+            ui.button(" Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/summary'")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important; transition:all 0.2s !important;"
             )
             ui.button("🚀 Lancer les algorithmes", on_click=run_all).style(
@@ -14386,7 +14386,7 @@ def results_page():
         with ui.column().style("width:100%; height:100vh; display:flex; align-items:center; justify-content:center;"):
             ui.label("❌ Aucun résultat disponible").style("font-size:20px; color:#e74c3c; font-weight:600; margin-bottom:12px;")
             ui.label("Veuillez d'abord lancer le clustering").style("font-size:14px; color:#7f8c8d; margin-bottom:20px;")
-            ui.button("← Retour au clustering", on_click=lambda: ui.navigate.to("/unsupervised/clustering")).style(
+            ui.button(" Retour au clustering", on_click=lambda: ui.navigate.to("/unsupervised/clustering")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
             )
         return
@@ -14594,7 +14594,7 @@ def results_page():
         
         # BOUTONS DE NAVIGATION
         with ui.row().style("display:flex; justify-content:center; width:100%; margin-top:32px;"):
-            ui.button("← Retour au Clustering", on_click=lambda: ui.navigate.to('/unsupervised/clustering')).style(
+            ui.button(" Retour au Clustering", on_click=lambda: ui.navigate.to('/unsupervised/clustering')).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:220px !important;"
             )
 # ----------------- FONCTIONS UTILITAIRES -----------------
