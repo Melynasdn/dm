@@ -824,7 +824,7 @@ def user_decisions_page():
 
         n_unique = df[target_col].nunique(dropna=True)
         if n_unique > 20:
-            target_warning.text = "⚠️ Plus de 20 valeurs uniques  Cela semble être une régression"
+            target_warning.text = "⚠️ Plus de 20 valeurs uniques → Cela semble être une régression"
             imbalance_label.text = ""
             smote_cb.disable()
         else:
@@ -858,31 +858,26 @@ def user_decisions_page():
 
         state["target_column"] = target_col
 
-        # Sauvegarder les types
         for col_name, widget in column_type_widgets.items():
             state.setdefault("columns_types", {})[col_name] = widget.value
 
-        # Sauvegarder les exclusions
         columns_to_exclude = {}
         for col_name, cb in column_exclude_widgets.items():
             columns_to_exclude[col_name] = cb.value
         
         state["columns_exclude"] = columns_to_exclude
 
-        # CRITIQUE: Appliquer immédiatement les exclusions sur raw_df ET split
         cols_to_drop = [col for col, exclude in columns_to_exclude.items() if exclude and col in df.columns and col != target_col]
         
         if cols_to_drop:
             print(f"\n🗑️ EXCLUSION DE {len(cols_to_drop)} COLONNES:")
             print(f"    Colonnes: {cols_to_drop}")
             
-            # 1. Supprimer du raw_df
             current_df = state["raw_df"].copy()
             current_df = current_df.drop(columns=cols_to_drop, errors='ignore')
             state["raw_df"] = current_df
-            print(f"   ✅ raw_df: {current_df.shape}")
+            print(f"✅ raw_df: {current_df.shape}")
             
-            # 2. Supprimer du split si existe
             split_data = state.get("split", {})
             if split_data:
                 for split_key in ["X_train", "X_val", "X_test"]:
@@ -891,7 +886,7 @@ def user_decisions_page():
                         cols_in_split = [c for c in cols_to_drop if c in split_df.columns]
                         if cols_in_split:
                             split_data[split_key] = split_df.drop(columns=cols_in_split, errors='ignore')
-                            print(f"   ✅ {split_key}: {split_data[split_key].shape}")
+                            print(f"✅ {split_key}: {split_data[split_key].shape}")
                 
                 state["split"] = split_data
             
@@ -902,9 +897,9 @@ def user_decisions_page():
         ui.notify("✅ Décisions enregistrées avec succès !", color="positive")
          
         ui.run_javascript("setTimeout(() => window.location.href='/supervised/split', 1000);")
+
     def go_to_split():
         on_confirm()
-        ui.run_javascript("setTimeout(() => window.location.href='/supervised/split', 500);")
 
     # ---------------------- UI ----------------------
     with ui.column().classes("w-full items-center").style(
@@ -1004,14 +999,11 @@ def user_decisions_page():
                 "font-size:14px !important; color:#636e72 !important; margin-bottom:20px !important;"
             )
 
-            # Créer un aperçu des 10 premières lignes
             df_preview = df.head(10).copy()
             
-            # Préparer les données pour le tableau
             columns_for_table = []
             rows_for_table = []
             
-            # Colonnes
             for col in df_preview.columns:
                 columns_for_table.append({
                     "name": col,
@@ -1021,12 +1013,10 @@ def user_decisions_page():
                     "sortable": True
                 })
             
-            # Lignes
             for idx, row in df_preview.iterrows():
                 row_dict = {"_index": str(idx)}
                 for col in df_preview.columns:
                     val = row[col]
-                    # Formater la valeur
                     if pd.isna(val):
                         row_dict[col] = "NaN"
                     elif isinstance(val, (int, np.integer)):
@@ -1034,10 +1024,9 @@ def user_decisions_page():
                     elif isinstance(val, (float, np.floating)):
                         row_dict[col] = f"{val:.2f}"
                     else:
-                        row_dict[col] = str(val)[:50]  # Limiter à 50 caractères
+                        row_dict[col] = str(val)[:50]
                 rows_for_table.append(row_dict)
             
-            # Ajouter colonne index
             columns_for_table.insert(0, {
                 "name": "_index",
                 "label": "Index",
@@ -1046,7 +1035,6 @@ def user_decisions_page():
                 "sortable": False
             })
             
-            # Afficher le tableau
             ui.table(
                 columns=columns_for_table,
                 rows=rows_for_table,
@@ -1056,66 +1044,71 @@ def user_decisions_page():
                 "overflow-y:auto !important;"
             )
             
-            # Statistiques rapides
-            with ui.row().classes("w-full gap-8 items-center justify-around mt-6").style(
-                "background:#f8f9fa !important; padding:20px !important; border-radius:12px !important;"
+            # Statistiques compactes avec gradient
+            with ui.row().classes("w-full items-center justify-around mt-6").style(
+                "background:linear-gradient(135deg, #01335A 0%, #09538C 100%) !important; "
+                "padding:20px !important; border-radius:12px !important;"
             ):
-                # Nombre de lignes
-                with ui.column().classes("items-center"):
-                    ui.label("📊").style("font-size:28px !important; margin-bottom:4px !important;")
-                    ui.label(f"{len(df):,}").style(
-                        "font-weight:700 !important; font-size:24px !important; color:#01335A !important;"
-                    )
-                    ui.label("Lignes").style(
-                        "font-size:13px !important; color:#636e72 !important; margin-top:4px !important;"
-                    )
+                with ui.row().classes("items-center gap-3"):
+                    ui.icon("dataset", size="md").classes("text-white")
+                    with ui.column().classes("gap-0"):
+                        ui.label(f"{len(df):,}").style(
+                            "font-weight:700 !important; font-size:24px !important; color:white !important; "
+                            "line-height:1 !important;"
+                        )
+                        ui.label("lignes").style(
+                            "font-size:12px !important; color:rgba(255,255,255,0.8) !important; margin-top:4px !important;"
+                        )
                 
-                # Nombre de colonnes
-                with ui.column().classes("items-center"):
-                    ui.label("📋").style("font-size:28px !important; margin-bottom:4px !important;")
-                    ui.label(f"{len(df.columns)}").style(
-                        "font-weight:700 !important; font-size:24px !important; color:#01335A !important;"
-                    )
-                    ui.label("Colonnes").style(
-                        "font-size:13px !important; color:#636e72 !important; margin-top:4px !important;"
-                    )
+                with ui.row().classes("items-center gap-3"):
+                    ui.icon("table_chart", size="md").classes("text-white")
+                    with ui.column().classes("gap-0"):
+                        ui.label(f"{len(df.columns)}").style(
+                            "font-weight:700 !important; font-size:24px !important; color:white !important; "
+                            "line-height:1 !important;"
+                        )
+                        ui.label("colonnes").style(
+                            "font-size:12px !important; color:rgba(255,255,255,0.8) !important; margin-top:4px !important;"
+                        )
                 
-                # Valeurs manquantes
-                with ui.column().classes("items-center"):
-                    ui.label("⚠️").style("font-size:28px !important; margin-bottom:4px !important;")
-                    total_missing = df.isna().sum().sum()
-                    missing_pct = (total_missing / (len(df) * len(df.columns)) * 100)
-                    ui.label(f"{total_missing:,}").style(
-                        "font-weight:700 !important; font-size:24px !important; color:#e74c3c !important;"
-                    )
-                    ui.label(f"Missing ({missing_pct:.1f}%)").style(
-                        "font-size:13px !important; color:#636e72 !important; margin-top:4px !important;"
-                    )
+                with ui.row().classes("items-center gap-3"):
+                    ui.icon("warning", size="md").classes("text-white")
+                    with ui.column().classes("gap-0"):
+                        total_missing = df.isna().sum().sum()
+                        missing_pct = (total_missing / (len(df) * len(df.columns)) * 100)
+                        ui.label(f"{total_missing:,}").style(
+                            "font-weight:700 !important; font-size:24px !important; color:white !important; "
+                            "line-height:1 !important;"
+                        )
+                        ui.label(f"missing ({missing_pct:.1f}%)").style(
+                            "font-size:12px !important; color:rgba(255,255,255,0.8) !important; margin-top:4px !important;"
+                        )
                 
-                # Colonnes numériques
-                with ui.column().classes("items-center"):
-                    ui.label("🔢").style("font-size:28px !important; margin-bottom:4px !important;")
-                    n_numeric = len(df.select_dtypes(include=[np.number]).columns)
-                    ui.label(f"{n_numeric}").style(
-                        "font-weight:700 !important; font-size:24px !important; color:#2196f3 !important;"
-                    )
-                    ui.label("Numériques").style(
-                        "font-size:13px !important; color:#636e72 !important; margin-top:4px !important;"
-                    )
+                with ui.row().classes("items-center gap-3"):
+                    ui.icon("analytics", size="md").classes("text-white")
+                    with ui.column().classes("gap-0"):
+                        n_numeric = len(df.select_dtypes(include=[np.number]).columns)
+                        ui.label(f"{n_numeric}").style(
+                            "font-weight:700 !important; font-size:24px !important; color:white !important; "
+                            "line-height:1 !important;"
+                        )
+                        ui.label("numériques").style(
+                            "font-size:12px !important; color:rgba(255,255,255,0.8) !important; margin-top:4px !important;"
+                        )
                 
-                # Colonnes catégorielles
-                with ui.column().classes("items-center"):
-                    ui.label("🏷️").style("font-size:28px !important; margin-bottom:4px !important;")
-                    n_categorical = len(df.select_dtypes(include=['object', 'category']).columns)
-                    ui.label(f"{n_categorical}").style(
-                        "font-weight:700 !important; font-size:24px !important; color:#094282 !important;"
-                    )
-                    ui.label("Catégorielles").style(
-                        "font-size:13px !important; color:#636e72 !important; margin-top:4px !important;"
-                    )
+                with ui.row().classes("items-center gap-3"):
+                    ui.icon("category", size="md").classes("text-white")
+                    with ui.column().classes("gap-0"):
+                        n_categorical = len(df.select_dtypes(include=['object', 'category']).columns)
+                        ui.label(f"{n_categorical}").style(
+                            "font-weight:700 !important; font-size:24px !important; color:white !important; "
+                            "line-height:1 !important;"
+                        )
+                        ui.label("catégorielles").style(
+                            "font-size:12px !important; color:rgba(255,255,255,0.8) !important; margin-top:4px !important;"
+                        )
 
-
-        # ---------- CONFIGURATION DES TYPES ----------
+        # ---------- CONFIGURATION DES TYPES (2 PAR LIGNE) ----------
         column_type_widgets = {}
         column_exclude_widgets = {}
 
@@ -1131,66 +1124,98 @@ def user_decisions_page():
                 "font-size:14px !important; color:#636e72 !important; margin-bottom:20px !important;"
             )
 
-            # Header tableau
-            with ui.row().classes("w-full items-center gap-4 mb-4 pb-3").style(
-                "border-bottom:2px solid #e1e8ed !important;"
-            ):
-                ui.label("Colonne").style(
-                    "width:200px !important; font-weight:700 !important; font-size:14px !important; "
-                    "color:#01335A !important;"
-                )
-                ui.label("Type Détecté").style(
-                    "flex:1 !important; font-weight:700 !important; font-size:14px !important; "
-                    "color:#01335A !important;"
-                )
-                ui.label("Exclure").style(
-                    "width:120px !important; font-weight:700 !important; font-size:14px !important; "
-                    "color:#01335A !important; text-align:center !important;"
-                )
-
-            for col in columns_info:
-                col_name = col["Colonne"]
-                actual_type = detect_actual_type(col, col_name)
-
-                with ui.row().classes("w-full items-center gap-4 mb-2").style(
-                    "padding:12px !important; border-radius:8px !important; background:#f8f9fa !important;"
-                ):
-                    ui.label(col_name).style(
-                        "width:200px !important; font-weight:600 !important; font-size:14px !important; "
-                        "color:#2c3e50 !important;"
-                    )
-
-                    col_type = ui.select(
-                        options=[
-                            "Numérique Continue", "Numérique Discrète",
-                            "Catégorielle Nominale", "Catégorielle Ordinale",
-                            "Date/Datetime", "Texte", "Identifiant"
-                        ],
-                        value=actual_type
-                    ).props("outlined dense").classes("flex-1")
-
-                    column_type_widgets[col_name] = col_type
-
-                    auto_exclude = False
-                    if col["Cardinalité"] == 1:
-                        auto_exclude = True
-                    if "%" in col["% Missing"]:
-                        try:
-                            missing_pct = float(col["% Missing"].replace("%", "").strip())
-                            if missing_pct >= 100:
-                                auto_exclude = True
-                        except:
-                            pass
-                    if actual_type == "Identifiant":
-                        auto_exclude = True
-
-                    exclude_cb = ui.checkbox("", value=auto_exclude)
-                    column_exclude_widgets[col_name] = exclude_cb
+            # ✅ DISPOSITION EN GRILLE : 2 COLONNES PAR LIGNE
+            for i in range(0, len(columns_info), 2):
+                with ui.row().classes("w-full gap-4 mb-4"):
+                    # Colonne 1
+                    col1 = columns_info[i]
+                    col1_name = col1["Colonne"]
+                    actual_type1 = detect_actual_type(col1, col1_name)
+                    
+                    with ui.card().classes("flex-1").style(
+                        "background:#f8f9fa !important; padding:16px !important; "
+                        "border-radius:12px !important; border:1px solid #e1e8ed !important;"
+                    ):
+                        ui.label(col1_name).style(
+                            "font-weight:700 !important; font-size:15px !important; "
+                            "color:#01335A !important; margin-bottom:12px !important;"
+                        )
+                        
+                        col_type1 = ui.select(
+                            options=[
+                                "Numérique Continue", "Numérique Discrète",
+                                "Catégorielle Nominale", "Catégorielle Ordinale",
+                                "Date/Datetime", "Texte", "Identifiant"
+                            ],
+                            value=actual_type1,
+                            label="Type"
+                        ).props("outlined dense").classes("w-full")
+                        
+                        column_type_widgets[col1_name] = col_type1
+                        
+                        auto_exclude1 = False
+                        if col1["Cardinalité"] == 1:
+                            auto_exclude1 = True
+                        if "%" in col1["% Missing"]:
+                            try:
+                                missing_pct = float(col1["% Missing"].replace("%", "").strip())
+                                if missing_pct >= 100:
+                                    auto_exclude1 = True
+                            except:
+                                pass
+                        if actual_type1 == "Identifiant":
+                            auto_exclude1 = True
+                        
+                        exclude_cb1 = ui.checkbox("Exclure cette colonne", value=auto_exclude1).classes("mt-2")
+                        column_exclude_widgets[col1_name] = exclude_cb1
+                    
+                    # Colonne 2 (si elle existe)
+                    if i + 1 < len(columns_info):
+                        col2 = columns_info[i + 1]
+                        col2_name = col2["Colonne"]
+                        actual_type2 = detect_actual_type(col2, col2_name)
+                        
+                        with ui.card().classes("flex-1").style(
+                            "background:#f8f9fa !important; padding:16px !important; "
+                            "border-radius:12px !important; border:1px solid #e1e8ed !important;"
+                        ):
+                            ui.label(col2_name).style(
+                                "font-weight:700 !important; font-size:15px !important; "
+                                "color:#01335A !important; margin-bottom:12px !important;"
+                            )
+                            
+                            col_type2 = ui.select(
+                                options=[
+                                    "Numérique Continue", "Numérique Discrète",
+                                    "Catégorielle Nominale", "Catégorielle Ordinale",
+                                    "Date/Datetime", "Texte", "Identifiant"
+                                ],
+                                value=actual_type2,
+                                label="Type"
+                            ).props("outlined dense").classes("w-full")
+                            
+                            column_type_widgets[col2_name] = col_type2
+                            
+                            auto_exclude2 = False
+                            if col2["Cardinalité"] == 1:
+                                auto_exclude2 = True
+                            if "%" in col2["% Missing"]:
+                                try:
+                                    missing_pct = float(col2["% Missing"].replace("%", "").strip())
+                                    if missing_pct >= 100:
+                                        auto_exclude2 = True
+                                except:
+                                    pass
+                            if actual_type2 == "Identifiant":
+                                auto_exclude2 = True
+                            
+                            exclude_cb2 = ui.checkbox("Exclure cette colonne", value=auto_exclude2).classes("mt-2")
+                            column_exclude_widgets[col2_name] = exclude_cb2
 
             # Info exclusions
             with ui.card().classes("w-full mt-6").style(
                 "background:#134b78 !important; padding:20px !important; border-radius:12px !important; "
-                "border-left:4px solid #01335A  !important; box-shadow:none !important;"
+                "border-left:4px solid #01335A !important; box-shadow:none !important;"
             ):
                 ui.label("💡 Exclusions automatiques détectées :").style(
                     "font-weight:700 !important; margin-bottom:12px !important; color:white !important;"
@@ -1208,29 +1233,29 @@ def user_decisions_page():
                     )
 
         # ---------- BOUTONS ----------
-        with ui.row().classes("w-full max-w-4xl gap-4 mt-8 justify-center"):
+        with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
             ui.button(
-                "Valider les décisions", 
-                on_click=on_confirm
+                "← Retour",
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")
             ).style(
-                "background:#01335A !important; color:white !important; font-weight:600 !important; "
-                "border-radius:8px !important; height:50px !important; min-width:220px !important; "
-                "font-size:16px !important; text-transform:none !important;"
+                "background:white !important; color:#01335A !important; font-weight:500 !important; "
+                "border:1px solid #e1e8ed !important; border-radius:8px !important; height:50px !important; "
+                "min-width:200px !important; font-size:14px !important; text-transform:none !important; "
+                "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
             )
-
+            
             ui.button(
-                "Suivant ", 
+                "Suivant →",
                 on_click=go_to_split
             ).style(
                 "background:#01335A !important; color:white !important; font-weight:600 !important; "
-                "border-radius:8px !important; height:50px !important; min-width:220px !important; "
-                "font-size:16px !important; text-transform:none !important;"
+                "border-radius:8px !important; height:50px !important; min-width:200px !important; "
+                "font-size:14px !important; text-transform:none !important;"
             )
 
     # Déclencher l'analyse initiale
     if default_target:
         on_target_change(default_target)
-
 
 # Fonction helper (si pas déjà définie ailleurs)
 def map_detected_type(detected_type):
@@ -1947,6 +1972,8 @@ def split_page():
         
 @ui.page('/supervised/univariate_analysis')
 def univariate_analysis_page():
+    import plotly.graph_objects as go
+    from scipy.stats import skew
 
     # Récupération des données train
     split = state.get("split")
@@ -1956,7 +1983,7 @@ def univariate_analysis_page():
                 "font-size:18px !important; color:#c0392b !important; font-weight:600 !important;"
             )
             ui.button(
-                " Retour au Preprocessing", 
+                "⬅ Retour au Preprocessing", 
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/split'")
             ).style(
                 "margin-top:20px !important; background:#01335A !important; color:white !important; "
@@ -1978,7 +2005,7 @@ def univariate_analysis_page():
 
     # ---------- UI PRINCIPALE ----------
     with ui.column().classes("w-full items-center").style(
-        "background:#f0f2f5 !important; min-height:100vh !important; padding:24px !important; "
+        "background:#f0f2f5 !important; min-height:100vh !important; padding:48px 24px !important; "
         "font-family:'Inter', sans-serif !important;"
     ):
         # HEADER
@@ -1987,38 +2014,59 @@ def univariate_analysis_page():
             "margin-bottom:8px !important; text-align:center !important; letter-spacing:-0.5px !important;"
         )
         ui.label("Exploration détaillée de chaque variable (dataset d'entraînement)").style(
-            "font-size:16px !important; color:#636e72 !important; "
+            "font-size:16px !important; color:#636e72 !important; margin-bottom:48px !important; "
             "text-align:center !important; font-weight:400 !important;"
         )
 
-        # --- OVERVIEW METRICS ---
-        with ui.card().classes("w-full max-w-6xl mb-6").style(
-            "background:white !important; border-radius:16px !important; padding:16px !important; "
+        # --- OVERVIEW COMPACTE ---
+        with ui.row().classes("w-full max-w-6xl items-center justify-around mb-6").style(
+            "background:linear-gradient(135deg, #01335A 0%, #09538C 100%) !important; "
+            "padding:20px !important; border-radius:16px !important; "
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
-            ui.label(" Vue d'ensemble du dataset").style(
-                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
-                "margin-bottom:6px !important;"
-            )
+            with ui.row().classes("items-center gap-3"):
+                ui.icon("analytics", size="md").classes("text-white")
+                with ui.column().classes("gap-0"):
+                    ui.label(str(n_numeric)).style(
+                        "font-weight:700 !important; font-size:24px !important; color:white !important; "
+                        "line-height:1 !important;"
+                    )
+                    ui.label(f"numériques ({round(n_numeric/total_features*100)}%)").style(
+                        "font-size:12px !important; color:rgba(255,255,255,0.8) !important; margin-top:4px !important;"
+                    )
             
-            with ui.row().classes("w-full gap-8 items-center justify-around"):
-                def metric_card(icon, label, value, sublabel=""):
-                    with ui.column().classes("items-center"):
-                        ui.label(value).style(
-                            "font-weight:700 !important; font-size:28px !important; color:#01335A !important;"
-                        )
-                        ui.label(label).style(
-                            "font-size:13px !important; color:#636e72 !important; margin-top:2px !important;"
-                        )
-                        if sublabel:
-                            ui.label(sublabel).style(
-                                "font-size:12px !important; color:#7f8c8d !important; "
-                            )
-                
-                metric_card("", "Variables numériques", str(n_numeric), f"{round(n_numeric/total_features*100)}% du total")
-                metric_card("", "Variables catégorielles", str(n_categorical), f"{round(n_categorical/total_features*100)}% du total")
-                metric_card("", "Observations", f"{n_observations:,}", "lignes d'entraînement")
-                metric_card("", "Features totales", str(total_features), "colonnes actives")
+            with ui.row().classes("items-center gap-3"):
+                ui.icon("category", size="md").classes("text-white")
+                with ui.column().classes("gap-0"):
+                    ui.label(str(n_categorical)).style(
+                        "font-weight:700 !important; font-size:24px !important; color:white !important; "
+                        "line-height:1 !important;"
+                    )
+                    ui.label(f"catégorielles ({round(n_categorical/total_features*100)}%)").style(
+                        "font-size:12px !important; color:rgba(255,255,255,0.8) !important; margin-top:4px !important;"
+                    )
+            
+            with ui.row().classes("items-center gap-3"):
+                ui.icon("dataset", size="md").classes("text-white")
+                with ui.column().classes("gap-0"):
+                    ui.label(f"{n_observations:,}").style(
+                        "font-weight:700 !important; font-size:24px !important; color:white !important; "
+                        "line-height:1 !important;"
+                    )
+                    ui.label("observations").style(
+                        "font-size:12px !important; color:rgba(255,255,255,0.8) !important; margin-top:4px !important;"
+                    )
+            
+            with ui.row().classes("items-center gap-3"):
+                ui.icon("table_chart", size="md").classes("text-white")
+                with ui.column().classes("gap-0"):
+                    ui.label(str(total_features)).style(
+                        "font-weight:700 !important; font-size:24px !important; color:white !important; "
+                        "line-height:1 !important;"
+                    )
+                    ui.label("features totales").style(
+                        "font-size:12px !important; color:rgba(255,255,255,0.8) !important; margin-top:4px !important;"
+                    )
 
         # --- FILTRES & TRI ---
         with ui.card().classes("w-full max-w-6xl mb-6").style(
@@ -2026,7 +2074,6 @@ def univariate_analysis_page():
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
             with ui.row().classes("w-full gap-4 items-end"):
-                # Filtre par type
                 filter_type = ui.select(
                     options={
                         "all": "Toutes les variables",
@@ -2035,9 +2082,8 @@ def univariate_analysis_page():
                     },
                     value="all",
                     label="Type de variable"
-                ).props("outlined").classes("flex-1")
+                ).props("outlined dense").classes("flex-1")
                 
-                # Tri
                 sort_by = ui.select(
                     options={
                         "name": "Nom (A-Z)",
@@ -2047,22 +2093,20 @@ def univariate_analysis_page():
                     },
                     value="name",
                     label="Trier par"
-                ).props("outlined").classes("flex-1")
+                ).props("outlined dense").classes("flex-1")
                 
-                # Recherche
                 search_input = ui.input(
-                    label="Rechercher une variable",
+                    label="Rechercher",
                     placeholder="Nom de colonne..."
-                ).props("outlined clearable").classes("flex-1").style("min-width:250px !important;")
+                ).props("outlined dense clearable").classes("flex-1")
 
         # --- CONTENEUR DES CARTES ---
-        cards_container = ui.column().classes("w-full max-w-6xl gap-6")
+        cards_container = ui.column().classes("w-full max-w-6xl gap-4")
 
         def create_numeric_plot(series, col_name):
-            """Crée un histogramme avec KDE pour une variable numérique"""
+            """Crée un histogramme pour une variable numérique"""
             fig = go.Figure()
             
-            # Histogramme
             fig.add_trace(go.Histogram(
                 x=series.dropna(),
                 name="Distribution",
@@ -2072,22 +2116,21 @@ def univariate_analysis_page():
             ))
             
             fig.update_layout(
-                title=f"Distribution de {col_name}",
-                height=280,
-                margin=dict(l=40, r=20, t=40, b=40),
+                height=220,
+                margin=dict(l=30, r=10, t=20, b=30),
                 showlegend=False,
                 paper_bgcolor='white',
                 plot_bgcolor='#f8f9fa',
-                font=dict(family="Inter, sans-serif", color="#2c3e50"),
-                xaxis=dict(title=col_name),
-                yaxis=dict(title="Fréquence")
+                font=dict(family="Inter, sans-serif", size=11, color="#2c3e50"),
+                xaxis=dict(title=None),
+                yaxis=dict(title=None)
             )
             
             return fig
 
         def create_categorical_plot(series, col_name):
             """Crée un bar chart pour une variable catégorielle"""
-            counts = series.value_counts().head(10)  # Top 10 catégories
+            counts = series.value_counts().head(10)
             
             fig = go.Figure()
             fig.add_trace(go.Bar(
@@ -2099,15 +2142,14 @@ def univariate_analysis_page():
             ))
             
             fig.update_layout(
-                title=f"Distribution de {col_name}",
-                height=280,
-                margin=dict(l=40, r=20, t=40, b=60),
+                height=220,
+                margin=dict(l=30, r=10, t=20, b=50),
                 showlegend=False,
                 paper_bgcolor='white',
                 plot_bgcolor='#f8f9fa',
-                font=dict(family="Inter, sans-serif", color="#2c3e50"),
-                xaxis=dict(title=col_name, tickangle=-45),
-                yaxis=dict(title="Fréquence")
+                font=dict(family="Inter, sans-serif", size=11, color="#2c3e50"),
+                xaxis=dict(title=None, tickangle=-45),
+                yaxis=dict(title=None)
             )
             
             return fig
@@ -2123,19 +2165,18 @@ def univariate_analysis_page():
             ))
             
             fig.update_layout(
-                title=f"Boxplot - {col_name}",
-                height=280,
-                margin=dict(l=40, r=20, t=40, b=40),
+                height=220,
+                margin=dict(l=30, r=10, t=20, b=30),
                 showlegend=False,
                 paper_bgcolor='white',
                 plot_bgcolor='#f8f9fa',
-                font=dict(family="Inter, sans-serif", color="#2c3e50")
+                font=dict(family="Inter, sans-serif", size=11, color="#2c3e50")
             )
             
             return fig
 
         def add_numeric_card(col):
-            """Carte pour variable numérique avec visualisations"""
+            """Carte COMPACTE pour variable numérique"""
             series = X_train[col].dropna()
             
             # Statistiques
@@ -2149,33 +2190,33 @@ def univariate_analysis_page():
             iqr_val = q3 - q1
             skewness = round(skew(series), 3)
             
-            # Détection outliers
+            # Outliers
             lower_bound = q1 - 1.5 * iqr_val
             upper_bound = q3 + 1.5 * iqr_val
             outliers = series[(series < lower_bound) | (series > upper_bound)]
             n_outliers = len(outliers)
-            pct_outliers = round(n_outliers / len(series) * 100, 2) if len(series) > 0 else 0
+            pct_outliers = round(n_outliers / len(series) * 100, 1) if len(series) > 0 else 0
             
             with cards_container:
                 with ui.card().classes("w-full").style(
-                    "background:white !important; border-radius:16px !important; padding:28px !important; "
+                    "background:white !important; border-radius:16px !important; padding:20px !important; "
                     "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important; border-left:4px solid #01335A !important;"
                 ):
-                    # Header
-                    with ui.row().classes("w-full items-center justify-between mb-4"):
-                        with ui.row().classes("items-center gap-3"):
-                            ui.label("").style("font-size:28px !important;")
-                            ui.label(col).style(
-                                "font-weight:700 !important; font-size:20px !important; color:#01335A !important;"
+                    # Header compact
+                    with ui.row().classes("w-full items-center justify-between mb-3"):
+                        ui.label(col).style(
+                            "font-weight:700 !important; font-size:18px !important; color:#01335A !important;"
+                        )
+                        with ui.badge().style(
+                            "background:#e3f2fd !important; color:#01335A !important; "
+                            "padding:4px 10px !important; border-radius:6px !important;"
+                        ):
+                            ui.label("Numérique").style(
+                                "font-size:11px !important; font-weight:600 !important;"
                             )
-                            with ui.badge().style(
-                                "background:#e8f4f8 !important; color:#01335A !important; "
-                                "padding:6px 12px !important; border-radius:6px !important;"
-                            ):
-                                ui.label("Numérique").style("font-size:12px !important; font-weight:600 !important;")
                     
-                    # Stats grid
-                    with ui.grid(columns=4).classes("w-full gap-4 mb-4"):
+                    # Stats compactes (2 lignes de 4)
+                    with ui.grid(columns=4).classes("w-full gap-2 mb-3"):
                         for stat_label, stat_value in [
                             ("Moyenne", mean_val),
                             ("Médiane", median_val),
@@ -2186,65 +2227,60 @@ def univariate_analysis_page():
                             ("Skewness", skewness),
                             ("Outliers", f"{n_outliers} ({pct_outliers}%)")
                         ]:
-                            with ui.card().classes("p-3").style(
-                                "background:#f8f9fa !important; border-radius:8px !important; "
+                            with ui.card().classes("p-2").style(
+                                "background:#f8f9fa !important; border-radius:6px !important; "
                                 "box-shadow:none !important;"
                             ):
                                 ui.label(stat_label).style(
-                                    "font-size:11px !important; color:#636e72 !important; "
-                                    "margin-bottom:4px !important; text-transform:uppercase !important;"
+                                    "font-size:10px !important; color:#636e72 !important; "
+                                    "margin-bottom:2px !important; text-transform:uppercase !important;"
                                 )
                                 ui.label(str(stat_value)).style(
-                                    "font-weight:700 !important; font-size:16px !important; "
+                                    "font-weight:700 !important; font-size:14px !important; "
                                     "color:#01335A !important; font-family:monospace !important;"
                                 )
                     
-                    # Alertes
+                    # Alertes compactes (bleu uniquement)
                     alerts = []
                     if abs(skewness) > 1:
-                        alerts.append(("🔴", f"Asymétrie très forte (skewness = {skewness})"))
+                        alerts.append(f"Asymétrie forte (skewness = {skewness})")
                     elif abs(skewness) > 0.5:
-                        alerts.append(("🟡", f"Asymétrie modérée (skewness = {skewness})"))
+                        alerts.append(f"Asymétrie modérée (skewness = {skewness})")
                     
                     if pct_outliers > 10:
-                        alerts.append(("🔴", f"Nombreux outliers détectés ({pct_outliers}% des données)"))
+                        alerts.append(f"Nombreux outliers ({pct_outliers}%)")
                     elif pct_outliers > 5:
-                        alerts.append(("🟡", f"Outliers détectés ({pct_outliers}% des données)"))
+                        alerts.append(f"Outliers détectés ({pct_outliers}%)")
                     
                     if series.isna().sum() > 0:
-                        pct_missing = round(series.isna().sum() / len(X_train) * 100, 2)
-                        alerts.append(("", f"Valeurs manquantes: {pct_missing}%"))
+                        pct_missing = round(series.isna().sum() / len(X_train) * 100, 1)
+                        alerts.append(f"Valeurs manquantes: {pct_missing}%")
                     
                     if alerts:
-                        with ui.column().classes("w-full gap-2 mb-4"):
-                            for icon, msg in alerts:
-                                with ui.card().classes("w-full p-3").style(
-                                    "background:#cde4ff !important; border-radius:8px !important; "
-                                    "border-left:3px solid #01335A !important; box-shadow:none !important;"
+                        with ui.column().classes("w-full gap-1 mb-3"):
+                            for msg in alerts:
+                                with ui.card().classes("w-full p-2").style(
+                                    "background:#e3f2fd !important; border-radius:6px !important; "
+                                    "border-left:3px solid #2196f3 !important; box-shadow:none !important;"
                                 ):
-                                    with ui.row().classes("items-center gap-2"):
-                                        ui.label(icon).style("font-size:18px !important;")
-                                        ui.label(msg).style(
-                                            "color:#856404 !important; font-size:13px !important; font-weight:500 !important;"
-                                        )
+                                    ui.label(f"⚠️ {msg}").style(
+                                        "color:#01335A !important; font-size:12px !important; font-weight:500 !important;"
+                                    )
                     
-                    # Visualisations
-                    with ui.row().classes("w-full gap-4"):
-                        # Histogramme
+                    # Visualisations côte à côte
+                    with ui.row().classes("w-full gap-3"):
                         with ui.column().classes("flex-1"):
                             hist_fig = create_numeric_plot(series, col)
                             ui.plotly(hist_fig).style("width:100% !important;")
                         
-                        # Boxplot
                         with ui.column().classes("flex-1"):
                             box_fig = create_boxplot(series, col)
                             ui.plotly(box_fig).style("width:100% !important;")
 
         def add_categorical_card(col):
-            """Carte pour variable catégorielle"""
+            """Carte COMPACTE pour variable catégorielle"""
             series = X_train[col]
             
-            # Statistiques
             n_unique = series.nunique()
             mode_val = series.mode()[0] if len(series.mode()) > 0 else "N/A"
             counts = series.value_counts()
@@ -2252,88 +2288,83 @@ def univariate_analysis_page():
             
             with cards_container:
                 with ui.card().classes("w-full").style(
-                    "background:white !important; border-radius:16px !important; padding:28px !important; "
-                    "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important; border-left:4px solid #01335A !important;"
+                    "background:white !important; border-radius:16px !important; padding:20px !important; "
+                    "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important; border-left:4px solid #2196f3 !important;"
                 ):
                     # Header
-                    with ui.row().classes("w-full items-center justify-between mb-4"):
-                        with ui.row().classes("items-center gap-3"):
-                            ui.label("").style("font-size:28px !important;")
-                            ui.label(col).style(
-                                "font-weight:700 !important; font-size:20px !important; color:#01335A !important;"
+                    with ui.row().classes("w-full items-center justify-between mb-3"):
+                        ui.label(col).style(
+                            "font-weight:700 !important; font-size:18px !important; color:#01335A !important;"
+                        )
+                        with ui.badge().style(
+                            "background:#e3f2fd !important; color:#01335A !important; "
+                            "padding:4px 10px !important; border-radius:6px !important;"
+                        ):
+                            ui.label("Catégorielle").style(
+                                "font-size:11px !important; font-weight:600 !important;"
                             )
-                            with ui.badge().style(
-                                "background:#d4edda !important; color:#155724 !important; "
-                                "padding:6px 12px !important; border-radius:6px !important;"
-                            ):
-                                ui.label("Catégorielle").style("font-size:12px !important; font-weight:600 !important;")
                     
                     # Stats
-                    with ui.row().classes("w-full gap-6 mb-4"):
-                        with ui.card().classes("flex-1 p-3").style(
-                            "background:#f8f9fa !important; border-radius:8px !important; box-shadow:none !important;"
+                    with ui.row().classes("w-full gap-3 mb-3"):
+                        with ui.card().classes("flex-1 p-2").style(
+                            "background:#f8f9fa !important; border-radius:6px !important; box-shadow:none !important;"
                         ):
-                            ui.label("Catégories uniques").style(
-                                "font-size:11px !important; color:#636e72 !important; "
-                                "margin-bottom:4px !important; text-transform:uppercase !important;"
+                            ui.label("CATÉGORIES").style(
+                                "font-size:10px !important; color:#636e72 !important; margin-bottom:2px !important;"
                             )
                             ui.label(str(n_unique)).style(
-                                "font-weight:700 !important; font-size:18px !important; color:#01335A !important;"
+                                "font-weight:700 !important; font-size:16px !important; color:#01335A !important;"
                             )
                         
-                        with ui.card().classes("flex-1 p-3").style(
-                            "background:#f8f9fa !important; border-radius:8px !important; box-shadow:none !important;"
+                        with ui.card().classes("flex-1 p-2").style(
+                            "background:#f8f9fa !important; border-radius:6px !important; box-shadow:none !important;"
                         ):
-                            ui.label("Mode (valeur la plus fréquente)").style(
-                                "font-size:11px !important; color:#636e72 !important; "
-                                "margin-bottom:4px !important; text-transform:uppercase !important;"
+                            ui.label("MODE").style(
+                                "font-size:10px !important; color:#636e72 !important; margin-bottom:2px !important;"
                             )
-                            ui.label(str(mode_val)[:30]).style(
-                                "font-weight:700 !important; font-size:18px !important; color:#01335A !important;"
+                            ui.label(str(mode_val)[:20]).style(
+                                "font-weight:700 !important; font-size:16px !important; color:#01335A !important;"
                             )
                     
-                    # Alertes
+                    # Alerte cardinalité
                     if n_unique > 50:
-                        with ui.card().classes("w-full p-3 mb-4").style(
-                            "background:#cde4ff !important; border-radius:8px !important; "
-                            "border-left:3px solid #01335A !important; box-shadow:none !important;"
+                        with ui.card().classes("w-full p-2 mb-3").style(
+                            "background:#e3f2fd !important; border-radius:6px !important; "
+                            "border-left:3px solid #2196f3 !important; box-shadow:none !important;"
                         ):
-                            with ui.row().classes("items-center gap-2"):
-                                ui.label("").style("font-size:18px !important;")
-                                ui.label(f"Cardinalité élevée: {n_unique} catégories (encodage complexe)").style(
-                                    "color:#856404 !important; font-size:13px !important; font-weight:500 !important;"
-                                )
+                            ui.label(f"⚠️ Cardinalité élevée: {n_unique} catégories").style(
+                                "color:#01335A !important; font-size:12px !important; font-weight:500 !important;"
+                            )
                     
-                    # Distribution (Top 10)
-                    with ui.column().classes("w-full gap-3 mb-4"):
-                        ui.label(f"Distribution (Top {min(10, len(counts))} catégories)").style(
-                            "font-weight:600 !important; font-size:14px !important; color:#636e72 !important;"
+                    # Distribution Top 5 (pas 10)
+                    with ui.column().classes("w-full gap-2 mb-3"):
+                        ui.label(f"Top {min(5, len(counts))} catégories").style(
+                            "font-weight:600 !important; font-size:13px !important; color:#636e72 !important;"
                         )
                         
-                        for idx, (cat, cnt) in enumerate(counts.head(10).items()):
+                        for idx, (cat, cnt) in enumerate(counts.head(5).items()):
                             pct = round(cnt / total * 100, 1)
                             
-                            with ui.row().classes("w-full items-center gap-3"):
-                                ui.label(str(cat)[:30]).style(
-                                    "width:180px !important; font-family:monospace !important; "
-                                    "font-size:13px !important; color:#2c3e50 !important;"
+                            with ui.row().classes("w-full items-center gap-2"):
+                                ui.label(str(cat)[:20]).style(
+                                    "width:120px !important; font-size:12px !important; "
+                                    "color:#2c3e50 !important; font-weight:500 !important;"
                                 )
                                 
                                 with ui.column().classes("flex-1"):
                                     ui.linear_progress(value=pct/100).props(
-                                        f'color={"primary" if idx == 0 else "grey"}'
-                                    ).classes("h-3 rounded-lg")
+                                        'color="primary"'
+                                    ).classes("h-2 rounded")
                                 
                                 ui.label(f"{cnt} ({pct}%)").style(
-                                    "width:100px !important; text-align:right !important; "
-                                    "font-family:monospace !important; font-size:13px !important; "
-                                    "color:#636e72 !important; font-weight:600 !important;"
+                                    "width:80px !important; text-align:right !important; "
+                                    "font-size:11px !important; color:#636e72 !important; font-weight:600 !important;"
                                 )
                         
-                        if len(counts) > 10:
-                            ui.label(f"... et {len(counts) - 10} autres catégories").style(
-                                "font-size:12px !important; color:#7f8c8d !important; "
-                                "font-style:italic !important; margin-top:8px !important;"
+                        if len(counts) > 5:
+                            ui.label(f"... et {len(counts) - 5} autres catégories").style(
+                                "font-size:11px !important; color:#7f8c8d !important; "
+                                "font-style:italic !important; margin-top:4px !important;"
                             )
                     
                     # Graphique
@@ -2345,7 +2376,6 @@ def univariate_analysis_page():
             """Met à jour l'affichage selon les filtres"""
             cards_container.clear()
             
-            # Filtrage
             cols_to_show = []
             filter_val = filter_type.value
             search_val = search_input.value.lower() if search_input.value else ""
@@ -2370,15 +2400,14 @@ def univariate_analysis_page():
                 remaining = [c for c in cols_to_show if c not in numeric_cols]
                 cols_to_show = [c for c, _ in sorted_numeric] + remaining
             
-            # Affichage
             if not cols_to_show:
                 with cards_container:
                     with ui.card().classes("w-full p-8").style(
                         "background:white !important; border-radius:16px !important; text-align:center !important;"
                     ):
-                        ui.label("🔍").style("font-size:48px !important; margin-bottom:16px !important;")
+                        ui.label("🔍").style("font-size:48px !important; margin-bottom:12px !important;")
                         ui.label("Aucune variable ne correspond aux filtres").style(
-                            "font-size:16px !important; color:#636e72 !important;"
+                            "font-size:15px !important; color:#636e72 !important;"
                         )
             else:
                 for col in cols_to_show:
@@ -2387,35 +2416,32 @@ def univariate_analysis_page():
                     else:
                         add_categorical_card(col)
         
-        # Événements des filtres
         filter_type.on_value_change(lambda: update_display())
         sort_by.on_value_change(lambda: update_display())
         search_input.on_value_change(lambda: update_display())
         
-        # Affichage initial
         update_display()
 
         # --- NAVIGATION ---
         with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
             ui.button(
-                " Précédent",
+                "← Précédent",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/split'")
             ).style(
                 "background:white !important; color:#01335A !important; font-weight:500 !important; "
-                "border-radius:8px !important; height:48px !important; min-width:140px !important; "
-                "font-size:14px !important; text-transform:none !important; "
+                "border:1px solid #e1e8ed !important; border-radius:8px !important; height:48px !important; "
+                "min-width:140px !important; font-size:14px !important; text-transform:none !important; "
                 "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
             )
             
             ui.button(
-                "Détection des Outliers ",
+                "Suivant →",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/outliers_analysis'")
             ).style(
                 "background:#01335A !important; color:white !important; font-weight:600 !important; "
-                "border-radius:8px !important; height:48px !important; min-width:200px !important; "
+                "border-radius:8px !important; height:48px !important; min-width:140px !important; "
                 "font-size:14px !important; text-transform:none !important;"
             )
-
 
 global_state = state
 
@@ -11852,116 +11878,94 @@ def map_detected_type(detected_type):
 
 @ui.page('/unsupervised/user_decisions')
 def unsupervised_user_decisions_page():
+    import pandas as pd
+    import numpy as np
     
-
     df = state.get("raw_df", None)
     columns_info = state.get("columns_info", None)
 
     if df is None or columns_info is None:
-        with ui.column().classes("w-full h-screen").style("display:flex; align-items:center; justify-content:center;"):
+        with ui.column().classes("w-full h-screen items-center justify-center"):
             ui.label("❌ Aucun dataset chargé ou informations de colonnes manquantes.").style(
-                "font-size:18px; color:#c0392b; font-weight:600;"
+                "font-size:18px !important; color:#c0392b !important; font-weight:600 !important;"
             )
-            ui.button(" Retour à l'Upload",
-                      on_click=lambda: ui.run_javascript("window.location.href='/upload'")).style(
-                "margin-top:20px; background:#01335A; color:white; font-weight:600;"
+            ui.button(
+                "⬅ Retour à l'Upload",
+                on_click=lambda: ui.run_javascript("window.location.href='/upload'")
+            ).style(
+                "margin-top:20px !important; background:#01335A !important; color:white !important; "
+                "font-weight:600 !important; padding:12px 32px !important; border-radius:8px !important;"
             )
         return
 
-    # ----------- STYLES ----------- 
-    with ui.column().style(
-        "width:100%; min-height:100vh; padding:40px; background-color:#f5f6fa; font-family:'Inter', sans-serif; display:flex; align-items:center;"
-    ):
-        ui.label("Phase 3.2 : Décisions Utilisateur (Clustering)").style(
-            "font-weight:700; font-size:32px; color:#01335A; margin-bottom:32px; text-align:center;"
-        )
+    # ---------------------- CORRECTIONS NUMÉRIQUES ----------------------
+    for col in df.columns:
+        if pd.api.types.is_numeric_dtype(df[col]):
+            non_null = df[col].dropna()
+            if len(non_null) > 0 and (non_null % 1 == 0).all():
+                df[col] = df[col].astype('Int64')
+    
+    state["raw_df"] = df
 
-        # ---------- 1️⃣ Sélection des Features ----------
-        with ui.card().style(
-            "width:100%; max-width:1200px; padding:24px; margin-bottom:24px; background:white; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.08);"
-        ):
-            with ui.row().style("display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;"):
-                ui.label("🧩 Sélection des colonnes pour le clustering").style(
-                    "font-weight:700; font-size:20px; color:#01335A;"
-                )
-                
-                # Boutons de sélection rapide
-                with ui.row().style("display:flex; gap:8px;"):
-                    ui.button("Tout sélectionner", 
-                             on_click=lambda: feature_dropdown.set_value(all_columns)).props("flat dense").style(
-                        " color:#01335A; font-weight:500; font-size:12px;"
-                    )
-                    ui.button("Désélectionner", 
-                             on_click=lambda: feature_dropdown.set_value([])).props("flat dense").style(
-                        " color:#6c757d; font-weight:500; font-size:12px;"
-                    )
+    # ---------------------- DÉTECTION TYPE ----------------------
+    def detect_actual_type(col_info, col_name):
+        col_data = df[col_name]
+        n_unique = col_data.nunique()
+        n_total = len(col_data.dropna())
 
-            all_columns = [col["Colonne"] for col in columns_info]
-            
-            feature_dropdown = ui.select(
-                options=all_columns,
-                multiple=True,
-                label="Sélectionnez les colonnes à utiliser pour le clustering"
-            ).props("dense")
+        if n_unique == 1:
+            return "Identifiant"
+        if col_name.lower().startswith('id') or col_name.lower().endswith('_id'):
+            return "Identifiant"
+        if n_total > 0 and n_unique / n_total > 0.95:
+            return "Identifiant"
 
-            feature_warning = ui.label("").style("color:#e67e22; font-weight:600; margin-top:6px;")
+        if pd.api.types.is_numeric_dtype(col_data):
+            non_null = col_data.dropna()
+            if len(non_null) > 0:
+                is_integer = (non_null % 1 == 0).all()
+                if is_integer:
+                    if n_unique <= 20:
+                        return "Numérique Discrète"
+                    else:
+                        unique_sorted = sorted(non_null.unique())
+                        if len(unique_sorted) > 1:
+                            gaps = np.diff(unique_sorted)
+                            avg_gap = np.mean(gaps)
+                            if avg_gap <= 5 and np.std(gaps) < avg_gap:
+                                return "Numérique Continue"
+                            else:
+                                return "Numérique Discrète"
+                        return "Numérique Discrète"
+                else:
+                    return "Numérique Continue"
 
-        # ---------- 2️⃣ Correction des Types ----------
-        with ui.card().style(
-            "width:100%; max-width:1200px; padding:24px; margin-bottom:24px; background:white; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.08);"
-        ):
-            ui.label("🛠 Correction des types de colonnes").style(
-                "font-weight:700; font-size:20px; color:#01335A; margin-bottom:12px;"
-            )
+        if pd.api.types.is_datetime64_any_dtype(col_data):
+            return "Date/Datetime"
 
-            column_type_widgets = {}
-            column_exclude_widgets = {}
+        if col_data.dtype == 'object' or pd.api.types.is_categorical_dtype(col_data):
+            values_lower = [str(v).lower() for v in col_data.unique()[:20]]
+            ordinal_patterns = [
+                ['low', 'medium', 'high'],
+                ['bad', 'good', 'excellent'],
+                ['small', 'medium', 'large'],
+                ['never', 'sometimes', 'often', 'always'],
+                ['poor', 'fair', 'good', 'excellent'],
+                ['xs', 's', 'm', 'l', 'xl', 'xxl']
+            ]
+            for pattern in ordinal_patterns:
+                if any(p in values_lower for p in pattern):
+                    return "Catégorielle Ordinale"
+            return "Catégorielle Nominale"
 
-            for col in columns_info:
-                with ui.row().style("display:flex; align-items:center; gap:12px; margin-bottom:8px;"):
-                    ui.label(col["Colonne"]).style("width:180px; font-weight:600;")
-                    col_type = ui.select(
-                        options=[
-                            "Numérique Continue",
-                            "Numérique Discrète",
-                            "Catégorielle Nominale",
-                            "Catégorielle Ordinale",
-                            "Date/Datetime",
-                            "Texte",
-                            "Identifiant"
-                        ],
-                        value=map_detected_type(col["Type Détecté"])
-                    )
-                    column_type_widgets[col["Colonne"]] = col_type
+        return "Texte"
 
-                    # Exclusion automatique (comme supervised)
-                    auto_exclude = False
-                    if col["Cardinalité"] == 1:
-                        auto_exclude = True
-                    if "%" in col["% Missing"]:
-                        if float(col["% Missing"].replace("%","")) >= 100:
-                            auto_exclude = True
-                    if col["Colonne"].lower().startswith("id") or col["Cardinalité"] / len(df) > 0.95:
-                        auto_exclude = True
-
-                    exclude_cb = ui.checkbox("Exclure", value=auto_exclude)
-                    column_exclude_widgets[col["Colonne"]] = exclude_cb
-
-        # ---------- BOUTONS (SÉPARÉS GAUCHE/DROITE) ----------
-        with ui.row().style("display:flex; justify-content:space-between; margin-top:20px; width:100%; max-width:1200px;"):
-           ui.button(" Retour",
-                      on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/preprocessing'")).style(
-                "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
-            )
-           ui.button(" Étape suivante", on_click=lambda: save_and_go()).style(
-                "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
-            )
-
-    # ----------------- FONCTIONS -----------------
+    # ---------------------- FONCTIONS ----------------------
     def on_confirm():
         selected_features = feature_dropdown.value
         if not selected_features or len(selected_features) < 2:
             feature_warning.text = "⚠️ Sélectionnez au moins 2 colonnes pour le clustering"
+            ui.notify("⚠️ Sélectionnez au moins 2 colonnes", color="warning")
             return
 
         state["selected_features"] = selected_features
@@ -11976,7 +11980,338 @@ def unsupervised_user_decisions_page():
 
     def save_and_go():
         on_confirm()
-        ui.run_javascript("window.location.href='/unsupervised/univariate_analysis'")
+        ui.run_javascript("setTimeout(() => window.location.href='/unsupervised/univariate_analysis', 500);")
+
+    # ---------------------- UI ----------------------
+    with ui.column().classes("w-full items-center").style(
+        "min-height:100vh !important; background:#f0f2f5 !important; padding:48px 24px !important; "
+        "font-family:'Inter', sans-serif !important;"
+    ):
+        # HEADER
+        ui.label("Configuration Clustering").style(
+            "font-weight:700 !important; font-size:36px !important; color:#01335A !important; "
+            "margin-bottom:8px !important; text-align:center !important; letter-spacing:-0.5px !important;"
+        )
+        ui.label("Sélection des features et configuration des types").style(
+            "font-size:16px !important; color:#636e72 !important; margin-bottom:48px !important; "
+            "text-align:center !important; font-weight:400 !important;"
+        )
+
+        # ---------- APERÇU DES DONNÉES ----------
+        with ui.card().classes("w-full max-w-6xl mb-6").style(
+            "background:white !important; border-radius:16px !important; padding:32px !important; "
+            "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
+        ):
+            ui.label("👁️ Aperçu des données").style(
+                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
+                "margin-bottom:16px !important;"
+            )
+            
+            ui.label(
+                f"Visualisation des 10 premières lignes du dataset ({len(df)} lignes × {len(df.columns)} colonnes)"
+            ).style(
+                "font-size:14px !important; color:#636e72 !important; margin-bottom:20px !important;"
+            )
+
+            # Créer un aperçu des 10 premières lignes
+            df_preview = df.head(10).copy()
+            
+            columns_for_table = []
+            rows_for_table = []
+            
+            for col in df_preview.columns:
+                columns_for_table.append({
+                    "name": col,
+                    "label": col,
+                    "field": col,
+                    "align": "left",
+                    "sortable": True
+                })
+            
+            for idx, row in df_preview.iterrows():
+                row_dict = {"_index": str(idx)}
+                for col in df_preview.columns:
+                    val = row[col]
+                    if pd.isna(val):
+                        row_dict[col] = "NaN"
+                    elif isinstance(val, (int, np.integer)):
+                        row_dict[col] = str(val)
+                    elif isinstance(val, (float, np.floating)):
+                        row_dict[col] = f"{val:.2f}"
+                    else:
+                        row_dict[col] = str(val)[:50]
+                rows_for_table.append(row_dict)
+            
+            columns_for_table.insert(0, {
+                "name": "_index",
+                "label": "Index",
+                "field": "_index",
+                "align": "center",
+                "sortable": False
+            })
+            
+            ui.table(
+                columns=columns_for_table,
+                rows=rows_for_table,
+                row_key="_index"
+            ).props("flat bordered dense").style(
+                "width:100% !important; font-size:12px !important; max-height:400px !important; "
+                "overflow-y:auto !important;"
+            )
+            
+            # Statistiques compactes
+            with ui.row().classes("w-full items-center justify-around mt-6").style(
+                "background:linear-gradient(135deg, #01335A 0%, #09538C 100%) !important; "
+                "padding:20px !important; border-radius:12px !important;"
+            ):
+                with ui.row().classes("items-center gap-3"):
+                    ui.icon("dataset", size="md").classes("text-white")
+                    with ui.column().classes("gap-0"):
+                        ui.label(f"{len(df):,}").style(
+                            "font-weight:700 !important; font-size:24px !important; color:white !important; "
+                            "line-height:1 !important;"
+                        )
+                        ui.label("lignes").style(
+                            "font-size:12px !important; color:rgba(255,255,255,0.8) !important; margin-top:4px !important;"
+                        )
+                
+                with ui.row().classes("items-center gap-3"):
+                    ui.icon("table_chart", size="md").classes("text-white")
+                    with ui.column().classes("gap-0"):
+                        ui.label(f"{len(df.columns)}").style(
+                            "font-weight:700 !important; font-size:24px !important; color:white !important; "
+                            "line-height:1 !important;"
+                        )
+                        ui.label("colonnes").style(
+                            "font-size:12px !important; color:rgba(255,255,255,0.8) !important; margin-top:4px !important;"
+                        )
+                
+                with ui.row().classes("items-center gap-3"):
+                    ui.icon("analytics", size="md").classes("text-white")
+                    with ui.column().classes("gap-0"):
+                        n_numeric = len(df.select_dtypes(include=[np.number]).columns)
+                        ui.label(f"{n_numeric}").style(
+                            "font-weight:700 !important; font-size:24px !important; color:white !important; "
+                            "line-height:1 !important;"
+                        )
+                        ui.label("numériques").style(
+                            "font-size:12px !important; color:rgba(255,255,255,0.8) !important; margin-top:4px !important;"
+                        )
+                
+                with ui.row().classes("items-center gap-3"):
+                    ui.icon("category", size="md").classes("text-white")
+                    with ui.column().classes("gap-0"):
+                        n_categorical = len(df.select_dtypes(include=['object', 'category']).columns)
+                        ui.label(f"{n_categorical}").style(
+                            "font-weight:700 !important; font-size:24px !important; color:white !important; "
+                            "line-height:1 !important;"
+                        )
+                        ui.label("catégorielles").style(
+                            "font-size:12px !important; color:rgba(255,255,255,0.8) !important; margin-top:4px !important;"
+                        )
+
+        # ---------- SÉLECTION DES FEATURES ----------
+        with ui.card().classes("w-full max-w-6xl mb-6").style(
+            "background:white !important; border-radius:16px !important; padding:32px !important; "
+            "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
+        ):
+            ui.label("🧩 Sélection des features pour le clustering").style(
+                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
+                "margin-bottom:16px !important;"
+            )
+            
+            ui.label("Choisissez les colonnes qui seront utilisées pour créer les clusters").style(
+                "font-size:14px !important; color:#636e72 !important; margin-bottom:20px !important;"
+            )
+
+            all_columns = [col["Colonne"] for col in columns_info]
+            
+            # Boutons de sélection rapide
+            with ui.row().classes("w-full justify-end gap-2 mb-4"):
+                ui.button(
+                    "Tout sélectionner",
+                    on_click=lambda: feature_dropdown.set_value(all_columns)
+                ).props("flat").style(
+                    "color:#01335A !important; font-weight:500 !important; text-transform:none !important;"
+                )
+                ui.button(
+                    "Tout désélectionner",
+                    on_click=lambda: feature_dropdown.set_value([])
+                ).props("flat").style(
+                    "color:#636e72 !important; font-weight:500 !important; text-transform:none !important;"
+                )
+
+            feature_dropdown = ui.select(
+                options=all_columns,
+                multiple=True,
+                label="Colonnes sélectionnées",
+                value=all_columns  # Toutes sélectionnées par défaut
+            ).props("outlined").classes("w-full")
+
+            feature_warning = ui.label("").style(
+                "color:#e74c3c !important; font-weight:600 !important; margin-top:8px !important; font-size:14px !important;"
+            )
+            
+            # Info box
+            with ui.card().classes("w-full mt-4").style(
+                "background:#e3f2fd !important; padding:16px !important; border-radius:12px !important; "
+                "border-left:4px solid #2196f3 !important; box-shadow:none !important;"
+            ):
+                ui.label("💡 Conseil").style(
+                    "font-weight:700 !important; color:#01335A !important; margin-bottom:8px !important;"
+                )
+                ui.label("Pour un clustering efficace, sélectionnez des features numériques pertinentes. Les colonnes identifiants et à variance nulle seront automatiquement exclues.").style(
+                    "font-size:13px !important; color:#01335A !important; line-height:1.6 !important;"
+                )
+
+        # ---------- CONFIGURATION DES TYPES (2-3 PAR LIGNE) ----------
+        column_type_widgets = {}
+        column_exclude_widgets = {}
+
+        with ui.card().classes("w-full max-w-6xl mb-6").style(
+            "background:white !important; border-radius:16px !important; padding:32px !important; "
+            "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
+        ):
+            ui.label("🛠 Configuration des types de colonnes").style(
+                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
+                "margin-bottom:16px !important;"
+            )
+            ui.label("Vérifiez et corrigez les types détectés automatiquement").style(
+                "font-size:14px !important; color:#636e72 !important; margin-bottom:20px !important;"
+            )
+
+            # ✅ DISPOSITION EN GRILLE : 2-3 COLONNES PAR LIGNE
+            for i in range(0, len(columns_info), 2):  # 2 colonnes par ligne
+                with ui.row().classes("w-full gap-4 mb-4"):
+                    # Colonne 1
+                    col1 = columns_info[i]
+                    col1_name = col1["Colonne"]
+                    actual_type1 = detect_actual_type(col1, col1_name)
+                    
+                    with ui.card().classes("flex-1").style(
+                        "background:#f8f9fa !important; padding:16px !important; "
+                        "border-radius:12px !important; border:1px solid #e1e8ed !important;"
+                    ):
+                        # Nom de la colonne
+                        ui.label(col1_name).style(
+                            "font-weight:700 !important; font-size:15px !important; "
+                            "color:#01335A !important; margin-bottom:12px !important;"
+                        )
+                        
+                        # Type selector
+                        col_type1 = ui.select(
+                            options=[
+                                "Numérique Continue", "Numérique Discrète",
+                                "Catégorielle Nominale", "Catégorielle Ordinale",
+                                "Date/Datetime", "Texte", "Identifiant"
+                            ],
+                            value=actual_type1,
+                            label="Type"
+                        ).props("outlined dense").classes("w-full")
+                        
+                        column_type_widgets[col1_name] = col_type1
+                        
+                        # Exclusion automatique
+                        auto_exclude1 = False
+                        if col1["Cardinalité"] == 1:
+                            auto_exclude1 = True
+                        if "%" in col1["% Missing"]:
+                            try:
+                                missing_pct = float(col1["% Missing"].replace("%", "").strip())
+                                if missing_pct >= 100:
+                                    auto_exclude1 = True
+                            except:
+                                pass
+                        if actual_type1 == "Identifiant":
+                            auto_exclude1 = True
+                        
+                        exclude_cb1 = ui.checkbox("Exclure cette colonne", value=auto_exclude1).classes("mt-2")
+                        column_exclude_widgets[col1_name] = exclude_cb1
+                    
+                    # Colonne 2 (si elle existe)
+                    if i + 1 < len(columns_info):
+                        col2 = columns_info[i + 1]
+                        col2_name = col2["Colonne"]
+                        actual_type2 = detect_actual_type(col2, col2_name)
+                        
+                        with ui.card().classes("flex-1").style(
+                            "background:#f8f9fa !important; padding:16px !important; "
+                            "border-radius:12px !important; border:1px solid #e1e8ed !important;"
+                        ):
+                            ui.label(col2_name).style(
+                                "font-weight:700 !important; font-size:15px !important; "
+                                "color:#01335A !important; margin-bottom:12px !important;"
+                            )
+                            
+                            col_type2 = ui.select(
+                                options=[
+                                    "Numérique Continue", "Numérique Discrète",
+                                    "Catégorielle Nominale", "Catégorielle Ordinale",
+                                    "Date/Datetime", "Texte", "Identifiant"
+                                ],
+                                value=actual_type2,
+                                label="Type"
+                            ).props("outlined dense").classes("w-full")
+                            
+                            column_type_widgets[col2_name] = col_type2
+                            
+                            auto_exclude2 = False
+                            if col2["Cardinalité"] == 1:
+                                auto_exclude2 = True
+                            if "%" in col2["% Missing"]:
+                                try:
+                                    missing_pct = float(col2["% Missing"].replace("%", "").strip())
+                                    if missing_pct >= 100:
+                                        auto_exclude2 = True
+                                except:
+                                    pass
+                            if actual_type2 == "Identifiant":
+                                auto_exclude2 = True
+                            
+                            exclude_cb2 = ui.checkbox("Exclure cette colonne", value=auto_exclude2).classes("mt-2")
+                            column_exclude_widgets[col2_name] = exclude_cb2
+
+            # Info exclusions
+            with ui.card().classes("w-full mt-6").style(
+                "background:#fff9e6 !important; padding:20px !important; border-radius:12px !important; "
+                "border-left:4px solid #f39c12 !important; box-shadow:none !important;"
+            ):
+                ui.label("💡 Exclusions automatiques détectées :").style(
+                    "font-weight:700 !important; margin-bottom:12px !important; color:#856404 !important;"
+                )
+                
+                exclusions = [
+                    "• Colonnes avec cardinalité = 1 (valeur unique)",
+                    "• Colonnes avec 100% de valeurs manquantes",
+                    "• Colonnes identifiants (détection automatique)"
+                ]
+                
+                for excl in exclusions:
+                    ui.label(excl).style(
+                        "font-size:13px !important; color:#856404 !important; margin-bottom:4px !important;"
+                    )
+
+        # ---------- BOUTONS NAVIGATION ----------
+        with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
+            ui.button(
+                "← Retour",
+                on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/preprocessing'")
+            ).style(
+                "background:white !important; color:#01335A !important; font-weight:500 !important; "
+                "border:1px solid #e1e8ed !important; border-radius:8px !important; height:50px !important; "
+                "min-width:200px !important; font-size:14px !important; text-transform:none !important; "
+                "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
+            )
+            
+            ui.button(
+                "Suivant →",
+                on_click=save_and_go
+            ).style(
+                "background:#01335A !important; color:white !important; font-weight:600 !important; "
+                "border-radius:8px !important; height:50px !important; min-width:200px !important; "
+                "font-size:14px !important; text-transform:none !important;"
+            )
+
 # ----------------- PAGE /unsupervised/missing_values ----------------- 
 
 
@@ -12579,26 +12914,44 @@ def encoding_page():
 
 @ui.page('/unsupervised/univariate_analysis')
 def unsupervised_univariate_page():
+    import pandas as pd
+    import numpy as np
+    from scipy.stats import skew
 
     df = state.get("raw_df")
     features = state.get("selected_features")
 
     if df is None or features is None:
-        with ui.column().style("width:100%; height:100vh; display:flex; align-items:center; justify-content:center;"):
-            ui.label("❌ Données manquantes").style("font-size:20px; color:#e74c3c; font-weight:600; margin-bottom:12px;")
-            ui.label("Veuillez revenir en arrière et sélectionner les features").style("color:#7f8c8d; margin-bottom:20px;")
-            ui.button(" Retour", on_click=lambda: ui.navigate.to("/unsupervised/user_decisions")).style(
-                "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
+        with ui.column().classes("w-full h-screen items-center justify-center"):
+            ui.label("❌ Données manquantes").style(
+                "font-size:20px !important; color:#c0392b !important; font-weight:600 !important; margin-bottom:12px !important;"
+            )
+            ui.label("Veuillez revenir en arrière et sélectionner les features").style(
+                "color:#7f8c8d !important; margin-bottom:20px !important;"
+            )
+            ui.button(
+                "⬅ Retour",
+                on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/user_decisions'")
+            ).style(
+                "background:#01335A !important; color:white !important; font-weight:600 !important; "
+                "border-radius:8px !important; height:46px !important; width:200px !important;"
             )
         return
 
     # Page principale
-    with ui.column().style("width:100%; min-height:100vh; padding:40px; background:#f5f6fa; font-family:'Inter', sans-serif;"):
-        
-        # Header moderne
-        with ui.column().style("margin-bottom:48px; text-align:center;"):
-            ui.label("📊 Analyse Univariée").style("font-weight:800; font-size:42px; background:linear-gradient(135deg, #01335A, #09538C); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:12px; letter-spacing:-1px;")
-            ui.label(f"Explorez et transformez vos {len(features)} variables").style("font-size:16px; color:#7f8c8d;")
+    with ui.column().classes("w-full items-center").style(
+        "min-height:100vh !important; background:#f0f2f5 !important; padding:48px 24px !important; "
+        "font-family:'Inter', sans-serif !important;"
+    ):
+        # HEADER
+        ui.label("Analyse Univariée").style(
+            "font-weight:700 !important; font-size:36px !important; color:#01335A !important; "
+            "margin-bottom:8px !important; text-align:center !important; letter-spacing:-0.5px !important;"
+        )
+        ui.label(f"Explorez et transformez vos {len(features)} variables").style(
+            "font-size:16px !important; color:#636e72 !important; margin-bottom:48px !important; "
+            "text-align:center !important; font-weight:400 !important;"
+        )
 
         decisions = {}
 
@@ -12618,157 +12971,247 @@ def unsupervised_univariate_page():
         # VARIABLES NUMÉRIQUES
         # ==========================================================
         if numeric_features:
-            with ui.column().style("width:100%; display:flex; align-items:center; margin-bottom:32px;"):
-                with ui.card().style("width:100%; max-width:900px; padding:24px; background:white; border-radius:8px; box-shadow:0 2px 12px rgba(0,0,0,0.08);"):
+            with ui.card().classes("w-full max-w-6xl mb-6").style(
+                "background:white !important; border-radius:16px !important; padding:32px !important; "
+                "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
+            ):
+                # En-tête de section
+                ui.label("📊 Variables Numériques").style(
+                    "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
+                    "margin-bottom:20px !important;"
+                )
+                
+                for col in numeric_features:
+                    series = pd.to_numeric(df[col], errors="coerce").dropna()
+
+                    if len(series) == 0:
+                        continue
+
+                    # Calculs statistiques
+                    sk = round(skew(series), 2)
+                    mean_val = round(series.mean(), 2)
+                    std_val = round(series.std(), 2)
+                    min_val = round(series.min(), 2)
+                    max_val = round(series.max(), 2)
+
+                    q1, q3 = np.percentile(series, [25, 75])
+                    iqr = q3 - q1
+                    lower = q1 - 1.5 * iqr
+                    upper = q3 + 1.5 * iqr
+                    outliers = ((series < lower) | (series > upper)).sum()
+
+                    # Déterminer le badge selon l'asymétrie (bleu uniquement)
+                    if abs(sk) > 1.0:
+                        skew_label = "Forte asymétrie"
+                        skew_bg = "#bbdefb"
+                    elif abs(sk) > 0.5:
+                        skew_label = "Asymétrie modérée"
+                        skew_bg = "#e3f2fd"
+                    else:
+                        skew_label = "Distribution symétrique"
+                        skew_bg = "#e8f5e9"
                     
-                    # En-tête de section
-                    with ui.column().style("margin-bottom:20px;"):
-                        ui.label("Variables Numériques").style("font-weight:600; font-size:20px; color:#2c3e50; margin-bottom:8px;")
-                        ui.separator().style("width:60px; height:3px; background:#3498db; border-radius:2px; margin:0;")
-                    
-                    for col in numeric_features:
-                        series = pd.to_numeric(df[col], errors="coerce").dropna()
-
-                        if len(series) == 0:
-                            continue
-
-                        # Calculs statistiques essentiels
-                        sk = round(skew(series), 2)
-                        mean_val = round(series.mean(), 2)
-                        std_val = round(series.std(), 2)
-                        min_val = round(series.min(), 2)
-                        max_val = round(series.max(), 2)
-
-                        q1, q3 = np.percentile(series, [25, 75])
-                        iqr = q3 - q1
-                        lower = q1 - 1.5 * iqr
-                        upper = q3 + 1.5 * iqr
-                        outliers = ((series < lower) | (series > upper)).sum()
-
-                        # Déterminer la couleur selon l'asymétrie
-                        if abs(sk) > 1.0:
-                            skew_color = "#e74c3c"
-                            skew_bg = "#fadbd8"
-                            skew_label = "Forte asymétrie"
-                        elif abs(sk) > 0.5:
-                            skew_color = "#e67e22"
-                            skew_bg = "#fdebd0"
-                            skew_label = "Asymétrie modérée"
-                        else:
-                            skew_color = "#27ae60"
-                            skew_bg = "#d5f4e6"
-                            skew_label = "Distribution normale"
+                    # Carte variable COMPACTE
+                    with ui.card().classes("w-full mb-4").style(
+                        "background:#f8f9fa !important; border-radius:12px !important; padding:16px !important; "
+                        "border:1px solid #e1e8ed !important; box-shadow:none !important;"
+                    ):
+                        # En-tête avec nom et badge
+                        with ui.row().classes("w-full items-center justify-between mb-3"):
+                            ui.label(col).style(
+                                "font-weight:700 !important; color:#01335A !important; font-size:16px !important;"
+                            )
+                            
+                            with ui.row().classes("items-center gap-2"):
+                                with ui.badge().style(
+                                    f"background:{skew_bg} !important; color:#01335A !important; "
+                                    "padding:4px 10px !important; border-radius:6px !important;"
+                                ):
+                                    ui.label(f"Skew: {sk}").style(
+                                        "font-size:11px !important; font-weight:600 !important;"
+                                    )
+                                ui.label(skew_label).style(
+                                    "color:#636e72 !important; font-size:12px !important; font-weight:500 !important;"
+                                )
                         
-                        # Carte variable
-                        with ui.card().style("padding:20px; margin-bottom:16px; background:#fafbfc; border-radius:8px; width:100%; border:1px solid #e1e8ed; transition:all 0.2s;"):
+                        # Statistiques en grille compacte
+                        with ui.grid(columns=5).classes("w-full gap-2 mb-3"):
+                            for stat_label, stat_value in [
+                                ("Moyenne", mean_val),
+                                ("Écart-type", std_val),
+                                ("Min", min_val),
+                                ("Max", max_val),
+                                ("Outliers", outliers)
+                            ]:
+                                with ui.card().classes("p-2").style(
+                                    "background:white !important; border-radius:6px !important; "
+                                    "box-shadow:none !important; border:1px solid #e1e8ed !important;"
+                                ):
+                                    ui.label(stat_label).style(
+                                        "font-size:10px !important; color:#636e72 !important; "
+                                        "margin-bottom:2px !important; text-transform:uppercase !important;"
+                                    )
+                                    ui.label(str(stat_value)).style(
+                                        "font-weight:700 !important; font-size:14px !important; "
+                                        "color:#01335A !important; font-family:monospace !important;"
+                                    )
+                        
+                        # Alerte outliers (bleu uniquement)
+                        if outliers > 0:
+                            pct_outliers = round((outliers / len(series)) * 100, 1)
+                            with ui.card().classes("w-full p-2 mb-3").style(
+                                "background:#e3f2fd !important; border-radius:6px !important; "
+                                "border-left:3px solid #2196f3 !important; box-shadow:none !important;"
+                            ):
+                                ui.label(f"⚠️ {outliers} outliers détectés ({pct_outliers}% des données)").style(
+                                    "color:#01335A !important; font-size:12px !important; font-weight:500 !important;"
+                                )
+                        
+                        # Sélecteur d'action
+                        with ui.row().classes("w-full items-center gap-3"):
+                            ui.label("Action :").style(
+                                "color:#636e72 !important; font-size:13px !important; font-weight:600 !important;"
+                            )
+                            action_select = ui.select(
+                                options=[
+                                    "Garder tel quel",
+                                    "Transformer (log)",
+                                    "Transformer (sqrt)",
+                                    "Supprimer"
+                                ],
+                                value="Garder tel quel"
+                            ).props("outlined dense").classes("flex-1")
                             
-                            # En-tête avec nom et asymétrie
-                            with ui.row().style("display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; width:100%;"):
-                                ui.label(col).style("font-weight:600; color:#2c3e50; font-size:18px;")
-                                with ui.row().style("display:flex; gap:12px; align-items:center;"):
-                                    with ui.card().style(f"padding:6px 12px; background:{skew_bg}; border-radius:6px; border:1px solid {skew_color};"):
-                                        ui.label(f"Skew: {sk}").style(f"color:{skew_color}; font-weight:700; font-size:14px;")
-                                    ui.label(skew_label).style("color:#7f8c8d; font-size:14px; font-weight:500;")
-                            
-                            # Statistiques en cartes
-                            with ui.row().style("display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap;"):
-                                with ui.card().style("padding:10px 14px; background:#f8f9fa; border-radius:6px; flex:1; min-width:120px;"):
-                                    ui.label("Moyenne").style("font-size:11px; color:#7f8c8d; margin-bottom:4px;")
-                                    ui.label(str(mean_val)).style("font-size:16px; font-weight:700; color:#2c3e50;")
-                                
-                                with ui.card().style("padding:10px 14px; background:#f8f9fa; border-radius:6px; flex:1; min-width:120px;"):
-                                    ui.label("Écart-type").style("font-size:11px; color:#7f8c8d; margin-bottom:4px;")
-                                    ui.label(str(std_val)).style("font-size:16px; font-weight:700; color:#2c3e50;")
-                                
-                                with ui.card().style("padding:10px 14px; background:#f8f9fa; border-radius:6px; flex:1; min-width:100px;"):
-                                    ui.label("Min").style("font-size:11px; color:#7f8c8d; margin-bottom:4px;")
-                                    ui.label(str(min_val)).style("font-size:16px; font-weight:700; color:#2c3e50;")
-                                
-                                with ui.card().style("padding:10px 14px; background:#f8f9fa; border-radius:6px; flex:1; min-width:100px;"):
-                                    ui.label("Max").style("font-size:11px; color:#7f8c8d; margin-bottom:4px;")
-                                    ui.label(str(max_val)).style("font-size:16px; font-weight:700; color:#2c3e50;")
-                                
-                                if outliers > 0:
-                                    with ui.card().style("padding:10px 14px; background:#fadbd8; border-radius:6px; border:1px solid #e74c3c; flex:1; min-width:120px;"):
-                                        ui.label("Outliers").style("font-size:11px; color:#c0392b; margin-bottom:4px; font-weight:600;")
-                                        ui.label(str(outliers)).style("font-size:16px; font-weight:700; color:#e74c3c;")
-                            
-                            # Sélecteur d'action
-                            with ui.row().style("display:flex; align-items:center; gap:12px; margin-top:16px;"):
-                                ui.label("Action:").style("color:#7f8c8d; font-size:14px; font-weight:600;")
-                                action_select = ui.select(
-                                    options=["Garder tel quel", "Transformer (log)", "Transformer (sqrt)", "Supprimer"],
-                                    value="Garder tel quel"
-                                ).style("width:250px; border:2px solid #e1e8ed; border-radius:6px;")
-                                
-                                decisions[col] = action_select
+                            decisions[col] = action_select
 
         # ==========================================================
         # VARIABLES CATÉGORIELLES
         # ==========================================================
         if categorical_features:
-            with ui.column().style("width:100%; display:flex; align-items:center; margin-bottom:32px;"):
-                with ui.card().style("width:100%; max-width:900px; padding:24px; background:white; border-radius:8px; box-shadow:0 2px 12px rgba(0,0,0,0.08);"):
+            with ui.card().classes("w-full max-w-6xl mb-6").style(
+                "background:white !important; border-radius:16px !important; padding:32px !important; "
+                "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
+            ):
+                # En-tête de section
+                ui.label("🏷️ Variables Catégorielles").style(
+                    "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
+                    "margin-bottom:20px !important;"
+                )
+                
+                for col in categorical_features:
+                    series = df[col].dropna()
                     
-                    # En-tête de section
-                    with ui.column().style("margin-bottom:20px;"):
-                        ui.label("Variables Catégorielles").style("font-weight:600; font-size:20px; color:#2c3e50; margin-bottom:8px;")
-                        ui.separator().style("width:60px; height:3px; background:#9b59b6; border-radius:2px; margin:0;")
-                    
-                    for col in categorical_features:
-                        series = df[col].dropna()
+                    if len(series) == 0:
+                        continue
+
+                    # Calculs statistiques
+                    n_unique = series.nunique()
+                    most_common = series.value_counts().head(5)  # Top 5 au lieu de 3
+                    missing = df[col].isna().sum()
+                    missing_pct = round((missing / len(df)) * 100, 1)
+
+                    # Carte variable COMPACTE
+                    with ui.card().classes("w-full mb-4").style(
+                        "background:#f8f9fa !important; border-radius:12px !important; padding:16px !important; "
+                        "border:1px solid #e1e8ed !important; box-shadow:none !important;"
+                    ):
+                        # En-tête avec nom et modalités
+                        with ui.row().classes("w-full items-center justify-between mb-3"):
+                            ui.label(col).style(
+                                "font-weight:700 !important; color:#01335A !important; font-size:16px !important;"
+                            )
+                            
+                            with ui.row().classes("items-center gap-2"):
+                                ui.label(f"{n_unique}").style(
+                                    "font-size:20px !important; font-weight:700 !important; color:#2196f3 !important;"
+                                )
+                                ui.label("modalités").style(
+                                    "color:#636e72 !important; font-weight:500 !important; font-size:12px !important;"
+                                )
                         
-                        if len(series) == 0:
-                            continue
-
-                        # Calculs statistiques essentiels
-                        n_unique = series.nunique()
-                        most_common = series.value_counts().head(3)
-                        missing = df[col].isna().sum()
-                        missing_pct = round((missing / len(df)) * 100, 1)
-
-                        # Carte variable
-                        with ui.card().style("padding:20px; margin-bottom:16px; background:#fafbfc; border-radius:8px; width:100%; border:1px solid #e1e8ed; transition:all 0.2s;"):
+                        # Statistiques
+                        with ui.row().classes("w-full gap-2 mb-3"):
+                            with ui.card().classes("flex-1 p-2").style(
+                                "background:white !important; border-radius:6px !important; "
+                                "box-shadow:none !important; border:1px solid #e1e8ed !important;"
+                            ):
+                                ui.label("OBSERVATIONS").style(
+                                    "font-size:10px !important; color:#636e72 !important; margin-bottom:2px !important;"
+                                )
+                                ui.label(str(len(series))).style(
+                                    "font-size:14px !important; font-weight:700 !important; color:#01335A !important;"
+                                )
                             
-                            # En-tête avec nom et modalités
-                            with ui.row().style("display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; width:100%;"):
-                                ui.label(col).style("font-weight:600; color:#2c3e50; font-size:18px;")
-                                with ui.row().style("display:flex; gap:8px; align-items:center;"):
-                                    ui.label(f"{n_unique}").style("font-size:20px; font-weight:700; color:#9b59b6;")
-                                    ui.label("modalités").style("color:#7f8c8d; font-weight:500; font-size:14px;")
-                            
-                            # Statistiques
-                            with ui.row().style("display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap;"):
-                                with ui.card().style("padding:10px 14px; background:#f8f9fa; border-radius:6px;"):
-                                    ui.label("Observations").style("font-size:11px; color:#7f8c8d; margin-bottom:4px;")
-                                    ui.label(str(len(series))).style("font-size:16px; font-weight:700; color:#2c3e50;")
+                            if missing > 0:
+                                with ui.card().classes("flex-1 p-2").style(
+                                    "background:#e3f2fd !important; border-radius:6px !important; "
+                                    "border-left:3px solid #2196f3 !important; box-shadow:none !important;"
+                                ):
+                                    ui.label("MANQUANTES").style(
+                                        "font-size:10px !important; color:#01335A !important; "
+                                        "margin-bottom:2px !important; font-weight:600 !important;"
+                                    )
+                                    ui.label(f"{missing} ({missing_pct}%)").style(
+                                        "font-size:14px !important; font-weight:700 !important; color:#2196f3 !important;"
+                                    )
+                        
+                        # Alerte cardinalité
+                        if n_unique > 50:
+                            with ui.card().classes("w-full p-2 mb-3").style(
+                                "background:#e3f2fd !important; border-radius:6px !important; "
+                                "border-left:3px solid #2196f3 !important; box-shadow:none !important;"
+                            ):
+                                ui.label(f"⚠️ Cardinalité élevée: {n_unique} catégories").style(
+                                    "color:#01335A !important; font-size:12px !important; font-weight:500 !important;"
+                                )
+                        
+                        # Top 5 modalités avec barres de progression
+                        if len(most_common) > 0:
+                            with ui.card().classes("w-full p-3 mb-3").style(
+                                "background:white !important; border-radius:8px !important; "
+                                "box-shadow:none !important; border:1px solid #e1e8ed !important;"
+                            ):
+                                ui.label(f"Top {len(most_common)} modalités :").style(
+                                    "color:#636e72 !important; font-size:12px !important; "
+                                    "font-weight:600 !important; margin-bottom:8px !important;"
+                                )
                                 
-                                if missing > 0:
-                                    with ui.card().style("padding:10px 14px; background:#fadbd8; border-radius:6px; border:1px solid #e74c3c;"):
-                                        ui.label("Manquantes").style("font-size:11px; color:#c0392b; margin-bottom:4px; font-weight:600;")
-                                        ui.label(f"{missing} ({missing_pct}%)").style("font-size:16px; font-weight:700; color:#e74c3c;")
+                                for category, count in most_common.items():
+                                    pct = round((count / len(series)) * 100, 1)
+                                    
+                                    with ui.row().classes("w-full items-center gap-2 mb-2"):
+                                        ui.label(str(category)[:30]).style(
+                                            "width:120px !important; font-size:12px !important; "
+                                            "color:#2c3e50 !important; font-weight:500 !important;"
+                                        )
+                                        
+                                        with ui.column().classes("flex-1"):
+                                            ui.linear_progress(value=pct/100).props(
+                                                'color="primary"'
+                                            ).classes("h-2 rounded")
+                                        
+                                        ui.label(f"{count} ({pct}%)").style(
+                                            "width:80px !important; text-align:right !important; "
+                                            "font-size:11px !important; color:#636e72 !important; "
+                                            "font-weight:600 !important;"
+                                        )
+                        
+                        # Sélecteur d'action
+                        with ui.row().classes("w-full items-center gap-3"):
+                            ui.label("Action :").style(
+                                "color:#636e72 !important; font-size:13px !important; font-weight:600 !important;"
+                            )
+                            action_select = ui.select(
+                                options=[
+                                    "Garder tel quel",
+                                    "Encoder (One-Hot)",
+                                    "Encoder (Ordinal)",
+                                    "Supprimer"
+                                ],
+                                value="Garder tel quel"
+                            ).props("outlined dense").classes("flex-1")
                             
-                            # Top 3 modalités
-                            if len(most_common) > 0:
-                                with ui.card().style("padding:12px; background:#f8f9fa; border-radius:6px; margin-bottom:16px;"):
-                                    ui.label("Top 3 modalités:").style("color:#7f8c8d; font-size:13px; font-weight:600; margin-bottom:8px;")
-                                    for category, count in most_common.items():
-                                        pct = round((count / len(series)) * 100, 1)
-                                        with ui.row().style("display:flex; align-items:center; gap:8px; margin-bottom:4px;"):
-                                            ui.label("•").style("color:#9b59b6; font-weight:700;")
-                                            ui.label(str(category)[:40]).style("color:#2c3e50; font-size:13px; flex:1;")
-                                            with ui.card().style("padding:4px 8px; background:white; border-radius:4px;"):
-                                                ui.label(f"{count} ({pct}%)").style("color:#9b59b6; font-size:12px; font-weight:600;")
-                            
-                            # Sélecteur d'action
-                            with ui.row().style("display:flex; align-items:center; gap:12px; margin-top:16px;"):
-                                ui.label("Action:").style("color:#7f8c8d; font-size:14px; font-weight:600;")
-                                action_select = ui.select(
-                                    options=["Garder tel quel", "Encoder (One-Hot)", "Encoder (Ordinal)", "Supprimer"],
-                                    value="Garder tel quel"
-                                ).style("width:250px; border:2px solid #e1e8ed; border-radius:6px;")
-                                
-                                decisions[col] = action_select
+                            decisions[col] = action_select
 
         # ==========================================================
         # BOUTONS DE NAVIGATION
@@ -12777,19 +13220,28 @@ def unsupervised_univariate_page():
             state["univariate_decisions"] = {
                 col: widget.value for col, widget in decisions.items()
             }
-            ui.notify("✅ Décisions sauvegardées", type="positive")
-            ui.navigate.to("/unsupervised/multivariate_analysis")
+            ui.notify("✅ Décisions sauvegardées", color="positive")
+            ui.run_javascript("setTimeout(() => window.location.href='/unsupervised/multivariate_analysis', 500);")
 
-        with ui.row().style("display:flex; justify-content:space-between; width:100%; margin-top:32px;"):
-            ui.button(" Retour", on_click=lambda: ui.navigate.to("/unsupervised/user_decisions")).style(
-                "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important; transition:all 0.2s !important;"
+        with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
+            ui.button(
+                "← Retour",
+                on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/user_decisions'")
+            ).style(
+                "background:white !important; color:#01335A !important; font-weight:500 !important; "
+                "border:1px solid #e1e8ed !important; border-radius:8px !important; height:50px !important; "
+                "min-width:200px !important; font-size:14px !important; text-transform:none !important; "
+                "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
             )
             
-            ui.button("Sauvegarder et Continuer ", on_click=save_and_next).style(
-                "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:250px !important; transition:all 0.2s !important;"
+            ui.button(
+                "Suivant →",
+                on_click=save_and_next
+            ).style(
+                "background:#01335A !important; color:white !important; font-weight:600 !important; "
+                "border-radius:8px !important; height:50px !important; min-width:200px !important; "
+                "font-size:14px !important; text-transform:none !important;"
             )
-       
-
  
  
 # ----------------- PAGE /unsupervised/multivariate_analysis -----------------
