@@ -71,6 +71,45 @@ from sklearn_extra.cluster import KMedoids
 from scipy.cluster.hierarchy import linkage, dendrogram
 
 
+# ----------------- IMPORTS -----------------
+
+# Interface
+from nicegui import ui
+
+# Manipulation de données
+import pandas as pd
+import numpy as np
+
+# Visualisation
+import matplotlib.pyplot as plt
+import seaborn as sns
+from matplotlib.colors import ListedColormap
+from scipy.cluster.hierarchy import linkage, dendrogram
+
+# Prétraitement
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.impute import KNNImputer
+from scipy.stats import zscore, skew, kurtosis
+
+# Réduction de dimension
+from sklearn.decomposition import PCA
+
+# Clustering (non supervisé)
+from sklearn.cluster import KMeans, DBSCAN, AgglomerativeClustering
+from sklearn_extra.cluster import KMedoids
+
+# Métriques de qualité de clustering
+from sklearn.metrics import (
+    silhouette_score,
+    davies_bouldin_score,
+    calinski_harabasz_score
+)
+from itertools import combinations
+
+# Utilitaires
+import io
+import base64
+import random
 
 # ----------------- ÉTAT GLOBAL -----------------
 state = {
@@ -517,7 +556,7 @@ def supervised_upload_page():
                     """
                 )
 
-                btn_next = ui.button("Continuer ➡")
+                btn_next = ui.button("Continuer ")
                 btn_next.disable()
                 btn_next.style(
                     """
@@ -671,7 +710,7 @@ def supervised_preprocessing_page():
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
             )
 
-            ui.button("➡ Étape suivante", on_click=lambda: ui.run_javascript("window.location.href='/supervised/user_decisions'")).style(
+            ui.button(" Étape suivante", on_click=lambda: ui.run_javascript("window.location.href='/supervised/user_decisions'")).style(
                 "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
             )
 
@@ -862,10 +901,10 @@ def user_decisions_page():
 
         ui.notify("✅ Décisions enregistrées avec succès !", color="positive")
          
-        ui.run_javascript("setTimeout(() => window.location.href='/supervised/preprocessing2', 1000);")
+        ui.run_javascript("setTimeout(() => window.location.href='/supervised/split', 1000);")
     def go_to_split():
         on_confirm()
-        ui.run_javascript("setTimeout(() => window.location.href='/supervised/preprocessing2', 500);")
+        ui.run_javascript("setTimeout(() => window.location.href='/supervised/split', 500);")
 
     # ---------------------- UI ----------------------
     with ui.column().classes("w-full items-center").style(
@@ -1209,8 +1248,10 @@ def map_detected_type(detected_type):
 
 
 
-@ui.page('/supervised/preprocessing2')
-def preprocessing2_page():
+@ui.page('/supervised/split')
+def split_page():
+    from sklearn.model_selection import train_test_split
+    
     df = state.get("raw_df")
     target_col = state.get("target_column")
     columns_exclude = state.get("columns_exclude", {})
@@ -1241,7 +1282,7 @@ def preprocessing2_page():
         with ui.card().classes("w-full max-w-4xl p-6 mb-6").style(
             "background:white; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.08);"
         ):
-            ui.label(f" Distribution de la target '{target_col}'").style(
+            ui.label(f"📊 Distribution de la target '{target_col}'").style(
                 "font-weight:700; font-size:20px; color:#01335A; margin-bottom:12px;"
             )
 
@@ -1257,7 +1298,7 @@ def preprocessing2_page():
 
             if len(counts) > 1 and counts.min() / total * 100 < 30:
                 imbalance_detected = True
-                ui.label(" Déséquilibre détecté !").style(
+                ui.label("⚠️ Déséquilibre détecté !").style(
                     "color:#01335A; font-weight:600; margin-top:6px;"
                 )
                 ui.label("Recommandation : Stratified split + métriques adaptées (F1-score, recall)").style(
@@ -1310,16 +1351,360 @@ def preprocessing2_page():
             test_slider.on("update:model-value", lambda e: update_ratios())
 
             # Stratified / Random / Time-based
+            ui.label("Stratégie de split").style(
+                "font-weight:600; font-size:16px; color:#2c3e50; margin-top:20px; margin-bottom:8px;"
+            )
+            
             strategy_radio = ui.radio(
                 options=["Stratified (recommandé)", "Random", "Time-based (si date)"],
                 value="Stratified (recommandé)"
-            ).style("margin-top:12px; color:#01335A !important;")
+            ).style("margin-bottom:16px; color:#01335A !important;")
 
-            seed_input = ui.input(label="Random Seed", value=42).style("margin-top:12px; width:150px;")
+            # ✅ AMÉLIORATION : Explications avec meilleur design
+            explanation_container = ui.column().classes("w-full")
+            
+            def update_explanation():
+                explanation_container.clear()
+                with explanation_container:
+                    strategy = strategy_radio.value
+                    
+                    if "Stratified" in strategy:
+                        with ui.card().classes("w-full p-6").style(
+                            "background:white !important; border-radius:16px !important; "
+                            "box-shadow:0 4px 12px rgba(1,51,90,0.08) !important; "
+                            "border-left:5px solid #2196f3 !important;"
+                        ):
+                            # Header
+                            with ui.row().classes("items-center gap-3 mb-4"):
+                                with ui.card().style(
+                                    "background:linear-gradient(135deg, #2196f3, #1976d2) !important; "
+                                    "padding:12px !important; border-radius:12px !important; "
+                                    "box-shadow:0 4px 8px rgba(33,150,243,0.3) !important; "
+                                    "min-width:60px !important; min-height:60px !important; "
+                                    "display:flex !important; align-items:center !important; justify-content:center !important;"
+                                ):
+                                    ui.label("🎯").style("font-size:32px !important;")
+                                
+                                with ui.column().classes("gap-1"):
+                                    ui.label("Stratified Split").style(
+                                        "font-weight:700 !important; font-size:20px !important; color:#01335A !important;"
+                                    )
+                                    ui.label("Méthode recommandée").style(
+                                        "font-size:13px !important; color:#2196f3 !important; font-weight:600 !important;"
+                                    )
+                            
+                            ui.separator().classes("my-3")
+                            
+                            # Principe
+                            with ui.column().classes("gap-2 mb-4"):
+                                ui.label("📌 Principe").style(
+                                    "font-weight:700 !important; font-size:15px !important; color:#01335A !important;"
+                                )
+                                ui.label(
+                                    "Préserve la distribution des classes dans chaque ensemble (train/val/test). "
+                                    "Garantit que chaque sous-ensemble a la même proportion de classes que le dataset original."
+                                ).style(
+                                    "font-size:14px !important; color:#2c3e50 !important; line-height:1.7 !important;"
+                                )
+                            
+                            # Exemple visuel
+                            with ui.card().classes("w-full").style(
+                                "background:#f8f9fa !important; padding:16px !important; "
+                                "border-radius:12px !important; box-shadow:none !important; "
+                                "border:1px solid #e1e8ed !important;"
+                            ):
+                                ui.label("💡 Exemple").style(
+                                    "font-weight:700 !important; font-size:14px !important; "
+                                    "color:#01335A !important; margin-bottom:8px !important;"
+                                )
+                                
+                                with ui.row().classes("items-center gap-3 mb-2"):
+                                    ui.label("Dataset original :").style("font-weight:600 !important; font-size:13px !important; width:140px !important;")
+                                    ui.label("70% classe A, 30% classe B").style(
+                                        "font-size:13px !important; color:#2c3e50 !important; "
+                                        "background:white !important; padding:4px 12px !important; border-radius:6px !important;"
+                                    )
+                                
+                                for dataset in ["Train", "Validation", "Test"]:
+                                    with ui.row().classes("items-center gap-3 mb-2"):
+                                        ui.label(f"{dataset} :").style("font-weight:600 !important; font-size:13px !important; width:140px !important;")
+                                        ui.label("70% classe A, 30% classe B").style(
+                                            "font-size:13px !important; color:#27ae60 !important; font-weight:600 !important; "
+                                            "background:white !important; padding:4px 12px !important; border-radius:6px !important;"
+                                        )
+                            
+                            ui.separator().classes("my-3")
+                            
+                            # Avantages
+                            with ui.column().classes("gap-2 mb-3"):
+                                ui.label("✅ Avantages").style(
+                                    "font-weight:700 !important; font-size:15px !important; color:#27ae60 !important;"
+                                )
+                                for advantage in [
+                                    "Garantit une distribution identique dans tous les ensembles",
+                                    "Essentiel pour les données déséquilibrées",
+                                    "Évite les biais lors de l'évaluation du modèle",
+                                    "Résultats plus fiables et reproductibles"
+                                ]:
+                                    with ui.row().classes("items-start gap-2"):
+                                        ui.label("•").style("color:#27ae60 !important; font-weight:700 !important; font-size:16px !important;")
+                                        ui.label(advantage).style("font-size:13px !important; color:#2c3e50 !important; line-height:1.6 !important;")
+                            
+                            # Cas d'usage
+                            with ui.column().classes("gap-2"):
+                                ui.label("📊 Cas d'usage").style(
+                                    "font-weight:700 !important; font-size:15px !important; color:#01335A !important;"
+                                )
+                                ui.label(
+                                    "Classification avec déséquilibre • Détection de fraude • Diagnostic médical • "
+                                    "Détection de spam • Prédiction de churn"
+                                ).style(
+                                    "font-size:13px !important; color:#636e72 !important; line-height:1.6 !important;"
+                                )
+                    
+                    elif "Random" in strategy:
+                        with ui.card().classes("w-full p-6").style(
+                            "background:white !important; border-radius:16px !important; "
+                            "box-shadow:0 4px 12px rgba(243,156,18,0.08) !important; "
+                            "border-left:5px solid #f39c12 !important;"
+                        ):
+                            # Header
+                            with ui.row().classes("items-center gap-3 mb-4"):
+                                with ui.card().style(
+                                    "background:linear-gradient(135deg, #f39c12, #e67e22) !important; "
+                                    "padding:12px !important; border-radius:12px !important; "
+                                    "box-shadow:0 4px 8px rgba(243,156,18,0.3) !important; "
+                                    "min-width:60px !important; min-height:60px !important; "
+                                    "display:flex !important; align-items:center !important; justify-content:center !important;"
+                                ):
+                                    ui.label("🎲").style("font-size:32px !important;")
+                                
+                                with ui.column().classes("gap-1"):
+                                    ui.label("Random Split").style(
+                                        "font-weight:700 !important; font-size:20px !important; color:#01335A !important;"
+                                    )
+                                    ui.label("Division aléatoire simple").style(
+                                        "font-size:13px !important; color:#f39c12 !important; font-weight:600 !important;"
+                                    )
+                            
+                            ui.separator().classes("my-3")
+                            
+                            # Principe
+                            with ui.column().classes("gap-2 mb-4"):
+                                ui.label("📌 Principe").style(
+                                    "font-weight:700 !important; font-size:15px !important; color:#01335A !important;"
+                                )
+                                ui.label(
+                                    "Division aléatoire du dataset sans tenir compte de la distribution des classes. "
+                                    "Chaque échantillon a une probabilité égale d'être assigné à train/val/test."
+                                ).style(
+                                    "font-size:14px !important; color:#2c3e50 !important; line-height:1.7 !important;"
+                                )
+                            
+                            # Exemple visuel
+                            with ui.card().classes("w-full").style(
+                                "background:#fff9f0 !important; padding:16px !important; "
+                                "border-radius:12px !important; box-shadow:none !important; "
+                                "border:1px solid #ffe8cc !important;"
+                            ):
+                                ui.label("⚠️ Attention au déséquilibre").style(
+                                    "font-weight:700 !important; font-size:14px !important; "
+                                    "color:#f39c12 !important; margin-bottom:8px !important;"
+                                )
+                                
+                                with ui.row().classes("items-center gap-3 mb-2"):
+                                    ui.label("Dataset original :").style("font-weight:600 !important; font-size:13px !important; width:140px !important;")
+                                    ui.label("70% classe A, 30% classe B").style(
+                                        "font-size:13px !important; color:#2c3e50 !important; "
+                                        "background:white !important; padding:4px 12px !important; border-radius:6px !important;"
+                                    )
+                                
+                                for dataset, distrib in [("Train", "68% A, 32% B"), ("Validation", "73% A, 27% B"), ("Test", "71% A, 29% B")]:
+                                    with ui.row().classes("items-center gap-3 mb-2"):
+                                        ui.label(f"{dataset} :").style("font-weight:600 !important; font-size:13px !important; width:140px !important;")
+                                        ui.label(distrib).style(
+                                            "font-size:13px !important; color:#f39c12 !important; font-weight:600 !important; "
+                                            "background:white !important; padding:4px 12px !important; border-radius:6px !important;"
+                                        )
+                                
+                                ui.label("→ Les distributions peuvent varier légèrement").style(
+                                    "font-size:12px !important; color:#856404 !important; margin-top:4px !important; font-style:italic !important;"
+                                )
+                            
+                            ui.separator().classes("my-3")
+                            
+                            # Avantages
+                            with ui.column().classes("gap-2 mb-3"):
+                                ui.label("✅ Avantages").style(
+                                    "font-weight:700 !important; font-size:15px !important; color:#27ae60 !important;"
+                                )
+                                for advantage in [
+                                    "Simple et rapide à implémenter",
+                                    "Bon pour les données parfaitement équilibrées",
+                                    "Pas de contrainte sur la distribution"
+                                ]:
+                                    with ui.row().classes("items-start gap-2"):
+                                        ui.label("•").style("color:#27ae60 !important; font-weight:700 !important; font-size:16px !important;")
+                                        ui.label(advantage).style("font-size:13px !important; color:#2c3e50 !important; line-height:1.6 !important;")
+                            
+                            # Inconvénients
+                            with ui.column().classes("gap-2 mb-3"):
+                                ui.label("❌ Inconvénients").style(
+                                    "font-weight:700 !important; font-size:15px !important; color:#e74c3c !important;"
+                                )
+                                for disadvantage in [
+                                    "Peut créer des ensembles déséquilibrés par hasard",
+                                    "Risque de sous-représenter certaines classes minoritaires",
+                                    "Résultats moins reproductibles avec petits datasets"
+                                ]:
+                                    with ui.row().classes("items-start gap-2"):
+                                        ui.label("•").style("color:#e74c3c !important; font-weight:700 !important; font-size:16px !important;")
+                                        ui.label(disadvantage).style("font-size:13px !important; color:#2c3e50 !important; line-height:1.6 !important;")
+                            
+                            # Cas d'usage
+                            with ui.column().classes("gap-2"):
+                                ui.label("📊 Cas d'usage").style(
+                                    "font-weight:700 !important; font-size:15px !important; color:#01335A !important;"
+                                )
+                                ui.label(
+                                    "Régression • Données parfaitement équilibrées • Datasets très larges (>100k lignes) • "
+                                    "Exploration rapide"
+                                ).style(
+                                    "font-size:13px !important; color:#636e72 !important; line-height:1.6 !important;"
+                                )
+                    
+                    elif "Time-based" in strategy:
+                        with ui.card().classes("w-full p-6").style(
+                            "background:white !important; border-radius:16px !important; "
+                            "box-shadow:0 4px 12px rgba(76,175,80,0.08) !important; "
+                            "border-left:5px solid #4caf50 !important;"
+                        ):
+                            # Header
+                            with ui.row().classes("items-center gap-3 mb-4"):
+                                with ui.card().style(
+                                    "background:linear-gradient(135deg, #4caf50, #388e3c) !important; "
+                                    "padding:12px !important; border-radius:12px !important; "
+                                    "box-shadow:0 4px 8px rgba(76,175,80,0.3) !important; "
+                                    "min-width:60px !important; min-height:60px !important; "
+                                    "display:flex !important; align-items:center !important; justify-content:center !important;"
+                                ):
+                                    ui.label("📅").style("font-size:32px !important;")
+                                
+                                with ui.column().classes("gap-1"):
+                                    ui.label("Time-based Split").style(
+                                        "font-weight:700 !important; font-size:20px !important; color:#01335A !important;"
+                                    )
+                                    ui.label("Division chronologique").style(
+                                        "font-size:13px !important; color:#4caf50 !important; font-weight:600 !important;"
+                                    )
+                            
+                            ui.separator().classes("my-3")
+                            
+                            # Principe
+                            with ui.column().classes("gap-2 mb-4"):
+                                ui.label("📌 Principe").style(
+                                    "font-weight:700 !important; font-size:15px !important; color:#01335A !important;"
+                                )
+                                ui.label(
+                                    "Division chronologique des données : les données passées pour l'entraînement, "
+                                    "les plus récentes pour validation et test. Respecte l'ordre temporel naturel."
+                                ).style(
+                                    "font-size:14px !important; color:#2c3e50 !important; line-height:1.7 !important;"
+                                )
+                            
+                            # Exemple visuel
+                            with ui.card().classes("w-full").style(
+                                "background:#f1f8f4 !important; padding:16px !important; "
+                                "border-radius:12px !important; box-shadow:none !important; "
+                                "border:1px solid #c8e6c9 !important;"
+                            ):
+                                ui.label("📆 Exemple temporel").style(
+                                    "font-weight:700 !important; font-size:14px !important; "
+                                    "color:#4caf50 !important; margin-bottom:8px !important;"
+                                )
+                                
+                                timeline_data = [
+                                    ("Train", "2020-2022", "70%", "#667eea"),
+                                    ("Validation", "2023", "15%", "#f093fb"),
+                                    ("Test", "2024", "15%", "#4facfe")
+                                ]
+                                
+                                for dataset, period, pct, color in timeline_data:
+                                    with ui.row().classes("items-center gap-3 mb-3"):
+                                        with ui.card().style(
+                                            f"background:{color} !important; min-width:100px !important; "
+                                            "padding:8px 12px !important; border-radius:8px !important; "
+                                            "box-shadow:0 2px 8px rgba(0,0,0,0.1) !important;"
+                                        ):
+                                            ui.label(dataset).style(
+                                                "color:white !important; font-weight:700 !important; "
+                                                "font-size:13px !important; text-align:center !important;"
+                                            )
+                                        
+                                        ui.label("→").style("font-size:20px !important; color:#4caf50 !important;")
+                                        
+                                        ui.label(period).style(
+                                            "font-weight:600 !important; font-size:14px !important; "
+                                            "color:#2c3e50 !important; background:white !important; "
+                                            "padding:6px 12px !important; border-radius:8px !important;"
+                                        )
+                                        
+                                        ui.label(f"({pct})").style(
+                                            "font-size:13px !important; color:#636e72 !important; font-family:monospace !important;"
+                                        )
+                            
+                            ui.separator().classes("my-3")
+                            
+                            # Avantages
+                            with ui.column().classes("gap-2 mb-3"):
+                                ui.label("✅ Avantages").style(
+                                    "font-weight:700 !important; font-size:15px !important; color:#27ae60 !important;"
+                                )
+                                for advantage in [
+                                    "Essentiel pour les séries temporelles",
+                                    "Évite le data leakage (fuite d'information du futur vers le passé)",
+                                    "Simule un scénario réel de prédiction",
+                                    "Respecte la dépendance temporelle des données"
+                                ]:
+                                    with ui.row().classes("items-start gap-2"):
+                                        ui.label("•").style("color:#27ae60 !important; font-weight:700 !important; font-size:16px !important;")
+                                        ui.label(advantage).style("font-size:13px !important; color:#2c3e50 !important; line-height:1.6 !important;")
+                            
+                            # Attention
+                            with ui.card().classes("w-full").style(
+                                "background:#fff3e0 !important; padding:12px !important; "
+                                "border-radius:8px !important; box-shadow:none !important; "
+                                "border-left:3px solid #ff9800 !important;"
+                            ):
+                                ui.label("⚠️ Attention").style(
+                                    "font-weight:700 !important; font-size:14px !important; color:#ff9800 !important; margin-bottom:4px !important;"
+                                )
+                                ui.label("Nécessite une colonne date/timestamp • Pas de mélange aléatoire possible").style(
+                                    "font-size:13px !important; color:#e65100 !important; line-height:1.6 !important;"
+                                )
+                            
+                            ui.separator().classes("my-3")
+                            
+                            # Cas d'usage
+                            with ui.column().classes("gap-2"):
+                                ui.label("📊 Cas d'usage").style(
+                                    "font-weight:700 !important; font-size:15px !important; color:#01335A !important;"
+                                )
+                                ui.label(
+                                    "Prévisions de ventes • Prédictions boursières • Analyse de séries temporelles • "
+                                    "Prévisions météo • Détection d'anomalies temporelles"
+                                ).style(
+                                    "font-size:13px !important; color:#636e72 !important; line-height:1.6 !important;"
+                                )
+            
+            strategy_radio.on_value_change(lambda: update_explanation())
+            update_explanation()
+
+            seed_input = ui.input(label="Random Seed", value=42).style("margin-top:16px; width:150px;")
 
         # ---------- 3️⃣ Bouton Split ----------
         # Container résultat
-        result_container = ui.column().classes("w-full max-w-4xl mt-4")
+        result_container = ui.column().classes("w-full max-w-6xl mt-4")
 
         def do_split():
             tr = train_slider.value / 100
@@ -1359,7 +1744,7 @@ def preprocessing2_page():
                 # Titre du résultat avec stats globales
                 with ui.column().classes("w-full items-center gap-2 mb-6"):
                     with ui.row().classes("items-center gap-3"):
-                        ui.label("").style("font-size:32px;")
+                        ui.label("✅").style("font-size:32px;")
                         ui.label("Split effectué avec succès !").style(
                             "font-weight:700; font-size:26px; color:#01335A;"
                         )
@@ -1368,9 +1753,9 @@ def preprocessing2_page():
                     )
                 
                 # Cards des datasets
-                with ui.row().classes("w-full gap-4 justify-center flex-wrap"):
+                with ui.row().classes("w-full gap-4 justify-center flex-wrap mb-8"):
                     for name, y_set, gradient, icon in [
-                        ("Train", y_train, "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", ""),
+                        ("Train", y_train, "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", "🎓"),
                         ("Validation", y_val, "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)", "🔍"),
                         ("Test", y_test, "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)", "✨")
                     ]:
@@ -1416,36 +1801,150 @@ def preprocessing2_page():
                                     # Barre de progression avec gradient
                                     with ui.row().classes("w-full").style("position:relative; height:10px; background:#e8e8e8; border-radius:8px; overflow:hidden;"):
                                         ui.html(f'<div style="position:absolute; left:0; top:0; height:100%; width:{pct}%; background:{gradient}; border-radius:8px; transition:width 0.5s ease;"></div>')
+                
+                # ✅ AJOUT : Vérification de la qualité du split
+                with ui.card().classes("w-full p-6 mb-6").style(
+                    "background:white; border-radius:16px; box-shadow:0 8px 24px rgba(0,0,0,0.12);"
+                ):
+                    ui.label("📊 Vérification de la Distribution").style(
+                        "font-weight:700; font-size:22px; color:#01335A; margin-bottom:20px;"
+                    )
+                    
+                    # Calculer les distributions
+                    original_dist = (counts / total * 100).round(1)
+                    train_dist = (y_train.value_counts() / len(y_train) * 100).round(1)
+                    val_dist = (y_val.value_counts() / len(y_val) * 100).round(1)
+                    test_dist = (y_test.value_counts() / len(y_test) * 100).round(1)
+                    
+                    # Tableau comparatif
+                    comparison_rows = []
+                    max_diff = 0
+                    
+                    for cls in counts.index:
+                        orig_pct = original_dist.get(cls, 0)
+                        train_pct = train_dist.get(cls, 0)
+                        val_pct = val_dist.get(cls, 0)
+                        test_pct = test_dist.get(cls, 0)
+                        
+                        # Calculer la différence max
+                        diffs = [abs(train_pct - orig_pct), abs(val_pct - orig_pct), abs(test_pct - orig_pct)]
+                        max_diff = max(max_diff, max(diffs))
+                        
+                        comparison_rows.append({
+                            "Classe": str(cls),
+                            "Original": f"{orig_pct}%",
+                            "Train": f"{train_pct}%",
+                            "Validation": f"{val_pct}%",
+                            "Test": f"{test_pct}%",
+                            "Max Diff": f"±{max(diffs):.1f}%"
+                        })
+                    
+                    ui.table(
+                        columns=[
+                            {"name": "Classe", "label": "Classe", "field": "Classe", "align": "left"},
+                            {"name": "Original", "label": "Original", "field": "Original", "align": "center"},
+                            {"name": "Train", "label": "Train", "field": "Train", "align": "center"},
+                            {"name": "Validation", "label": "Validation", "field": "Validation", "align": "center"},
+                            {"name": "Test", "label": "Test", "field": "Test", "align": "center"},
+                            {"name": "Max Diff", "label": "Diff Max", "field": "Max Diff", "align": "center"}
+                        ],
+                        rows=comparison_rows,
+                        row_key="Classe"
+                    ).props("flat bordered").style(
+                        "width:100% !important; font-size:13px !important;"
+                    )
+                    
+                    # Évaluation de la qualité du split
+                    ui.separator().classes("my-4")
+                    
+                    if max_diff < 2:
+                        quality_color = "#27ae60"
+                        quality_icon = "✅"
+                        quality_text = "Excellent"
+                        quality_msg = "Le split est parfaitement équilibré ! Les distributions sont quasi-identiques."
+                    elif max_diff < 5:
+                        quality_color = "#2196f3"
+                        quality_icon = "✔️"
+                        quality_text = "Très bon"
+                        quality_msg = "Le split est bien équilibré. Différences mineures acceptables."
+                    elif max_diff < 10:
+                        quality_color = "#f39c12"
+                        quality_icon = "⚠️"
+                        quality_text = "Acceptable"
+                        quality_msg = "Le split présente quelques différences. Surveiller les performances."
+                    else:
+                        quality_color = "#e74c3c"
+                        quality_icon = "❌"
+                        quality_text = "À améliorer"
+                        quality_msg = "Le split est déséquilibré. Considérez l'utilisation du Stratified Split."
+                    
+                    with ui.card().classes("w-full").style(
+                        f"background:{quality_color}15 !important; padding:20px !important; "
+                        f"border-radius:12px !important; border-left:4px solid {quality_color} !important; "
+                        "box-shadow:none !important;"
+                    ):
+                        with ui.row().classes("items-center gap-3"):
+                            ui.label(quality_icon).style("font-size:32px;")
+                            with ui.column().classes("gap-2"):
+                                ui.label(f"Qualité du split : {quality_text}").style(
+                                    f"font-weight:700 !important; font-size:18px !important; color:{quality_color} !important;"
+                                )
+                                ui.label(quality_msg).style(
+                                    "font-size:14px !important; color:#2c3e50 !important; line-height:1.6 !important;"
+                                )
+                                ui.label(f"Différence maximale : ±{max_diff:.1f}%").style(
+                                    "font-size:13px !important; color:#636e72 !important; font-family:monospace !important; margin-top:4px !important;"
+                                )
+                    
+                    # Recommandations
+                    with ui.expansion("💡 Comment interpréter ces résultats ?", icon="help").classes("w-full mt-4"):
+                        ui.markdown("""
+<div style="color:#2c3e50; font-size:14px; line-height:1.8; padding:12px;">
 
-            ui.notify(" Split effectué avec succès !", color="positive")
-            
-            # Affichage post-split - Information simple
-            with result_container:
-                ui.label(f" Split effectué ! Train: {len(X_train)}, Val: {len(X_val)}, Test: {len(X_test)}").style(
-                    "font-weight:600; color:#01335A; margin-top:20px; font-size:16px; text-align:center;"
-                )
+**Différence maximale :** Écart maximum entre la distribution originale et un ensemble
 
-                ui.button(
-                    "➡ Analyse Univariée",
-                    on_click=lambda: ui.run_javascript("window.location.href='/supervised/univariate_analysis'"),
-                ).style(
-                    "background:#09538C !important; color:white; font-weight:600; border-radius:8px; height:40px; width:280px; margin-top:12px;"
-                )
+**Seuils de qualité :**
+- **< 2%** : Excellent - Split parfaitement stratifié
+- **2-5%** : Très bon - Variations naturelles acceptables
+- **5-10%** : Acceptable - Peut affecter légèrement les performances
+- **> 10%** : Problématique - Risque de biais dans l'évaluation
 
-        ui.button("Effectue r le split", on_click=do_split).style(
+**Que faire si le split est déséquilibré ?**
+1. Utiliser le **Stratified Split** (recommandé)
+2. Augmenter la taille du dataset si possible
+3. Vérifier le random seed (essayer plusieurs valeurs)
+
+</div>
+                        """)
+
+                # Bouton de navigation
+                with ui.row().classes("w-full justify-center mt-6"):
+                    ui.button(
+                        " Analyse Univariée",
+                        on_click=lambda: ui.run_javascript("window.location.href='/supervised/univariate_analysis'"),
+                    ).style(
+                        "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white !important; "
+                        "font-weight:600 !important; border-radius:12px !important; height:50px !important; "
+                        "width:280px !important; font-size:16px !important; "
+                        "box-shadow:0 6px 20px rgba(1,51,90,0.3) !important; transition:all 0.3s ease !important;"
+                    ).props('icon-right="arrow_forward"')
+
+            ui.notify("✅ Split effectué avec succès !", color="positive")
+
+        ui.button("Effectuer le split", on_click=do_split).style(
             "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white; font-weight:600; "
             "border-radius:12px; height:50px; width:280px; margin-top:20px; font-size:16px; "
             "box-shadow:0 6px 20px rgba(1,51,90,0.3); transition:all 0.3s ease;"
         ).classes("hover:shadow-xl")
         
         ui.button(
-                "➡ Analyse Univariée",
+                " Analyse Univariée",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/univariate_analysis'"),
         ).style(
-                "background:#09538C !important; color:white; font-weight:600; border-radius:8px; height:40px; width:280px; margin-top:12px;"
+                "background:#01335A !important; color:white; font-weight:600; border-radius:8px; height:40px; width:280px; margin-top:12px;"
         )
-        
 
+        
 @ui.page('/supervised/univariate_analysis')
 def univariate_analysis_page():
 
@@ -1458,7 +1957,7 @@ def univariate_analysis_page():
             )
             ui.button(
                 " Retour au Preprocessing", 
-                on_click=lambda: ui.run_javascript("window.location.href='/supervised/preprocessing2'")
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/split'")
             ).style(
                 "margin-top:20px !important; background:#01335A !important; color:white !important; "
                 "font-weight:600 !important; padding:12px 32px !important; border-radius:8px !important;"
@@ -1900,7 +2399,7 @@ def univariate_analysis_page():
         with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
             ui.button(
                 "← Précédent",
-                on_click=lambda: ui.run_javascript("window.location.href='/supervised/preprocessing2'")
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/split'")
             ).style(
                 "background:white !important; color:#01335A !important; font-weight:500 !important; "
                 "border-radius:8px !important; height:48px !important; min-width:140px !important; "
@@ -2704,7 +3203,7 @@ def outliers_analysis_page():
         with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
             ui.button(
                 "← Précédent",
-                on_click=lambda: ui.run_javascript("window.location.href='/supervised/preprocessing2'")
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/split'")
             ).style(
                 "background:#01335A !important; color:white; font-weight:500; border-radius:8px; "
                 "height:48px; min-width:140px; font-size:14px; text-transform:none; box-shadow:0 2px 8px rgba(0,0,0,0.08);"
@@ -2750,7 +3249,7 @@ def multivariate_analysis_page():
                 "font-size:18px !important; color:#c0392b !important; font-weight:600 !important;"
             )
             ui.button(
-                "⬅ Retour à l'Upload",
+                " Retour à l'Upload",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")
             ).style(
                 "background:#01335A !important; color:white !important; padding:12px 32px !important; "
@@ -3523,7 +4022,7 @@ def multivariate_analysis_page():
         with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
             ui.button(
                 "← Précédent",
-                on_click=lambda: ui.run_javascript("window.location.href='/supervised/preprocessing2'")
+                on_click=lambda: ui.run_javascript("window.location.href='/supervised/split'")
             ).style(
                 "background:white !important; color:#01335A !important; font-weight:500 !important; "
                 "border-radius:8px !important; height:48px !important; min-width:140px !important; "
@@ -3569,7 +4068,7 @@ def missing_values_page():
                 "font-size:18px !important; color:#c0392b !important; font-weight:600 !important;"
             )
             ui.button(
-                "⬅ Retour à l'Upload",
+                " Retour à l'Upload",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")
             ).style(
                 "background:#01335A !important; color:white !important; padding:12px 32px !important; "
@@ -4840,7 +5339,7 @@ def encoding_page():
                 "font-size:18px !important; color:#c0392b !important; font-weight:600 !important;"
             )
             ui.button(
-                "⬅ Retour à l'Upload",
+                " Retour à l'Upload",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")
             ).style(
                 "background:#01335A !important; color:white !important; padding:12px 32px !important; "
@@ -8021,7 +8520,7 @@ def recap_validation_page():
     def open_step_selector():
         """Ouvre un dialog pour sélectionner une étape à modifier"""
         steps = [
-            ("3.2 - Split Train/Val/Test", "/supervised/preprocessing2"),
+            ("3.2 - Split Train/Val/Test", "/supervised/split"),
             ("3.3 - Analyse Univariée", "/supervised/univariate_analysis"),
             ("3.4 - Détection Anomalies", "/supervised/outliers_analysis"),
             ("3.5 - Analyse Multivariée", "/supervised/multivariate_analysis"),
@@ -11092,7 +11591,7 @@ def unsupervised_upload_page():
                 """
             )
 
-            btn_next = ui.button("Continuer ➡")
+            btn_next = ui.button("Continuer ")
             btn_next.disable()
             btn_next.style(
                 """
@@ -11194,7 +11693,7 @@ def unsupervised_upload_page():
                 )
 
                 ui.button(
-                    "⬅ Retour",
+                    " Retour",
                     on_click=lambda: ui.run_javascript("window.location.href='/'")
                 ).style(
                     """
@@ -11227,7 +11726,7 @@ def unsupervised_preprocessing_page():
             ui.label("❌ Aucun dataset chargé. Veuillez importer un fichier avant de continuer.").style(
                 "font-size:18px !important; color:#c0392b !important; font-weight:600 !important;"
             )
-            ui.button("⬅ Retour à l'Upload",
+            ui.button(" Retour à l'Upload",
                       on_click=lambda: ui.run_javascript("window.location.href='/upload'")).style(
                 "margin-top:20px !important; background:#01335A !important; color:white !important; font-weight:600 !important;"
             )
@@ -11327,12 +11826,12 @@ def unsupervised_preprocessing_page():
 
         # ---------- NAV ----------
         with ui.row().classes("justify-between w-full max-w-6xl mt-8"):
-            ui.button("⬅ Retour",
+            ui.button(" Retour",
                       on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/upload'")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
             )
 
-            ui.button("➡ Étape suivante",
+            ui.button(" Étape suivante",
                       on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/user_decisions'")).style(
                 "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
             )
@@ -11362,7 +11861,7 @@ def unsupervised_user_decisions_page():
             ui.label("❌ Aucun dataset chargé ou informations de colonnes manquantes.").style(
                 "font-size:18px; color:#c0392b; font-weight:600;"
             )
-            ui.button("⬅ Retour à l'Upload",
+            ui.button(" Retour à l'Upload",
                       on_click=lambda: ui.run_javascript("window.location.href='/upload'")).style(
                 "margin-top:20px; background:#01335A; color:white; font-weight:600;"
             )
@@ -11449,11 +11948,11 @@ def unsupervised_user_decisions_page():
 
         # ---------- BOUTONS (SÉPARÉS GAUCHE/DROITE) ----------
         with ui.row().style("display:flex; justify-content:space-between; margin-top:20px; width:100%; max-width:1200px;"):
-           ui.button("⬅ Retour",
+           ui.button(" Retour",
                       on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/preprocessing'")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
             )
-           ui.button("➡ Étape suivante", on_click=lambda: save_and_go()).style(
+           ui.button(" Étape suivante", on_click=lambda: save_and_go()).style(
                 "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
             )
 
