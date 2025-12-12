@@ -11521,6 +11521,7 @@ def results_page():
 def unsupervised_upload_page():
 
 
+
     # Conteneur principal
     with ui.column() as main_col:
         main_col.style(
@@ -11553,7 +11554,7 @@ def unsupervised_upload_page():
             card.style(
                 """
                 padding: 32px !important;
-                width: 580px !important;
+                width: 800px !important;
                 border-radius: 12px !important;
                 box-shadow: 0 4px 20px rgba(0,0,0,0.12) !important;
                 display: flex !important;
@@ -11591,23 +11592,6 @@ def unsupervised_upload_page():
                 """
             )
 
-            btn_next = ui.button("Continuer ")
-            btn_next.disable()
-            btn_next.style(
-                """
-                width: 100% !important;
-                height: 48px !important;
-                margin-top: 14px !important;
-                border-radius: 8px !important;
-                background: linear-gradient(135deg, #01335A, #09538C) !important;
-                color: white !important;
-                font-weight: 600 !important;
-                font-size: 15px !important;
-                border: none !important;
-                cursor: pointer !important;
-                """
-            )
-
             table_placeholder = ui.column().style(
                 """
                 width: 100% !important;
@@ -11627,7 +11611,7 @@ def unsupervised_upload_page():
                     status_label.text = f"Fichier chargé : {df.shape[0]} lignes × {df.shape[1]} colonnes"
                     status_label.style(
                         """
-                        color: #27ae60 !important;
+                        color: #01335A !important;
                         font-size: 14px !important;
                         margin-bottom: 18px !important;
                         font-weight: 600 !important;
@@ -11689,6 +11673,23 @@ def unsupervised_upload_page():
                     display: flex !important;
                     gap: 16px !important;
                     margin-top: 12px !important;
+                    """
+                )
+
+                btn_next = ui.button("Continuer ")
+                btn_next.disable()
+                btn_next.style(
+                    """
+                    width: 100% !important;
+                    height: 48px !important;
+                    margin-top: 14px !important;
+                    border-radius: 8px !important;
+                    background: linear-gradient(0deg,rgba(1, 51, 90, 1) 0%, rgba(15, 50, 102, 1) 100%) !important;
+                    color: white !important;
+                    font-weight: 600 !important;
+                    font-size: 15px !important;
+                    border: none !important;
+                    cursor: pointer !important;
                     """
                 )
 
