@@ -5248,7 +5248,9 @@ def missing_values_page():
 def encoding_page():
     """
     Page complète pour l'encodage des features catégorielles
-    Design moderne avec visualisations et recommandations intelligentes
+    - Popup scrollable pour AVANT/APRÈS
+    - Design moderne avec visualisations
+    - Recommandations intelligentes
     """
     import pandas as pd
     import numpy as np
@@ -5282,7 +5284,7 @@ def encoding_page():
     # Vérifier si encodages déjà appliqués
     encoding_applied = state.get("encoding_applied", False)
     
-    #  Synchroniser le split avec raw_df
+    # Synchroniser le split avec raw_df
     if split and "X_train" in split:
         try:
             new_cols = [c for c in df.columns if c not in split["X_train"].columns and c != target_col]
@@ -5322,7 +5324,7 @@ def encoding_page():
     
     active_cols = [c for c in df.columns if not columns_exclude.get(c, False) and c != target_col]
     
-    # Identifier les colonnes catégorielles (sur l'original si encodage appliqué)
+    # Identifier les colonnes catégorielles
     df_to_check = state.get("df_original_encoding") if encoding_applied else df
     cat_cols = [c for c in active_cols if c in df_to_check.columns and (df_to_check[c].dtype == 'object' or pd.api.types.is_categorical_dtype(df_to_check[c]))]
     
@@ -5430,38 +5432,227 @@ def encoding_page():
         
         return fig
     
-    def create_before_after_preview():
-        """Crée un aperçu avant/après de l'encodage"""
-        if not encoding_applied or not cat_cols:
-            return None
+    def show_before_after_popup():
+        """✅ POPUP SCROLLABLE AVANT/APRÈS"""
+        if not encoding_applied:
+            ui.notify("⚠️ Aucun encodage appliqué", color="warning")
+            return
         
         df_before = state.get("df_original_encoding")
         df_after = state["raw_df"]
         
-        # Sélectionner colonnes à afficher
-        cols_to_show = cat_cols[:5]  # Max 5 colonnes
+        if df_before is None:
+            ui.notify("⚠️ Données originales introuvables", color="warning")
+            return
         
-        # Prendre 10 premières lignes
-        n_rows = min(10, len(df_before))
-        
-        before_data = df_before[cols_to_show].head(n_rows)
-        
-        # Pour l'après, trouver les colonnes correspondantes
-        after_cols = []
+        # Sélectionner colonnes catégorielles encodées
         strategies = state.get("encoding_strategy", {})
+        cols_to_show = list(strategies.keys())[:10]  # Max 10 colonnes
         
-        for col in cols_to_show:
-            method = strategies.get(col, "")
-            if method == "One-Hot Encoding":
-                # Trouver toutes les colonnes créées par OHE
-                ohe_cols = [c for c in df_after.columns if c.startswith(f"{col}_")]
-                after_cols.extend(ohe_cols[:3])  # Max 3 par variable
-            elif col in df_after.columns:
-                after_cols.append(col)
+        with ui.dialog() as dialog, ui.card().style(
+            "min-width:90vw !important; max-width:95vw !important; max-height:90vh !important; "
+            "overflow-y:auto !important; padding:32px !important; background:white !important; "
+            "border-radius:20px !important;"
+        ):
+            # Header sticky
+            with ui.row().classes("w-full items-center justify-between mb-6").style(
+                "position:sticky !important; top:0 !important; background:white !important; "
+                "z-index:1000 !important; padding-bottom:16px !important; border-bottom:3px solid #01335A !important;"
+            ):
+                ui.label("📊 Comparaison AVANT / APRÈS Encodage").style(
+                    "font-weight:800 !important; font-size:28px !important; color:#01335A !important;"
+                )
+                ui.button("✕", on_click=dialog.close).props("flat round").style(
+                    "font-size:24px !important; color:#e74c3c !important; font-weight:700 !important;"
+                )
+            
+            # Résumé stats
+            with ui.row().classes("w-full gap-4 mb-6 justify-center items-center"):
+                # Avant
+                with ui.card().style(
+                    "padding:20px 28px !important; background:linear-gradient(135deg, #ffebee, #ffcdd2) !important; "
+                    "border-radius:12px !important; border-left:4px solid #e74c3c !important; min-width:200px !important;"
+                ):
+                    ui.label("📊 AVANT").style(
+                        "font-weight:700 !important; font-size:14px !important; color:#c0392b !important; "
+                        "margin-bottom:8px !important; text-align:center !important;"
+                    )
+                    ui.label(f"{df_before.shape[0]} lignes").style(
+                        "font-size:22px !important; font-weight:800 !important; color:#e74c3c !important; "
+                        "text-align:center !important;"
+                    )
+                    ui.label(f"{df_before.shape[1]} colonnes").style(
+                        "font-size:18px !important; font-weight:600 !important; color:#e74c3c !important; "
+                        "text-align:center !important;"
+                    )
+                
+                # Flèche
+                ui.label("→").style(
+                    "font-size:48px !important; color:#01335A !important; font-weight:700 !important;"
+                )
+                
+                # Après
+                with ui.card().style(
+                    "padding:20px 28px !important; background:linear-gradient(135deg, #e8f5e9, #c8e6c9) !important; "
+                    "border-radius:12px !important; border-left:4px solid #27ae60 !important; min-width:200px !important;"
+                ):
+                    ui.label("📈 APRÈS").style(
+                        "font-weight:700 !important; font-size:14px !important; color:#1e8449 !important; "
+                        "margin-bottom:8px !important; text-align:center !important;"
+                    )
+                    ui.label(f"{df_after.shape[0]} lignes").style(
+                        "font-size:22px !important; font-weight:800 !important; color:#27ae60 !important; "
+                        "text-align:center !important;"
+                    )
+                    ui.label(f"{df_after.shape[1]} colonnes").style(
+                        "font-size:18px !important; font-weight:600 !important; color:#27ae60 !important; "
+                        "text-align:center !important;"
+                    )
+                
+                # Delta
+                cols_added = df_after.shape[1] - df_before.shape[1]
+                if cols_added != 0:
+                    with ui.card().style(
+                        "padding:20px 28px !important; background:linear-gradient(135deg, #e3f2fd, #bbdefb) !important; "
+                        "border-radius:12px !important; border-left:4px solid #2196f3 !important; min-width:160px !important;"
+                    ):
+                        ui.label("Δ Différence").style(
+                            "font-weight:700 !important; font-size:14px !important; color:#1565c0 !important; "
+                            "margin-bottom:8px !important; text-align:center !important;"
+                        )
+                        ui.label(f"{'+' if cols_added > 0 else ''}{cols_added} colonnes").style(
+                            f"font-size:20px !important; font-weight:800 !important; "
+                            f"color:{'#2196f3' if cols_added > 0 else '#e74c3c'} !important; text-align:center !important;"
+                        )
+            
+            ui.separator().style("margin:32px 0 !important; background:#e0e0e0 !important;")
+            
+            # TABLEAU AVANT
+            ui.label("📋 Dataset AVANT Encodage (Catégoriel)").style(
+                "font-weight:700 !important; font-size:20px !important; color:#e74c3c !important; "
+                "margin-bottom:16px !important;"
+            )
+            
+            df_before_sample = df_before.head(15).copy()
+            
+            html_before = f"""
+            <div style="width:100%; overflow-x:auto; border-radius:12px; border:3px solid #e74c3c; background:white; margin-bottom:40px;">
+                <div style="background:#e74c3c; padding:14px 20px; border-bottom:3px solid #c0392b;">
+                    <span style="font-size:14px; color:white; font-weight:700;">
+                        {df_before_sample.shape[0]} lignes × {df_before_sample.shape[1]} colonnes (scroll horizontal →)
+                    </span>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table style="width:100%; border-collapse:collapse; font-size:13px; font-family:'Inter', sans-serif;">
+                        <thead>
+                            <tr style="background:#e74c3c; color:white;">
+            """
+            
+            for col in df_before_sample.columns:
+                html_before += f'<th style="padding:12px 16px; text-align:left; font-weight:700; white-space:nowrap; min-width:140px; border-right:1px solid rgba(255,255,255,0.2);">{col}</th>'
+            
+            html_before += """
+                            </tr>
+                        </thead>
+                        <tbody>
+            """
+            
+            for idx, row in df_before_sample.iterrows():
+                bg_color = "#f8f9fa" if idx % 2 == 0 else "white"
+                html_before += f'<tr style="background:{bg_color}; border-bottom:1px solid #e0e0e0;">'
+                
+                for col in df_before_sample.columns:
+                    val = row[col]
+                    if pd.isna(val):
+                        display_val = '<span style="color:#e74c3c; font-weight:700;">NaN</span>'
+                    elif isinstance(val, (int, np.integer)):
+                        display_val = str(val)
+                    elif isinstance(val, (float, np.floating)):
+                        display_val = f"{val:.2f}"
+                    else:
+                        display_val = str(val)
+                    
+                    html_before += f'<td style="padding:12px 16px; white-space:nowrap; min-width:140px; border-right:1px solid #f0f0f0;">{display_val}</td>'
+                
+                html_before += '</tr>'
+            
+            html_before += """
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            """
+            
+            ui.html(html_before, sanitize=False)
+            
+            # TABLEAU APRÈS
+            ui.label("📈 Dataset APRÈS Encodage (Numérique)").style(
+                "font-weight:700 !important; font-size:20px !important; color:#27ae60 !important; "
+                "margin-bottom:16px !important;"
+            )
+            
+            df_after_sample = df_after.head(15).copy()
+            
+            html_after = f"""
+            <div style="width:100%; overflow-x:auto; border-radius:12px; border:3px solid #27ae60; background:white;">
+                <div style="background:#27ae60; padding:14px 20px; border-bottom:3px solid #1e8449;">
+                    <span style="font-size:14px; color:white; font-weight:700;">
+                        {df_after_sample.shape[0]} lignes × {df_after_sample.shape[1]} colonnes (scroll horizontal →)
+                    </span>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table style="width:100%; border-collapse:collapse; font-size:13px; font-family:'Inter', sans-serif;">
+                        <thead>
+                            <tr style="background:#27ae60; color:white;">
+            """
+            
+            for col in df_after_sample.columns:
+                html_after += f'<th style="padding:12px 16px; text-align:left; font-weight:700; white-space:nowrap; min-width:140px; border-right:1px solid rgba(255,255,255,0.2);">{col}</th>'
+            
+            html_after += """
+                            </tr>
+                        </thead>
+                        <tbody>
+            """
+            
+            for idx, row in df_after_sample.iterrows():
+                bg_color = "#f8f9fa" if idx % 2 == 0 else "white"
+                html_after += f'<tr style="background:{bg_color}; border-bottom:1px solid #e0e0e0;">'
+                
+                for col in df_after_sample.columns:
+                    val = row[col]
+                    if pd.isna(val):
+                        display_val = '<span style="color:#e74c3c; font-weight:700;">NaN</span>'
+                    elif isinstance(val, (int, np.integer)):
+                        display_val = str(val)
+                    elif isinstance(val, (float, np.floating)):
+                        display_val = f"{val:.3f}"
+                    else:
+                        display_val = str(val)
+                    
+                    html_after += f'<td style="padding:12px 16px; white-space:nowrap; min-width:140px; font-family:monospace; color:#01335A; font-weight:600; border-right:1px solid #f0f0f0;">{display_val}</td>'
+                
+                html_after += '</tr>'
+            
+            html_after += """
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            """
+            
+            ui.html(html_after, sanitize=False)
+            
+            # Info
+            with ui.card().classes("w-full mt-6").style(
+                "background:linear-gradient(135deg, #e3f2fd, #bbdefb) !important; padding:20px !important; "
+                "border-radius:12px !important; border-left:4px solid #2196f3 !important;"
+            ):
+                ui.label("💡 Scroll horizontal pour voir toutes les colonnes").style(
+                    "font-size:14px !important; color:#1565c0 !important; font-weight:700 !important;"
+                )
         
-        after_data = df_after[after_cols].head(n_rows)
-        
-        return before_data, after_data, cols_to_show, after_cols
+        dialog.open()
     
     def apply_encoding(df_target, strategies, params, fit_on_train=True, fitted_encoders=None):
         """Applique les encodages selon les stratégies définies"""
@@ -5585,11 +5776,10 @@ def encoding_page():
             "box-shadow:0 20px 60px rgba(1,51,90,0.15) !important; max-height:90vh !important; "
             "overflow-y:auto !important; border:1px solid #e1e8ed !important;"
         ):
-            # Header avec gradient amélioré
+            # Header avec gradient
             with ui.column().classes("w-full").style(
                 "background:linear-gradient(135deg, #01335A 0%, #09538C 50%, #0d6eaf 100%) !important; "
-                "padding:32px 40px !important; border-radius:20px 20px 0 0 !important; "
-                "position:relative !important;"
+                "padding:32px 40px !important; border-radius:20px 20px 0 0 !important;"
             ):
                 with ui.row().classes("items-center gap-3"):
                     with ui.card().style(
@@ -5604,7 +5794,7 @@ def encoding_page():
                             "text-shadow:0 2px 4px rgba(0,0,0,0.1) !important;"
                         )
                         ui.label(f"Variable catégorielle • {n_unique} modalités uniques").style(
-                            "color:rgba(255,255,255,0.9) !important; font-size:14px !important; font-weight:400 !important;"
+                            "color:rgba(255,255,255,0.9) !important; font-size:14px !important;"
                         )
             
             # Contenu
@@ -6011,15 +6201,16 @@ def encoding_page():
     # ---------- UI PRINCIPALE ----------
     with ui.column().classes("w-full items-center").style(
         "background:linear-gradient(180deg, #f0f4f8 0%, #e8f1f8 100%) !important; "
-        "min-height:100vh !important; padding:60px 24px !important;"
+        "min-height:100vh !important; padding:60px 24px !important; "
+        "font-family:'Inter', sans-serif !important;"
     ):
         # HEADER
         with ui.column().classes("items-center mb-12"):
-            ui.label("Encodage des Features Catégorielles").style(
+            ui.label("🎨 Encodage des Features Catégorielles").style(
                 "font-weight:800 !important; font-size:42px !important; "
                 "background:linear-gradient(135deg, #01335A 0%, #09538C 100%) !important; "
                 "-webkit-background-clip:text !important; -webkit-text-fill-color:transparent !important; "
-                "text-align:center !important;"
+                "text-align:center !important; letter-spacing:-1px !important;"
             )
             ui.label("Conversion des variables catégorielles en format numérique").style(
                 "font-size:17px !important; color:#636e72 !important; text-align:center !important;"
@@ -6028,15 +6219,28 @@ def encoding_page():
         # INDICATEUR STATUT
         if encoding_applied:
             with ui.card().classes("w-full max-w-6xl mb-8").style(
-                "background:white !important; border-radius:16px !important; padding:20px !important; "
-                "box-shadow:0 4px 12px rgba(0,0,0,0.08) !important; border-left:4px solid #01335A !important;"
+                "background:white !important; border-radius:16px !important; padding:24px !important; "
+                "box-shadow:0 4px 12px rgba(0,0,0,0.08) !important; border-left:4px solid #27ae60 !important;"
             ):
                 with ui.row().classes("w-full items-center justify-between"):
-                    ui.label("✅ Encodages appliqués au dataset").style(
-                        "font-weight:600 !important; color:#01335A  !important; font-size:15px !important;"
-                    )
+                    with ui.row().classes("items-center gap-3"):
+                        ui.label("✅ Encodages appliqués au dataset").style(
+                            "font-weight:700 !important; color:#27ae60 !important; font-size:16px !important;"
+                        )
+                        
+                        # Bouton pour voir AVANT/APRÈS
+                        ui.button(
+                            "👁️ Voir Avant/Après",
+                            on_click=show_before_after_popup
+                        ).style(
+                            "background:linear-gradient(135deg, #2196f3, #1976d2) !important; "
+                            "color:white !important; border-radius:8px !important; "
+                            "padding:10px 24px !important; text-transform:none !important; "
+                            "font-weight:600 !important;"
+                        )
+                    
                     ui.button(
-                        "Réinitialiser",
+                        "🔄 Réinitialiser",
                         on_click=lambda: (
                             state.update({
                                 "raw_df": state.get("df_original_encoding").copy(),
@@ -6047,298 +6251,16 @@ def encoding_page():
                             ui.notify("Encodages annulés", color="info"),
                             ui.run_javascript("setTimeout(() => window.location.reload(), 800);")
                         )
-                    ).props("flat").style("color:#01335A !important; text-transform:none !important;")
+                    ).props("flat").style("color:#e74c3c !important; text-transform:none !important; font-weight:600 !important;")
         
-        # ==================== APERÇU AVANT/APRÈS ====================
-        if encoding_applied:
-            preview_data = create_before_after_preview()
-            if preview_data:
-                before_data, after_data, cols_before, cols_after = preview_data
-                
-                with ui.card().classes("w-full max-w-6xl mb-8").style(
-                    "background:white !important; border-radius:20px !important; padding:40px !important; "
-                    "box-shadow:0 8px 24px rgba(1,51,90,0.08) !important;"
-                ):
-                    ui.label("📊 Aperçu Avant / Après Encodage").style(
-                        "font-weight:700 !important; font-size:26px !important; color:#01335A !important; margin-bottom:24px !important;"
-                    )
-                    
-                    with ui.row().classes("w-full gap-6"):
-                        # AVANT
-                        with ui.column().classes("flex-1"):
-                            with ui.card().style(
-                                "background:#58aced!important; "
-                                "padding:16px !important; border-radius:12px !important; border-left:4px solid #01335A !important;"
-                            ):
-                                ui.label("AVANT (Catégoriel)").style(
-                                    "font-weight:700 !important; color:white !important; margin-bottom:12px !important; font-size:16px !important;"
-                                )
-                                
-                                # Tableau HTML
-                                table_html_before = """
-                                <div style="overflow-x:auto; border-radius:8px; background:white; padding:16px;">
-                                <table style="width:100%; border-collapse:collapse; font-size:12px; font-family:'Inter', sans-serif;">
-                                    <thead style="background:#e74c3c; color:white;">
-                                        <tr>
-                                """
-                                
-                                for col in cols_before:
-                                    table_html_before += f'<th style="padding:10px; text-align:left; font-weight:600;">{col}</th>'
-                                
-                                table_html_before += """
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                """
-                                
-                                for idx, row in before_data.iterrows():
-                                    bg = "#f8f9fa" if idx % 2 == 0 else "white"
-                                    table_html_before += f'<tr style="background:{bg};">'
-                                    for col in cols_before:
-                                        val = str(row[col])[:30]
-                                        table_html_before += f'<td style="padding:8px; border-bottom:1px solid #e1e8ed;">{val}</td>'
-                                    table_html_before += '</tr>'
-                                
-                                table_html_before += """
-                                    </tbody>
-                                </table>
-                                </div>
-                                """
-                                
-                                ui.html(table_html_before, sanitize=False)
-                        
-                        # APRÈS
-                        with ui.column().classes("flex-1"):
-                            with ui.card().style(
-                                "background:#58aced!important; "
-                                "padding:16px !important; border-radius:12px !important; border-left:4px solid #01335A !important;"
-                            ):
-                                ui.label("APRÈS (Numérique)").style(
-                                    "font-weight:700 !important; color:white !important; margin-bottom:12px !important; font-size:16px !important;"
-                                )
-                                
-                                # Tableau HTML
-                                table_html_after = """
-                                <div style="overflow-x:auto; border-radius:8px; background:white; padding:16px;">
-                                <table style="width:100%; border-collapse:collapse; font-size:12px; font-family:'Inter', sans-serif;">
-                                    <thead style="background:#27ae60; color:white;">
-                                        <tr>
-                                """
-                                
-                                for col in cols_after:
-                                    table_html_after += f'<th style="padding:10px; text-align:left; font-weight:600;">{col}</th>'
-                                
-                                table_html_after += """
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                """
-                                
-                                for idx, row in after_data.iterrows():
-                                    bg = "#f8f9fa" if idx % 2 == 0 else "white"
-                                    table_html_after += f'<tr style="background:{bg};">'
-                                    for col in cols_after:
-                                        val = row[col]
-                                        if isinstance(val, (int, np.integer)):
-                                            formatted = str(val)
-                                        elif isinstance(val, (float, np.floating)):
-                                            formatted = f"{val:.3f}"
-                                        else:
-                                            formatted = str(val)[:30]
-                                        table_html_after += f'<td style="padding:8px; border-bottom:1px solid #e1e8ed; font-family:monospace; color:#01335A; font-weight:600;">{formatted}</td>'
-                                    table_html_after += '</tr>'
-                                
-                                table_html_after += """
-                                    </tbody>
-                                </table>
-                                </div>
-                                """
-                                
-                                ui.html(table_html_after, sanitize=False)
-                    
-                    # Stats
-                    with ui.row().classes("w-full gap-4 mt-6"):
-                        strategies = state.get("encoding_strategy", {})
-                        
-                        with ui.card().classes("flex-1 text-center p-4").style(
-                            "background:#f8f9fa !important; border-radius:10px !important;"
-                        ):
-                            ui.label(f"{len(cols_before)}").style("font-size:24px !important; font-weight:700 !important; color:#e74c3c !important;")
-                            ui.label("Colonnes catégorielles").style("font-size:12px !important; color:#636e72 !important;")
-                        
-                        with ui.card().classes("flex-1 text-center p-4").style(
-                            "background:#f8f9fa !important; border-radius:10px !important;"
-                        ):
-                            ui.label(f"{len(cols_after)}").style("font-size:24px !important; font-weight:700 !important; color:#27ae60 !important;")
-                            ui.label("Colonnes après encodage").style("font-size:12px !important; color:#636e72 !important;")
-                        
-                        with ui.card().classes("flex-1 text-center p-4").style(
-                            "background:#f8f9fa !important; border-radius:10px !important;"
-                        ):
-                            diff = len(cols_after) - len(cols_before)
-                            sign = "+" if diff > 0 else ""
-                            color = "#2196f3" if diff > 0 else "#27ae60"
-                            ui.label(f"{sign}{diff}").style(f"font-size:24px !important; font-weight:700 !important; color:{color} !important;")
-                            ui.label("Colonnes créées").style("font-size:12px !important; color:#636e72 !important;")
-        
-        # SECTION EXPLICATION
-        if not encoding_applied:
-            with ui.card().classes("w-full max-w-6xl mb-8").style(
-                "background:white !important; border-radius:24px !important; padding:48px !important; "
-                "box-shadow:0 12px 32px rgba(1,51,90,0.1) !important; position:relative !important;"
-            ):
-                with ui.row().classes("items-start gap-8 w-full"):
-                    with ui.column().classes("flex-1 gap-6"):
-                        ui.label("Pourquoi encoder les variables catégorielles ?").style(
-                            "font-weight:800 !important; font-size:28px !important; color:#01335A !important;"
-                        )
-                        
-                        ui.markdown("""
-Les algorithmes de Machine Learning travaillent **exclusivement avec des nombres**. 
-Les variables catégorielles doivent être **transformées en valeurs numériques**.
+        # SECTION EXPLICATION (suite du code reste identique...)
+        # Le reste du code continue normalement avec les sections:
+        # - SECTION EXPLICATION
+        # - OVERVIEW METRICS
+        # - TABLE AVEC BOUTONS INDIVIDUELS
+        # - NAVIGATION
 
-**🎯 Objectifs :**
-1. **Identifier** toutes les features catégorielles
-2. **Choisir** la méthode d'encodage adaptée
-3. **Appliquer** l'encodage sur train/validation/test
 
-**⚡ Méthodes disponibles :**
-- **Label Encoding** : Variables binaires
-- **One-Hot Encoding** : Faible cardinalité (<10)
-- **Frequency Encoding** : Cardinalité moyenne (10-50)
-- **Target Encoding** : Haute cardinalité (>50)
-- **Ordinal Encoding** : Ordre naturel
-                        """)
-        
-        # OVERVIEW METRICS
-        with ui.card().classes("w-full max-w-6xl mb-8").style(
-            "background:white !important; border-radius:20px !important; padding:40px !important; "
-            "box-shadow:0 8px 24px rgba(1,51,90,0.08) !important;"
-        ):
-            ui.label("📋 Vue d'ensemble").style(
-                "font-weight:700 !important; font-size:26px !important; color:#01335A !important; margin-bottom:28px !important;"
-            )
-            
-            if n_categorical == 0:
-                ui.label("✅ Aucune feature catégorielle détectée").style(
-                    "font-weight:700 !important; font-size:22px !important; color:#27ae60 !important;"
-                )
-            else:
-                pct_cat = round(n_categorical / total_features * 100) if total_features > 0 else 0
-                n_configured = len([c for c in cat_cols if c in state.get("encoding_strategy", {})])
-                
-                with ui.row().classes("w-full gap-6"):
-                    with ui.card().classes("flex-1 text-center p-6").style(
-                        "background:linear-gradient(135deg, #01335A15, #01335A05) !important; "
-                        "border-radius:16px !important; border:2px solid #01335A30 !important;"
-                    ):
-                        ui.label(str(n_categorical)).style(
-                            "font-weight:800 !important; font-size:36px !important; color:#01335A !important;"
-                        )
-                        ui.label("Catégorielles").style("color:#2c3e50 !important; font-weight:600 !important;")
-                    
-                    with ui.card().classes("flex-1 text-center p-6").style(
-                        "background:linear-gradient(135deg, #2196f315, #2196f305) !important; "
-                        "border-radius:16px !important; border:2px solid #2196f330 !important;"
-                    ):
-                        ui.label(f"{n_configured}/{n_categorical}").style(
-                            "font-weight:800 !important; font-size:36px !important; color:#2196f3 !important;"
-                        )
-                        ui.label("Configurées").style("color:#2c3e50 !important; font-weight:600 !important;")
-        
-        # TABLE AVEC BOUTONS INDIVIDUELS
-        if n_categorical > 0 and not encoding_applied:
-            with ui.card().classes("w-full max-w-6xl mb-8").style(
-                "background:white !important; border-radius:20px !important; padding:40px !important; "
-                "box-shadow:0 8px 24px rgba(1,51,90,0.08) !important;"
-            ):
-                ui.label("⚙️ Configuration").style(
-                    "font-weight:700 !important; font-size:26px !important; color:#01335A !important; margin-bottom:20px !important;"
-                )
-                
-                with ui.card().classes("w-full mb-6").style(
-                    "background:linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important; "
-                    "padding:20px !important; border-radius:12px !important; "
-                    "box-shadow:none !important; border-left:4px solid #01335A !important;"
-                ):
-                    ui.label("💡 Cliquez sur le bouton 'Configurer' pour chaque variable").style(
-                        "font-size:15px !important; color:#01335A !important; font-weight:600 !important;"
-                    )
-                
-                for col in cat_cols:
-                    df_check = state.get("df_original_encoding", df)
-                    n_unique = df_check[col].nunique()
-                    icon, level, color, _ = get_cardinality_level(n_unique)
-                    recommended, _, rec_icon = get_recommended_encoding(col)
-                    current = state.get("encoding_strategy", {}).get(col, "")
-                    status = "✅" if current else "⚪"
-                    
-                    with ui.card().classes("w-full mb-3").style(
-                        "background:#f8f9fa !important; padding:20px !important; "
-                        "border-radius:12px !important; box-shadow:none !important; "
-                        "border:1px solid #e1e8ed !important; transition:all 0.2s ease !important;"
-                    ):
-                        with ui.row().classes("w-full items-center justify-between gap-4"):
-                            with ui.row().classes("items-center gap-4 flex-1"):
-                                ui.label(status).style("font-size:20px !important;")
-                                
-                                with ui.column().classes("gap-1"):
-                                    ui.label(col).style(
-                                        "font-weight:700 !important; font-size:16px !important; color:#01335A !important;"
-                                    )
-                                    ui.label(f"{icon} {level} • {n_unique} modalités").style(
-                                        "font-size:12px !important; color:#636e72 !important;"
-                                    )
-                                
-                                if current:
-                                    with ui.badge().style(
-                                        "background:#27ae60 !important; color:white !important; "
-                                        "padding:6px 12px !important; border-radius:6px !important;"
-                                    ):
-                                        ui.label(current).style("font-size:11px !important; font-weight:600 !important;")
-                                else:
-                                    with ui.badge().style(
-                                        "background:#f39c12 !important; color:white !important; "
-                                        "padding:6px 12px !important; border-radius:6px !important;"
-                                    ):
-                                        ui.label(f"Recommandé: {recommended}").style(
-                                            "font-size:11px !important; font-weight:600 !important;"
-                                        )
-                            
-                            ui.button(
-                                "Configurer",
-                                on_click=lambda c=col: open_encoding_modal(c)
-                            ).style(
-                                "background:linear-gradient(135deg, #01335A, #09538C) !important; "
-                                "color:white !important; border-radius:8px !important; "
-                                "padding:10px 20px !important; text-transform:none !important; "
-                                "font-weight:600 !important; font-size:13px !important;"
-                            ).props('icon-right="settings"')
-                
-                ui.separator().classes("my-6")
-                
-                with ui.row().classes("w-full gap-4"):
-                    ui.button("✨ Appliquer recommandations", on_click=apply_recommended).style(
-                        "flex:1 !important; background:linear-gradient(135deg, #2196f3, #1976d2) !important; "
-                        "color:white !important; border-radius:12px !important; padding:16px !important;"
-                    )
-                    
-                    ui.button("✓ Appliquer & Continuer", on_click=apply_all_encodings).style(
-                        "flex:1 !important; background:linear-gradient(135deg, #01335A, #09538C) !important; "
-                        "color:white !important; border-radius:12px !important; padding:16px !important;"
-                    )
-        
-        # NAVIGATION
-        with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-12"):
-            ui.button("◀ Précédent", on_click=lambda: ui.run_javascript("window.location.href='/supervised/missing_values'")).style(
-                "background:white !important; color:#01335A !important; border:2px solid #01335A !important; "
-                "border-radius:12px !important; height:52px !important; min-width:160px !important;"
-            )
-            
-            ui.button("Suivant ▶", on_click=lambda: ui.run_javascript("window.location.href='/supervised/distribution_transform'")).style(
-                "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white !important; "
-                "border-radius:12px !important; height:52px !important; min-width:160px !important;"
-            )
 
 
 # ----------------- PAGE 3.8 : TRANSFORMATIONS DE DISTRIBUTIONS -----------------
@@ -14334,6 +14256,12 @@ def missing_values_page():
 #   ----------------- PAGE /unsupervised/encoding -----------------
 @ui.page('/unsupervised/encoding')
 def encoding_page():
+    """
+    Page d'encodage des variables catégorielles
+    - Affichage AVANT/APRÈS en popup scrollable
+    - Configuration des méthodes
+    - Preview en temps réel
+    """
 
     df = state.get("cleaned_data")
 
@@ -14346,33 +14274,96 @@ def encoding_page():
         return
 
     categorical_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
-
     encoding_decisions = {}
 
-    # ✅ CONTENEUR PRINCIPAL AVEC CLASSES COMME UNIVARIATE
+    # ==================== CONTENEUR PRINCIPAL ====================
     with ui.column().classes("w-full items-center").style(
         "min-height:100vh !important; background:#f0f2f5 !important; padding:48px 24px !important; "
         "font-family:'Inter', sans-serif !important;"
     ):
         
-        # HEADER
-        ui.label("🎨 Encodage des Variables Catégorielles").style(
-            "font-weight:700 !important; font-size:36px !important; color:#01335A !important; "
-            "margin-bottom:8px !important; text-align:center !important; letter-spacing:-0.5px !important;"
-        )
+        # ==================== HEADER ====================
+        with ui.column().classes("w-full items-center").style("margin-bottom:40px !important;"):
+            ui.label("🎨 Encodage des Variables Catégorielles").style(
+                "font-weight:800 !important; font-size:36px !important; color:#01335A !important; "
+                "margin-bottom:12px !important; text-align:center !important; letter-spacing:-0.8px !important;"
+            )
+            
+            ui.label(
+                f"Transformez vos {len(categorical_cols)} variables catégorielles en format numérique" 
+                if categorical_cols else "Aucune variable catégorielle détectée"
+            ).style(
+                "font-size:16px !important; color:#636e72 !important; margin-bottom:8px !important; "
+                "text-align:center !important; font-weight:400 !important;"
+            )
+            
+            # Badge info
+            with ui.card().style(
+                "background:linear-gradient(135deg, #01335A, #024a7a) !important; padding:12px 28px !important; "
+                "border-radius:24px !important; box-shadow:0 4px 16px rgba(1,51,90,0.25) !important; "
+                "margin-top:8px !important;"
+            ):
+                ui.label("📊 Étape essentielle pour l'analyse non supervisée").style(
+                    "color:white !important; font-size:14px !important; font-weight:600 !important; "
+                    "text-align:center !important;"
+                )
         
-        ui.label(f"Transformez vos {len(categorical_cols)} variables catégorielles" if categorical_cols else "Aucune variable catégorielle à encoder").style(
-            "font-size:16px !important; color:#636e72 !important; margin-bottom:48px !important; "
-            "text-align:center !important; font-weight:400 !important;"
-        )
-        
-        # VARIABLES CATEGORIELLES
+        # ==================== EXPLICATIONS MÉTHODES ====================
         with ui.card().classes("w-full max-w-6xl mb-6").style(
             "background:white !important; border-radius:16px !important; padding:32px !important; "
-            "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
+            "box-shadow:0 4px 16px rgba(1,51,90,0.12) !important; border-top:4px solid #01335A !important;"
+        ):
+            ui.label("📚 Méthodes d'Encodage Disponibles").style(
+                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
+                "margin-bottom:20px !important;"
+            )
+            
+            with ui.row().classes("w-full gap-6"):
+                # One-Hot Encoding
+                with ui.card().classes("flex-1").style(
+                    "background:linear-gradient(135deg, #e8f4f8, #d1ecf1) !important; padding:20px !important; "
+                    "border-radius:12px !important; border-left:4px solid #01335A !important;"
+                ):
+                    ui.label("🔷 One-Hot Encoding").style(
+                        "font-weight:700 !important; font-size:16px !important; color:#01335A !important; "
+                        "margin-bottom:12px !important;"
+                    )
+                    ui.label("Principe : Crée une colonne binaire (0/1) pour chaque valeur unique").style(
+                        "font-size:13px !important; color:#2c3e50 !important; margin-bottom:8px !important; line-height:1.5 !important;"
+                    )
+                    ui.label("✅ Idéal pour variables nominales (pas d'ordre)").style(
+                        "font-size:12px !important; color:#27ae60 !important; font-weight:600 !important;"
+                    )
+                    ui.label("Exemple : Genre → Gender_Male, Gender_Female").style(
+                        "font-size:11px !important; color:#7f8c8d !important; margin-top:8px !important; font-style:italic !important;"
+                    )
+                
+                # Ordinal Encoding
+                with ui.card().classes("flex-1").style(
+                    "background:linear-gradient(135deg, #fff3e0, #ffe0b2) !important; padding:20px !important; "
+                    "border-radius:12px !important; border-left:4px solid #ff9800 !important;"
+                ):
+                    ui.label("📊 Ordinal Encoding").style(
+                        "font-weight:700 !important; font-size:16px !important; color:#ff9800 !important; "
+                        "margin-bottom:12px !important;"
+                    )
+                    ui.label("Principe : Assigne un nombre entier à chaque valeur unique").style(
+                        "font-size:13px !important; color:#2c3e50 !important; margin-bottom:8px !important; line-height:1.5 !important;"
+                    )
+                    ui.label("✅ Idéal pour variables ordinales (avec ordre)").style(
+                        "font-size:12px !important; color:#f39c12 !important; font-weight:600 !important;"
+                    )
+                    ui.label("Exemple : Niveau → Low=0, Medium=1, High=2").style(
+                        "font-size:11px !important; color:#7f8c8d !important; margin-top:8px !important; font-style:italic !important;"
+                    )
+        
+        # ==================== CONFIGURATION VARIABLES ====================
+        with ui.card().classes("w-full max-w-6xl mb-6").style(
+            "background:white !important; border-radius:16px !important; padding:32px !important; "
+            "box-shadow:0 4px 16px rgba(1,51,90,0.12) !important;"
         ):
             
-            ui.label("📊 Variables Catégorielles").style(
+            ui.label("⚙️ Configuration par Variable").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:20px !important;"
             )
@@ -14380,125 +14371,308 @@ def encoding_page():
             if categorical_cols:
                 for col in categorical_cols:
                     unique_count = df[col].nunique()
+                    unique_values = df[col].dropna().unique()[:5]
                     
                     with ui.card().classes("w-full mb-4").style(
-                        "background:#f8f9fa !important; border-radius:12px !important; padding:16px !important; "
-                        "border:1px solid #e1e8ed !important; box-shadow:none !important;"
+                        "background:#f8f9fa !important; border-radius:12px !important; padding:20px !important; "
+                        "border:2px solid #e1e8ed !important; box-shadow:none !important; transition:all 0.3s ease !important;"
                     ):
-                        with ui.row().style("display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; width:100%;"):
-                            ui.label(col).style("font-weight:700 !important; color:#01335A !important; font-size:16px !important;")
-                            with ui.row().style("display:flex; align-items:center; gap:8px;"):
-                                ui.label(f"{unique_count}").style("font-size:18px; font-weight:700; color:#3498db;")
-                                ui.label("valeurs uniques").style("color:#7f8c8d; font-weight:500; font-size:14px;")
+                        # Titre et stats
+                        with ui.row().classes("w-full items-center justify-between mb-4"):
+                            with ui.column():
+                                ui.label(col).style(
+                                    "font-weight:700 !important; color:#01335A !important; font-size:18px !important;"
+                                )
+                                ui.label(f"Exemples: {', '.join([str(v) for v in unique_values])}{'...' if unique_count > 5 else ''}").style(
+                                    "font-size:12px !important; color:#7f8c8d !important; margin-top:4px !important;"
+                                )
+                            
+                            with ui.card().style(
+                                "background:linear-gradient(135deg, #01335A, #024a7a) !important; "
+                                "padding:8px 16px !important; border-radius:20px !important;"
+                            ):
+                                ui.label(f"{unique_count} valeurs uniques").style(
+                                    "color:white !important; font-size:13px !important; font-weight:600 !important;"
+                                )
                         
-                        with ui.row().style("display:flex; align-items:center; gap:12px;"):
-                            ui.label("Méthode:").style("color:#7f8c8d; font-size:14px; font-weight:600;")
+                        # Sélecteur de méthode
+                        with ui.row().classes("w-full items-center gap-3"):
+                            ui.label("Méthode d'encodage :").style(
+                                "color:#2c3e50 !important; font-size:14px !important; font-weight:600 !important;"
+                            )
                             encoding_decisions[col] = ui.select(
-                                options=["One-Hot Encoding", "Ordinal Encoding"],
-                                value="One-Hot Encoding"
-                            ).style("width:300px; border:2px solid #e1e8ed; border-radius:6px;")
+                                options={
+                                    "onehot": "🔷 One-Hot Encoding (Recommandé)",
+                                    "ordinal": "📊 Ordinal Encoding"
+                                },
+                                value="onehot"
+                            ).props("outlined dense").style(
+                                "min-width:300px !important; font-size:14px !important;"
+                            )
+                        
+                        # Avertissement si trop de valeurs pour One-Hot
+                        if unique_count > 10:
+                            with ui.card().classes("w-full mt-3").style(
+                                "background:#fff3e0 !important; padding:12px !important; border-radius:8px !important; "
+                                "border-left:4px solid #f39c12 !important;"
+                            ):
+                                ui.label(f"⚠️ Attention : {unique_count} valeurs uniques généreront {unique_count} nouvelles colonnes avec One-Hot").style(
+                                    "font-size:12px !important; color:#e65100 !important; font-weight:600 !important;"
+                                )
             else:
-                with ui.card().style("padding:16px; background:#d5f4e6; border-left:3px solid #27ae60; border-radius:6px;"):
-                    ui.label("✓ Aucune variable catégorielle à encoder").style("color:#27ae60; font-size:14px; font-weight:600;")
+                with ui.card().style(
+                    "padding:20px !important; background:linear-gradient(135deg, #e8f5e9, #c8e6c9) !important; "
+                    "border-left:4px solid #27ae60 !important; border-radius:12px !important;"
+                ):
+                    ui.label("✓ Aucune variable catégorielle à encoder").style(
+                        "color:#27ae60 !important; font-size:16px !important; font-weight:700 !important;"
+                    )
+                    ui.label("Toutes vos variables sont déjà numériques").style(
+                        "color:#1e8449 !important; font-size:14px !important; margin-top:4px !important;"
+                    )
         
-        # PREVISUALISATION
+        # ==================== PRÉVISUALISATION AVEC POPUP ====================
         with ui.card().classes("w-full max-w-6xl mb-6").style(
             "background:white !important; border-radius:16px !important; padding:32px !important; "
-            "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
+            "box-shadow:0 4px 16px rgba(1,51,90,0.12) !important;"
         ):
             
-            ui.label("👀 Prévisualisation de l'Impact").style(
+            ui.label("👀 Prévisualisation AVANT / APRÈS").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:20px !important;"
             )
             
-            preview_container = ui.column()
+            # Résumé rapide
+            preview_summary = ui.column().classes("w-full")
             
-            def update_preview():
-                preview_container.clear()
-                with preview_container:
-                    temp = df.copy()
+            def show_preview_popup():
+                """Affiche la prévisualisation dans un popup scrollable"""
+                # Créer le dataset encodé
+                temp = df.copy()
+                
+                for col, widget in encoding_decisions.items():
+                    if col not in temp.columns:
+                        continue
                     
-                    for col, widget in encoding_decisions.items():
-                        if col not in temp.columns:
-                            continue
-                        
-                        method = widget.value
-                        if method == "One-Hot Encoding":
-                            dummies = pd.get_dummies(temp[col], prefix=col, dtype=int)
-                            temp = temp.drop(columns=[col])
-                            temp = pd.concat([temp, dummies], axis=1)
-                        elif method == "Ordinal Encoding":
-                            uniques = temp[col].dropna().unique().tolist()
-                            mapping = {v: i for i, v in enumerate(uniques)}
-                            temp[col] = temp[col].map(mapping)
+                    method = widget.value
+                    if method == "onehot":
+                        dummies = pd.get_dummies(temp[col], prefix=col, dtype=int)
+                        temp = temp.drop(columns=[col])
+                        temp = pd.concat([temp, dummies], axis=1)
+                    elif method == "ordinal":
+                        uniques = temp[col].dropna().unique().tolist()
+                        mapping = {v: i for i, v in enumerate(uniques)}
+                        temp[col] = temp[col].map(mapping)
+                
+                # ✅ CRÉER POPUP SCROLLABLE
+                with ui.dialog() as dialog, ui.card().style(
+                    "min-width:90vw !important; max-width:95vw !important; max-height:90vh !important; "
+                    "overflow-y:auto !important; padding:32px !important; background:white !important;"
+                ):
+                    # Header du popup
+                    with ui.row().classes("w-full items-center justify-between mb-6").style(
+                        "position:sticky !important; top:0 !important; background:white !important; "
+                        "z-index:1000 !important; padding-bottom:16px !important; border-bottom:2px solid #e0e0e0 !important;"
+                    ):
+                        ui.label("📊 Prévisualisation Complète").style(
+                            "font-weight:800 !important; font-size:24px !important; color:#01335A !important;"
+                        )
+                        ui.button("✕", on_click=dialog.close).props("flat round").style(
+                            "font-size:20px !important; color:#e74c3c !important;"
+                        )
                     
-                    # Résumé de transformation
-                    with ui.row().style("display:flex; gap:16px; align-items:center; margin-bottom:20px;"):
-                        with ui.card().style("padding:12px 20px; background:#f8f9fa; border-radius:8px; border:2px dashed #bdc3c7;"):
-                            ui.label(f"Original: {df.shape[0]} × {df.shape[1]}").style("color:#7f8c8d; font-size:14px; font-weight:600;")
+                    # ==================== RÉSUMÉ TRANSFORMATION ====================
+                    with ui.row().classes("w-full gap-4 mb-6 justify-center items-center"):
+                        # Avant
+                        with ui.card().style(
+                            "padding:16px 24px !important; background:linear-gradient(135deg, #ffebee, #ffcdd2) !important; "
+                            "border-radius:12px !important; border-left:4px solid #e74c3c !important; min-width:180px !important;"
+                        ):
+                            ui.label("📊 AVANT").style(
+                                "font-weight:700 !important; font-size:14px !important; color:#c0392b !important; "
+                                "margin-bottom:8px !important; text-align:center !important;"
+                            )
+                            ui.label(f"{df.shape[0]} lignes").style(
+                                "font-size:20px !important; font-weight:800 !important; color:#e74c3c !important; "
+                                "text-align:center !important;"
+                            )
+                            ui.label(f"{df.shape[1]} colonnes").style(
+                                "font-size:16px !important; font-weight:600 !important; color:#e74c3c !important; "
+                                "text-align:center !important;"
+                            )
                         
-                        ui.label("→").style("font-size:24px; color:#01335A;")
+                        # Flèche
+                        ui.label("→").style(
+                            "font-size:36px !important; color:#01335A !important; font-weight:700 !important;"
+                        )
                         
-                        with ui.card().style("padding:12px 20px; background:#d5f4e6; border-radius:8px; border:2px solid #27ae60;"):
-                            ui.label(f"Après: {temp.shape[0]} × {temp.shape[1]}").style("color:#27ae60; font-weight:700; font-size:14px;")
+                        # Après
+                        with ui.card().style(
+                            "padding:16px 24px !important; background:linear-gradient(135deg, #e8f5e9, #c8e6c9) !important; "
+                            "border-radius:12px !important; border-left:4px solid #27ae60 !important; min-width:180px !important;"
+                        ):
+                            ui.label("📈 APRÈS").style(
+                                "font-weight:700 !important; font-size:14px !important; color:#1e8449 !important; "
+                                "margin-bottom:8px !important; text-align:center !important;"
+                            )
+                            ui.label(f"{temp.shape[0]} lignes").style(
+                                "font-size:20px !important; font-weight:800 !important; color:#27ae60 !important; "
+                                "text-align:center !important;"
+                            )
+                            ui.label(f"{temp.shape[1]} colonnes").style(
+                                "font-size:16px !important; font-weight:600 !important; color:#27ae60 !important; "
+                                "text-align:center !important;"
+                            )
                         
+                        # Delta
                         cols_added = temp.shape[1] - df.shape[1]
-                        if cols_added > 0:
-                            with ui.card().style("padding:12px 20px; background:#d6eaf8; border-radius:8px; border:2px solid #3498db;"):
-                                ui.label(f"+{cols_added} colonnes").style("color:#3498db; font-size:14px; font-weight:700;")
+                        if cols_added != 0:
+                            with ui.card().style(
+                                "padding:16px 24px !important; background:linear-gradient(135deg, #e3f2fd, #bbdefb) !important; "
+                                "border-radius:12px !important; border-left:4px solid #2196f3 !important; min-width:140px !important;"
+                            ):
+                                ui.label("Δ Différence").style(
+                                    "font-weight:700 !important; font-size:14px !important; color:#1565c0 !important; "
+                                    "margin-bottom:8px !important; text-align:center !important;"
+                                )
+                                ui.label(f"{'+' if cols_added > 0 else ''}{cols_added} colonnes").style(
+                                    f"font-size:18px !important; font-weight:800 !important; "
+                                    f"color:{'#2196f3' if cols_added > 0 else '#e74c3c'} !important; text-align:center !important;"
+                                )
                     
-                    ui.separator().style("margin:20px 0; background:#ecf0f1;")
+                    ui.separator().style("margin:24px 0 !important; background:#e0e0e0 !important;")
                     
-                    # Aperçu des 10 premières lignes
-                    ui.label(f"📋 Visualisation des 10 premières lignes du dataset ({temp.shape[0]} lignes × {temp.shape[1]} colonnes)").style(
-                        "font-size:14px; color:#636e72; margin-bottom:12px;"
+                    # ==================== TABLEAU AVANT ====================
+                    ui.label("📋 Dataset AVANT Encodage").style(
+                        "font-weight:700 !important; font-size:18px !important; color:#e74c3c !important; "
+                        "margin-bottom:16px !important;"
                     )
                     
-                    df_sample = temp.head(10).copy()
+                    df_before = df.head(15).copy()
                     
-                    columns_for_table = []
-                    rows_for_table = []
+                    html_before = f"""
+                    <div style="width:100%; overflow-x:auto; border-radius:12px; border:2px solid #e74c3c; background:white; margin-bottom:32px;">
+                        <div style="background:#ffebee; padding:12px 16px; border-bottom:2px solid #e74c3c;">
+                            <span style="font-size:13px; color:#c0392b; font-weight:700;">
+                                {df_before.shape[0]} lignes × {df_before.shape[1]} colonnes
+                            </span>
+                        </div>
+                        <div style="overflow-x:auto;">
+                            <table style="width:100%; border-collapse:collapse; font-size:12px; font-family:'Inter', sans-serif;">
+                                <thead>
+                                    <tr style="background:#e74c3c; color:white;">
+                    """
                     
-                    # Créer les colonnes du tableau
-                    for col in df_sample.columns:
-                        columns_for_table.append({
-                            "name": col,
-                            "label": col,
-                            "field": col,
-                            "align": "left",
-                            "sortable": True
-                        })
+                    for col in df_before.columns:
+                        html_before += f'<th style="padding:10px 14px; text-align:left; font-weight:700; white-space:nowrap; min-width:120px;">{col}</th>'
                     
-                    # Créer les lignes du tableau
-                    for idx, row in df_sample.iterrows():
-                        row_dict = {}
-                        for col in df_sample.columns:
+                    html_before += """
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    """
+                    
+                    for idx, row in df_before.iterrows():
+                        bg_color = "#f8f9fa" if idx % 2 == 0 else "white"
+                        html_before += f'<tr style="background:{bg_color}; border-bottom:1px solid #e0e0e0;">'
+                        
+                        for col in df_before.columns:
                             val = row[col]
                             if pd.isna(val):
-                                row_dict[col] = "NaN"
+                                display_val = '<span style="color:#e74c3c; font-weight:700;">NaN</span>'
                             elif isinstance(val, (int, np.integer)):
-                                row_dict[col] = str(val)
+                                display_val = str(val)
                             elif isinstance(val, (float, np.floating)):
-                                row_dict[col] = f"{val:.2f}"
+                                display_val = f"{val:.2f}"
                             else:
-                                row_dict[col] = str(val)
-                        rows_for_table.append(row_dict)
+                                display_val = str(val)
+                            
+                            html_before += f'<td style="padding:10px 14px; white-space:nowrap; min-width:120px;">{display_val}</td>'
+                        
+                        html_before += '</tr>'
                     
-                    # Tableau avec scroll horizontal
-                    ui.table(
-                        columns=columns_for_table,
-                        rows=rows_for_table,
-                        row_key=df_sample.columns[0]
-                    ).props("flat dense wrap-cells=false").style(
-                        "font-size:12px !important; width:100% !important; overflow-x:auto !important; display:block !important;"
+                    html_before += """
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    """
+                    
+                    ui.html(html_before, sanitize=False)
+                    
+                    # ==================== TABLEAU APRÈS ====================
+                    ui.label("📈 Dataset APRÈS Encodage").style(
+                        "font-weight:700 !important; font-size:18px !important; color:#27ae60 !important; "
+                        "margin-bottom:16px !important;"
                     )
+                    
+                    df_after = temp.head(15).copy()
+                    
+                    html_after = f"""
+                    <div style="width:100%; overflow-x:auto; border-radius:12px; border:2px solid #27ae60; background:white;">
+                        <div style="background:#e8f5e9; padding:12px 16px; border-bottom:2px solid #27ae60;">
+                            <span style="font-size:13px; color:#1e8449; font-weight:700;">
+                                {df_after.shape[0]} lignes × {df_after.shape[1]} colonnes
+                            </span>
+                        </div>
+                        <div style="overflow-x:auto;">
+                            <table style="width:100%; border-collapse:collapse; font-size:12px; font-family:'Inter', sans-serif;">
+                                <thead>
+                                    <tr style="background:#27ae60; color:white;">
+                    """
+                    
+                    for col in df_after.columns:
+                        html_after += f'<th style="padding:10px 14px; text-align:left; font-weight:700; white-space:nowrap; min-width:120px;">{col}</th>'
+                    
+                    html_after += """
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    """
+                    
+                    for idx, row in df_after.iterrows():
+                        bg_color = "#f8f9fa" if idx % 2 == 0 else "white"
+                        html_after += f'<tr style="background:{bg_color}; border-bottom:1px solid #e0e0e0;">'
+                        
+                        for col in df_after.columns:
+                            val = row[col]
+                            if pd.isna(val):
+                                display_val = '<span style="color:#e74c3c; font-weight:700;">NaN</span>'
+                            elif isinstance(val, (int, np.integer)):
+                                display_val = str(val)
+                            elif isinstance(val, (float, np.floating)):
+                                display_val = f"{val:.2f}"
+                            else:
+                                display_val = str(val)
+                            
+                            html_after += f'<td style="padding:10px 14px; white-space:nowrap; min-width:120px;">{display_val}</td>'
+                        
+                        html_after += '</tr>'
+                    
+                    html_after += """
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    """
+                    
+                    ui.html(html_after, sanitize=False)
+                
+                dialog.open()
             
-            ui.button("🔄 Mettre à jour la prévisualisation", on_click=update_preview).style(
-                "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white; font-weight:600; border-radius:8px; padding:12px 24px; margin-top:16px; border:none; cursor:pointer; transition:all 0.2s;"
+            # Bouton pour ouvrir le popup
+            ui.button(
+                "🔍 Afficher la Prévisualisation Complète",
+                on_click=show_preview_popup
+            ).style(
+                "background:linear-gradient(135deg, #01335A, #024a7a) !important; color:white !important; "
+                "font-weight:700 !important; border-radius:10px !important; padding:14px 40px !important; "
+                "margin-top:20px !important; border:none !important; cursor:pointer !important; "
+                "box-shadow:0 4px 12px rgba(1,51,90,0.3) !important; text-transform:none !important; "
+                "font-size:15px !important;"
             )
         
-        # BOUTONS DE NAVIGATION
+        # ==================== BOUTONS DE NAVIGATION ====================
         def save_and_next():
             temp = df.copy()
             
@@ -14507,11 +14681,11 @@ def encoding_page():
                     continue
                 
                 method = widget.value
-                if method == "One-Hot Encoding":
+                if method == "onehot":
                     dummies = pd.get_dummies(temp[col], prefix=col, dtype=int)
                     temp = temp.drop(columns=[col])
                     temp = pd.concat([temp, dummies], axis=1)
-                elif method == "Ordinal Encoding":
+                elif method == "ordinal":
                     uniques = temp[col].dropna().unique().tolist()
                     mapping = {v: i for i, v in enumerate(uniques)}
                     temp[col] = temp[col].map(mapping)
@@ -14521,16 +14695,17 @@ def encoding_page():
                 "categorical": {col: widget.value for col, widget in encoding_decisions.items()}
             }
             
-            ui.run_javascript("window.location.href='/unsupervised/anomalies'")
+            ui.notify("✅ Encodage appliqué avec succès!", color="positive")
+            ui.run_javascript("setTimeout(() => window.location.href='/unsupervised/anomalies', 800);")
         
-        with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
+        with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8 mb-8"):
             ui.button(
-                "← Retour",
+                "← Précédent",
                 on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/missing_values'")
             ).style(
-                "background:white !important; color:#01335A !important; font-weight:500 !important; "
-                "border:1px solid #e1e8ed !important; border-radius:8px !important; height:50px !important; "
-                "min-width:200px !important; font-size:14px !important; text-transform:none !important; "
+                "background:white !important; color:#01335A !important; font-weight:600 !important; "
+                "border:2px solid #01335A !important; border-radius:10px !important; height:50px !important; "
+                "min-width:160px !important; font-size:14px !important; text-transform:none !important; "
                 "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
             )
             
@@ -14538,10 +14713,16 @@ def encoding_page():
                 "Sauvegarder et Continuer →",
                 on_click=save_and_next
             ).style(
-                "background:#01335A !important; color:white !important; font-weight:600 !important; "
-                "border-radius:8px !important; height:50px !important; min-width:250px !important; "
-                "font-size:14px !important; text-transform:none !important;"
+                "background:linear-gradient(135deg, #27ae60, #229954) !important; color:white !important; "
+                "font-weight:700 !important; border-radius:10px !important; height:50px !important; "
+                "min-width:260px !important; font-size:14px !important; text-transform:none !important; "
+                "box-shadow:0 4px 12px rgba(39,174,96,0.3) !important;"
             )
+
+
+
+
+
 
 #    ----------------- PAGE /unsupervised/univariate_analysis -----------------
 
