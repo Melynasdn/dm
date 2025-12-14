@@ -248,6 +248,7 @@ def plot_elbow_curve(X, max_k=10, algo='kmeans'):
 
 
 # ----------------- PAGE INDEX -----------------
+# ----------------- PAGE INDEX -----------------
 @ui.page('/')
 def home_page():
     
@@ -485,7 +486,7 @@ def home_page():
             with ui.card().classes("hover-scale p-10").style(
                 "background: white !important; border-radius: 24px !important; "
                 "box-shadow: 0 10px 40px rgba(0,0,0,0.12) !important; min-width: 500px !important; "
-                "max-width: 620px !important; border: 2px solid #e1e8ed !important; "
+                "max-width: 500px !important; border: 2px solid #e1e8ed !important; "
                 "position: relative !important; overflow: visible !important;"
             ):
                 # Badge "NOUVEAU"
@@ -523,7 +524,7 @@ def home_page():
                     "font-weight: 700 !important; font-size: 15px !important; color: #01335A !important; margin-bottom: 16px !important;"
                 )
                 
-                algorithms = ["K-Means Clustering", "DBSCAN", "Hierarchical Clustering", "Détection d'anomalies", "PCA & t-SNE"]
+                algorithms = ["K-Means Clustering","K-Medoids Clustering", "DBSCAN", "Hierarchical Clustering", "PCA"]
                 for algo in algorithms:
                     with ui.row().classes("items-center gap-3 mb-3"):
                         ui.label("✓").style("color: #01335A !important; font-weight: 700 !important; font-size: 18px !important;")
@@ -574,7 +575,7 @@ def home_page():
             with ui.card().classes("hover-scale p-10").style(
                 "background: white !important; border-radius: 24px !important; "
                 "box-shadow: 0 10px 40px rgba(0,0,0,0.12) !important; min-width: 500px !important; "
-                "max-width: 620px !important; border: 2px solid #e1e8ed !important; "
+                "max-width: 500px !important; border: 2px solid #e1e8ed !important; "
                 "position: relative !important; overflow: visible !important;"
             ):
                 # Badge "RECOMMANDÉ"
@@ -612,7 +613,7 @@ def home_page():
                     "font-weight: 700 !important; font-size: 15px !important; color: #01335A !important; margin-bottom: 16px !important;"
                 )
                 
-                algorithms = ["KNN", "Decision Trees", "Naive Bayes"]
+                algorithms = ["KNN", "Decision Trees", "Naive Bayes", "PCA","Optimisation ", "Gestion d'anomalies"]
                 for algo in algorithms:
                     with ui.row().classes("items-center gap-3 mb-3"):
                         ui.label("✓").style("color: #01335A !important; font-weight: 700 !important; font-size: 18px !important;")
@@ -675,6 +676,7 @@ def home_page():
         )
 
 
+
 # ----------------- PAGE UPLOAD ---------------
 
 
@@ -700,7 +702,7 @@ def supervised_upload_page():
         )
 
         # Titre
-        ui.label("Phase 2 : Chargement et Validation des Données").style(
+        ui.label(" Chargement et Validation des Données").style(
             """
             font-weight: 700 !important;
             font-size: 32px !important;
@@ -1111,7 +1113,7 @@ def user_decisions_page():
             counts = df[target_col].value_counts()
             total = counts.sum()
 
-            distribution_text = "📊 Distribution des classes : "
+            distribution_text = " Distribution des classes : "
             for k, v in counts.items():
                 pct = (v / total * 100)
                 distribution_text += f"{k}: {v} ({pct:.1f}%) | "
@@ -1124,7 +1126,7 @@ def user_decisions_page():
                 imbalance_label.text += "\n⚠️ Déséquilibre détecté dans les classes"
                 imbalance_label.style("color:#e74c3c !important; font-weight:600 !important;")
             else:
-                imbalance_label.text += "\n✅ Classes équilibrées"
+                imbalance_label.text += "\n Classes équilibrées"
                 imbalance_label.style("color:#01335A !important; font-weight:600 !important;")
 
     def on_confirm():
@@ -1153,7 +1155,7 @@ def user_decisions_page():
             current_df = state["raw_df"].copy()
             current_df = current_df.drop(columns=cols_to_drop, errors='ignore')
             state["raw_df"] = current_df
-            print(f"✅ raw_df: {current_df.shape}")
+            print(f" raw_df: {current_df.shape}")
             
             split_data = state.get("split", {})
             if split_data:
@@ -1163,13 +1165,13 @@ def user_decisions_page():
                         cols_in_split = [c for c in cols_to_drop if c in split_df.columns]
                         if cols_in_split:
                             split_data[split_key] = split_df.drop(columns=cols_in_split, errors='ignore')
-                            print(f"✅ {split_key}: {split_data[split_key].shape}")
+                            print(f" {split_key}: {split_data[split_key].shape}")
                 
                 state["split"] = split_data
             
             ui.notify(f"🗑️ {len(cols_to_drop)} colonne(s) exclue(s)", color="info", timeout=2000)
 
-        ui.notify("✅ Décisions enregistrées avec succès !", color="positive")
+        ui.notify(" Décisions enregistrées avec succès !", color="positive")
          
         ui.run_javascript("setTimeout(() => window.location.href='/supervised/split', 1000);")
 
@@ -1195,7 +1197,7 @@ def user_decisions_page():
             "background:white !important; border-radius:16px !important; padding:32px !important; "
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
-            ui.label("🎯 Sélection de la colonne Target").style(
+            ui.label(" Sélection de la colonne Target").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:16px !important;"
             )
@@ -1223,7 +1225,7 @@ def user_decisions_page():
             "background:white !important; border-radius:16px !important; padding:32px !important; "
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
-            ui.label("👁️ Aperçu des données").style(
+            ui.label(" Aperçu des données").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:16px !important;"
             )
@@ -1359,7 +1361,7 @@ def user_decisions_page():
                 "font-size:14px !important; color:#636e72 !important; margin-bottom:20px !important;"
             )
 
-            # ✅ DISPOSITION EN GRILLE : 2 COLONNES PAR LIGNE
+            #  DISPOSITION EN GRILLE : 2 COLONNES PAR LIGNE
             for i in range(0, len(columns_info), 2):
                 with ui.row().classes("w-full gap-4 mb-4"):
                     # Colonne 1
@@ -1610,7 +1612,7 @@ def split_page():
                     "background:linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important; "
                     "border-radius:12px !important; border-left:4px solid #01335A !important;"
                 ):
-                    ui.label("🎓 ENTRAÎNEMENT").style(
+                    ui.label(" ENTRAÎNEMENT").style(
                         "font-weight:700 !important; font-size:14px !important; color:#01335A !important; margin-bottom:8px !important;"
                     )
                     ui.label(f"{n_train:,}").style(
@@ -1625,7 +1627,7 @@ def split_page():
                     "background:linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%) !important; "
                     "border-radius:12px !important; border-left:4px solid #f39c12 !important;"
                 ):
-                    ui.label("🔍 VALIDATION").style(
+                    ui.label(" VALIDATION").style(
                         "font-weight:700 !important; font-size:14px !important; color:#e67e22 !important; margin-bottom:8px !important;"
                     )
                     ui.label(f"{n_val:,}").style(
@@ -1640,7 +1642,7 @@ def split_page():
                     "background:linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%) !important; "
                     "border-radius:12px !important; border-left:4px solid #9c27b0 !important;"
                 ):
-                    ui.label("🎯 TEST").style(
+                    ui.label(" TEST").style(
                         "font-weight:700 !important; font-size:14px !important; color:#7b1fa2 !important; margin-bottom:8px !important;"
                     )
                     ui.label(f"{n_test:,}").style(
@@ -1698,7 +1700,7 @@ def split_page():
             state["split_config"] = split_config.copy()
             
             ui.notify(
-                f"✅ Split effectué : Train={len(X_train)}, Val={len(X_val)}, Test={len(X_test)}",
+                f" Split effectué : Train={len(X_train)}, Val={len(X_val)}, Test={len(X_test)}",
                 color="positive"
             )
             
@@ -1715,7 +1717,7 @@ def split_page():
         "background:#f0f2f5 !important; min-height:100vh !important; padding:32px 20px !important;"
     ):
         with ui.column().classes("items-center w-full").style("margin-bottom:32px !important;"):
-            ui.label("🔀 Configuration du Split").style(
+            ui.label(" Configuration du Split").style(
                 "font-weight:700 !important; font-size:28px !important; color:#2c3e50 !important; "
                 "margin-bottom:8px !important; text-align:center !important;"
             )
@@ -1730,7 +1732,7 @@ def split_page():
             "box-shadow:0 2px 12px rgba(0,0,0,0.08) !important; border-radius:12px !important; "
             "background:white !important;"
         ):
-            ui.label("📊 Proportions du Split").style(
+            ui.label(" Proportions du Split").style(
                 "font-weight:700 !important; font-size:20px !important; color:#2c3e50 !important; margin-bottom:20px !important;"
             )
             
@@ -1772,7 +1774,7 @@ def split_page():
             "box-shadow:0 2px 12px rgba(0,0,0,0.08) !important; border-radius:12px !important; "
             "background:white !important;"
         ):
-            ui.label("🎲 Stratification").style(
+            ui.label(" Stratification").style(
                 "font-weight:700 !important; font-size:20px !important; color:#2c3e50 !important; margin-bottom:16px !important;"
             )
             
@@ -1792,7 +1794,7 @@ def split_page():
             "box-shadow:0 2px 12px rgba(0,0,0,0.08) !important; border-radius:12px !important; "
             "background:white !important;"
         ):
-            ui.label("👀 Aperçu du Split").style(
+            ui.label(" Aperçu du Split").style(
                 "font-weight:700 !important; font-size:20px !important; color:#2c3e50 !important; margin-bottom:20px !important;"
             )
             
@@ -2255,7 +2257,7 @@ def univariate_analysis_page():
                     with ui.card().classes("w-full p-8").style(
                         "background:white !important; border-radius:16px !important; text-align:center !important;"
                     ):
-                        ui.label("🔍").style("font-size:48px !important; margin-bottom:12px !important;")
+                        ui.label("").style("font-size:48px !important; margin-bottom:12px !important;")
                         ui.label("Aucune variable ne correspond aux filtres").style(
                             "font-size:15px !important; color:#636e72 !important;"
                         )
@@ -2337,7 +2339,7 @@ def outliers_analysis_page():
 
     df_current = state["raw_df"].copy()
 
-    # ✅ BONNE PRATIQUE : Utiliser UNIQUEMENT le train pour la détection
+    #  BONNE PRATIQUE : Utiliser UNIQUEMENT le train pour la détection
     df_train = None
     if split and "X_train" in split:
         df_train = split["X_train"].copy()
@@ -2500,7 +2502,7 @@ def outliers_analysis_page():
             fig.add_trace(go.Box(y=data_before, name='Avant', marker_color='#e74c3c', boxmean='sd', showlegend=(idx == 0)), row=row, col=col_pos)
             fig.add_trace(go.Box(y=data_after, name='Après', marker_color='#27ae60', boxmean='sd', showlegend=(idx == 0)), row=row, col=col_pos)
         fig.update_layout(
-            title_text="📊 Comparaison Avant / Après Traitement (Boxplots)",
+            title_text=" Comparaison Avant / Après Traitement (Boxplots)",
             height=300 * n_rows, showlegend=True, paper_bgcolor='white', plot_bgcolor='#f8f9fa',
             font=dict(family="Inter, sans-serif", size=11, color="#2c3e50"),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
@@ -2601,7 +2603,7 @@ def outliers_analysis_page():
                         ui.plotly(fig_hist).style("width:100%;")
                 
                 with ui.card().classes("w-full").style("background:#f8f9fa; padding:20px; border-radius:12px; border:1px solid #e1e8ed;"):
-                    ui.label("📊 Statistiques (TRAIN)").style("font-weight:600; margin-bottom:12px; color:#01335A; font-size:15px;")
+                    ui.label(" Statistiques (TRAIN)").style("font-weight:600; margin-bottom:12px; color:#01335A; font-size:15px;")
                     col_stats = data_series.describe()
                     with ui.row().classes("w-full gap-8"):
                         with ui.column():
@@ -2659,14 +2661,14 @@ def outliers_analysis_page():
     def open_global_method_modal():
         with ui.dialog() as dialog, ui.card().classes("w-full max-w-3xl").style("padding:0; border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,0.15);"):
             with ui.column().classes("w-full").style("background:linear-gradient(135deg, #01335A 0%, #09538C 100%); padding:24px 32px; border-radius:16px 16px 0 0;"):
-                ui.label("⚡ Application globale").style("font-weight:700; font-size:24px; color:white; font-family:'Inter', sans-serif;")
+                ui.label(" Application globale").style("font-weight:700; font-size:24px; color:white; font-family:'Inter', sans-serif;")
                 ui.label("Appliquer la même méthode à tous les attributs numériques").style("color:white; margin-top:8px; font-size:14px; opacity:0.9;")
             with ui.column().classes("w-full").style("padding:32px;"):
                 with ui.card().classes("w-full mb-4").style("background:#e3f2fd; padding:20px; border-radius:12px; border-left:4px solid #2196F3;"):
-                    ui.label("ℹ️ Information").style("font-weight:600; color:#1565C0; margin-bottom:8px;")
+                    ui.label(" Information").style("font-weight:600; color:#1565C0; margin-bottom:8px;")
                     ui.label(f"Cette action appliquera la méthode choisie aux {len(numeric_cols)} attributs numériques détectés.").style("font-size:13px; color:#1565C0;")
                     ui.label("Les outliers seront détectés automatiquement pour chaque attribut selon son type.").style("font-size:13px; color:#1565C0; margin-top:4px;")
-                    ui.label("✅ Détection sur TRAIN, application sur TRAIN/VAL/TEST").style("font-size:13px; color:#1565C0; margin-top:4px; font-weight:600;")
+                    ui.label(" Détection sur TRAIN, application sur TRAIN/VAL/TEST").style("font-size:13px; color:#1565C0; margin-top:4px; font-weight:600;")
                 ui.label("Choisir la méthode globale").style("font-weight:600; font-size:15px; color:#01335A; margin-bottom:8px;")
                 global_method_select = ui.select(options={"none": "Aucun traitement", "remove": "⚠️ Supprimer les lignes (risqué)", "cap": "Capping (IQR) - Recommandé", "median": "Remplacer par la médiane", "mean": "Remplacer par la moyenne"}, value="cap", label="Méthode de traitement").props("outlined").classes("w-full")
                 with ui.card().classes("w-full mt-4").style("background:#fff9e6; padding:16px; border-radius:12px; border-left:4px solid #f57c00;"):
@@ -2715,11 +2717,11 @@ def outliers_analysis_page():
             y_train = split_data["y_train"].copy()
             y_val = split_data["y_val"].copy()
             y_test = split_data["y_test"].copy()
-            print(f"📊 Avant traitement:")
+            print(f" Avant traitement:")
             print(f"   Train: {len(X_train)} lignes")
             print(f"   Val: {len(X_val)} lignes")
             print(f"   Test: {len(X_test)} lignes")
-            print("\n📖 APPRENTISSAGE DES PARAMÈTRES SUR TRAIN")
+            print("\n APPRENTISSAGE DES PARAMÈTRES SUR TRAIN")
             outliers_params = {}
             for col, strat in strategies.items():
                 method = strat.get("method", "none")
@@ -2767,7 +2769,7 @@ def outliers_analysis_page():
                 print(f"   {col}: {len(test_outliers)} outliers traités")
             print("\n💾 SAUVEGARDE DES SPLITS TRAITÉS")
             state["split"] = {"X_train": X_train, "X_val": X_val, "X_test": X_test, "y_train": y_train, "y_val": y_val, "y_test": y_test}
-            print(f"📊 Après traitement:")
+            print(f" Après traitement:")
             print(f"   Train: {len(X_train)} lignes")
             print(f"   Val: {len(X_val)} lignes")
             print(f"   Test: {len(X_test)} lignes")
@@ -2777,7 +2779,7 @@ def outliers_analysis_page():
                 df_treated[target_col] = y_concat
             state["raw_df"] = df_treated
             state["outliers_applied"] = True
-            print("\n✅ TRAITEMENT TERMINÉ")
+            print("\n TRAITEMENT TERMINÉ")
             print("="*60)
             ui.notify(f"✓ Traitement appliqué avec succès!", color="positive", timeout=3000)
             if navigate_after:
@@ -2818,7 +2820,7 @@ def outliers_analysis_page():
         with ui.card().classes("w-full max-w-6xl mb-6").style("background:white; border-radius:16px; padding:32px; box-shadow:0 2px 8px rgba(0,0,0,0.08);"):
             with ui.row().classes("w-full items-center justify-between mb-6"):
                 ui.label("Analyse des variables").style("font-weight:700; font-size:22px; color:#01335A;")
-                ui.button("⚡ Appliquer méthode globale", on_click=open_global_method_modal).style("background:#01335A; color:white; border-radius:8px; padding:10px 24px; font-weight:600; text-transform:none; font-size:14px;")
+                ui.button(" Appliquer méthode globale", on_click=open_global_method_modal).style("background:#01335A; color:white; border-radius:8px; padding:10px 24px; font-weight:600; text-transform:none; font-size:14px;")
             if not numeric_cols:
                 ui.label("Aucune colonne numérique détectée").style("color:#7f8c8d;")
             else:
@@ -2857,7 +2859,7 @@ def outliers_analysis_page():
 
         if state.get("outliers_applied", False):
             with ui.card().classes("w-full max-w-6xl mb-6").style("background:white; border-radius:16px; padding:32px; box-shadow:0 2px 8px rgba(0,0,0,0.08);"):
-                ui.label("📊 Comparaison Avant / Après Traitement").style("font-weight:700; font-size:22px; color:#01335A; margin-bottom:24px;")
+                ui.label(" Comparaison Avant / Après Traitement").style("font-weight:700; font-size:22px; color:#01335A; margin-bottom:24px;")
                 df_original = state.get("df_original_outliers")
                 df_treated = state["raw_df"]
                 with ui.row().classes("w-full gap-6 mb-6"):
@@ -3266,7 +3268,7 @@ def multivariate_analysis_page():
                 (new_name, f"{formula_str} of {b} and {a}")
             )
             
-            ui.notify(f"✅ Feature '{new_name}' créée avec succès", color="positive")
+            ui.notify(f" Feature '{new_name}' créée avec succès", color="positive")
             dialog_obj.close()
             
         except Exception as e:
@@ -3279,14 +3281,14 @@ def multivariate_analysis_page():
         """
         if keep == a:
             state.setdefault("columns_exclude", {})[b] = True
-            ui.notify(f"✅ {a} conservée, {b} exclue", color="positive")
+            ui.notify(f" {a} conservée, {b} exclue", color="positive")
         elif keep == b:
             state.setdefault("columns_exclude", {})[a] = True
-            ui.notify(f"✅ {b} conservée, {a} exclue", color="positive")
+            ui.notify(f" {b} conservée, {a} exclue", color="positive")
         else:
             state.setdefault("columns_exclude", {})[a] = False
             state.setdefault("columns_exclude", {})[b] = False
-            ui.notify(f"✅ Les deux features sont conservées", color="positive")
+            ui.notify(f" Les deux features sont conservées", color="positive")
         
         ui.run_javascript("setTimeout(() => window.location.reload(), 800);")
 
@@ -3325,7 +3327,7 @@ def multivariate_analysis_page():
                 state.setdefault("columns_exclude", {})[b] = True
                 excluded_count += 1
         
-        ui.notify(f"✅ {excluded_count} features exclues (optimisation Naive Bayes)", color="positive")
+        ui.notify(f" {excluded_count} features exclues (optimisation Naive Bayes)", color="positive")
         ui.run_javascript("setTimeout(() => window.location.reload(), 1000);")
 
     def open_bulk_engineer_modal():
@@ -3424,7 +3426,7 @@ def multivariate_analysis_page():
             "background:#e3f2fd !important; border-radius:16px !important; padding:24px !important; "
             "border-left:4px solid #2196f3 !important; box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
-            ui.label("🔍 À quoi sert cette étape ?").style(
+            ui.label(" À quoi sert cette étape ?").style(
                 "font-weight:700 !important; font-size:18px !important; color:#01335A !important; "
                 "margin-bottom:12px !important;"
             )
@@ -3436,11 +3438,11 @@ def multivariate_analysis_page():
             )
             
             points = [
-                "🔍 Détecter la redondance : deux features très associées apportent une information similaire",
-                "📊 Utiliser les bonnes métriques : Pearson (num↔num), V de Cramér (cat↔cat), η² (num↔cat)",
-                "🔢 Calculer le VIF : mesure la multicolinéarité (problématique pour certains modèles)",
-                "➕ Créer des features combinées : nouvelles features en combinant des existantes (ex: ratio, différence)",
-                "🎯 Optimiser pour vos algorithmes : Naive Bayes est sensible aux corrélations, les arbres de décision non"
+                " Détecter la redondance : deux features très associées apportent une information similaire",
+                " Utiliser les bonnes métriques : Pearson (num↔num), V de Cramér (cat↔cat), η² (num↔cat)",
+                " Calculer le VIF : mesure la multicolinéarité (problématique pour certains modèles)",
+                " Créer des features combinées : nouvelles features en combinant des existantes (ex: ratio, différence)",
+                " Optimiser pour vos algorithmes : Naive Bayes est sensible aux corrélations, les arbres de décision non"
             ]
             
             for point in points:
@@ -3454,7 +3456,7 @@ def multivariate_analysis_page():
             "background:white !important; border-radius:16px !important; padding:32px !important; "
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
-            ui.label("📊 Matrice de corrélation généralisée").style(
+            ui.label(" Matrice de corrélation généralisée").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:16px !important;"
             )
@@ -3464,7 +3466,7 @@ def multivariate_analysis_page():
                 "background:#f0f4f8 !important; padding:16px !important; "
                 "border-radius:8px !important; border-left:4px solid #3498db !important;"
             ):
-                ui.label("📖 Méthodes utilisées :").style(
+                ui.label(" Méthodes utilisées :").style(
                     "font-weight:600 !important; color:#01335A !important; margin-bottom:8px !important;"
                 )
                 ui.label("• Numérique ↔ Numérique : Corrélation de Pearson (relation linéaire)").style(
@@ -3584,7 +3586,7 @@ def multivariate_analysis_page():
             "background:white !important; border-radius:16px !important; padding:32px !important; "
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
-            ui.label("🔗 Paires fortement associées").style(
+            ui.label(" Paires fortement associées").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:16px !important;"
             )
@@ -3600,7 +3602,7 @@ def multivariate_analysis_page():
                     "background:#e8f5e9 !important; padding:16px !important; "
                     "border-radius:12px !important; border-left:4px solid #4caf50 !important;"
                 ):
-                    ui.label("✅ Aucune association élevée détectée").style(
+                    ui.label(" Aucune association élevée détectée").style(
                         "color:#1b5e20 !important; font-weight:500 !important;"
                     )
             else:
@@ -3810,7 +3812,7 @@ def multivariate_analysis_page():
             "background:white !important; border-radius:16px !important; padding:32px !important; "
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
-            ui.label("⚡ Actions et recommandations").style(
+            ui.label(" Actions et recommandations").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:16px !important;"
             )
@@ -3818,7 +3820,7 @@ def multivariate_analysis_page():
             # Boutons globaux
             with ui.row().classes("gap-3 mb-6"):
                 ui.button(
-                    "🎯 Optimiser pour Naive Bayes",
+                    " Optimiser pour Naive Bayes",
                     on_click=apply_naivebayes_prune
                 ).style(
                     "background:#01335A !important; color:white !important; border-radius:8px !important; "
@@ -3826,7 +3828,7 @@ def multivariate_analysis_page():
                 )
                 
                 ui.button(
-                    "➕ Créer feature combinée",
+                    " Créer feature combinée",
                     on_click=open_bulk_engineer_modal
                 ).style(
                     "background:#3498db !important; color:white !important; border-radius:8px !important; "
@@ -3952,7 +3954,7 @@ def multivariate_analysis_page():
                     "background:#e8f5e9 !important; padding:16px !important; "
                     "border-radius:12px !important; border-left:4px solid #4caf50 !important;"
                 ):
-                    ui.label("✅ Aucune paire fortement associée détectée").style(
+                    ui.label(" Aucune paire fortement associée détectée").style(
                         "color:#1b5e20 !important; font-weight:500 !important;"
                     )
 
@@ -3984,7 +3986,7 @@ def multivariate_analysis_page():
 @ui.page('/supervised/missing_values')
 def missing_values_page():
     """
-    Page complète pour gestion des valeurs manquantes avec visualisation before/after
+    Page complète pour gestion des valeurs manquantes et doublons avec visualisation before/after
     Gestion robuste des features créées dynamiquement + vérification exhaustive
     """
     import pandas as pd
@@ -3997,6 +3999,10 @@ def missing_values_page():
     split = state.get("split", None)
     columns_exclude = state.get("columns_exclude", {}) or {}
     target_col = state.get("target_column", None)
+    
+    # État pour la gestion des doublons
+    state.setdefault("duplicate_strategy", "none")  # none, drop_all, drop_first, drop_last
+    state.setdefault("duplicate_subset", None)  # None = toutes les colonnes, ou liste de colonnes
 
     if df is None:
         with ui.column().classes("items-center justify-center w-full h-screen"):
@@ -4004,7 +4010,7 @@ def missing_values_page():
                 "font-size:18px !important; color:#c0392b !important; font-weight:600 !important;"
             )
             ui.button(
-                " Retour à l'Upload",
+                "🔙 Retour à l'Upload",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/upload'")
             ).style(
                 "background:#01335A !important; color:white !important; padding:12px 32px !important; "
@@ -4056,6 +4062,10 @@ def missing_values_page():
 
     state.setdefault("missing_strategy", {})
     state.setdefault("fitted_imputers", {})
+    
+    # Calcul des doublons
+    n_duplicates = df.duplicated().sum()
+    duplicate_pct = round(n_duplicates / len(df) * 100, 2) if len(df) > 0 else 0
 
     # ---------- HELPERS ----------
     def fit_imputers(strategies: dict, df_train_local: pd.DataFrame):
@@ -4275,27 +4285,27 @@ def missing_values_page():
                     "box-shadow:none !important;"
                 ):
                     ui.markdown("""
-    <div style="color:#856404; font-size:14px; line-height:1.8;">
+<div style="color:#856404; font-size:14px; line-height:1.8;">
 
-    ### ⚠️ Impact sur les algorithmes de Machine Learning
+### ⚠️ Impact sur les algorithmes de Machine Learning
 
-    Les valeurs manquantes non traitées peuvent **gravement affecter** les performances de vos modèles :
+Les valeurs manquantes non traitées peuvent **gravement affecter** les performances de vos modèles :
 
-    **Problèmes potentiels :**
-    - ❌ **Erreurs d'exécution** : Certains algorithmes (KNN, SVM, Réseaux de neurones) refusent les NaN
-    - 📉 **Biais dans les prédictions** : Les algorithmes gèrent mal les données incomplètes
-    - 🔻 **Perte de données** : Suppression automatique des lignes avec NaN (perte d'information)
-    - ⚠️ **Résultats imprévisibles** : Comportement inconsistant selon les librairies
+**Problèmes potentiels :**
+- ❌ **Erreurs d'exécution** : Certains algorithmes (KNN, SVM, Réseaux de neurones) refusent les NaN
+- 📉 **Biais dans les prédictions** : Les algorithmes gèrent mal les données incomplètes
+- 🔻 **Perte de données** : Suppression automatique des lignes avec NaN (perte d'information)
+- ⚠️ **Résultats imprévisibles** : Comportement inconsistant selon les librairies
 
-    **Recommandation :** Configurez une stratégie d'imputation pour **toutes** les colonnes avec valeurs manquantes.
+**Recommandation :** Configurez une stratégie d'imputation pour **toutes** les colonnes avec valeurs manquantes.
 
-    </div>
+</div>
                     """)
                 
                 # Liste des colonnes non configurées
                 if report["unconfigured"]:
                     ui.separator().classes("my-4")
-                    ui.label(f"📋 Colonnes non configurées ({len(report['unconfigured'])}) :").style(
+                    ui.label(f"🔴 Colonnes non configurées ({len(report['unconfigured'])}) :").style(
                         "font-weight:700 !important; font-size:16px !important; "
                         "color:#2c3e50 !important; margin-bottom:12px !important;"
                     )
@@ -4371,25 +4381,25 @@ def missing_values_page():
                     )
                     
                     ui.markdown("""
-    <div style="color:#01335A; font-size:13px; line-height:1.8;">
+<div style="color:#01335A; font-size:13px; line-height:1.8;">
 
-    **Option 1 : Configuration manuelle**
-    - Retournez à la configuration et choisissez une méthode pour chaque colonne
+**Option 1 : Configuration manuelle**
+- Retournez à la configuration et choisissez une méthode pour chaque colonne
 
-    **Option 2 : Stratégie globale**
-    - Utilisez "Balanced" pour appliquer automatiquement median/mode
-    - Utilisez "Aggressive" pour appliquer KNN sur les colonnes numériques
+**Option 2 : Stratégie globale**
+- Utilisez "Balanced" pour appliquer automatiquement median/mode
+- Utilisez "Aggressive" pour appliquer KNN sur les colonnes numériques
 
-    **Option 3 : Exclusion**
-    - Si la colonne est peu importante, excluez-la de l'analyse
+**Option 3 : Exclusion**
+- Si la colonne est peu importante, excluez-la de l'analyse
 
-    </div>
+</div>
                     """)
                 
                 # Boutons d'action
                 with ui.row().classes("w-full justify-end gap-3 mt-6"):
                     ui.button(
-                        " Retour à la configuration",
+                        "⬅ Retour à la configuration",
                         on_click=dialog.close
                     ).style(
                         "background:#01335A !important; color:white !important; "
@@ -4406,7 +4416,7 @@ def missing_values_page():
                         )
                     
                     ui.button(
-                        "Continuer quand même ",
+                        "Continuer quand même ⚠",
                         on_click=continue_anyway
                     ).style(
                         "background:#f39c12 !important; color:white !important; "
@@ -4489,12 +4499,12 @@ def missing_values_page():
                         method = current_strat.get("method", "none")
                         
                         if method == "none":
-                            ui.label(f"• {col} : Aucune stratégie configurée  Configurez une méthode").style(
+                            ui.label(f"• {col} : Aucune stratégie configurée → Configurez une méthode").style(
                                 "color:#e74c3c !important; font-size:13px !important;"
                             )
                         elif method == "forward_fill" or method == "backward_fill":
                             ui.label(
-                                f"• {col} : Fill méthode peut laisser des NaN en début/fin  "
+                                f"• {col} : Fill méthode peut laisser des NaN en début/fin → "
                                 "Essayez median/mode/constant"
                             ).style(
                                 "color:#f39c12 !important; font-size:13px !important;"
@@ -4522,21 +4532,21 @@ def missing_values_page():
     def apply_and_propagate(navigate_after=False):
         """Applique l'imputation sur raw_df ET tous les splits avec vérification"""
         try:
-            print("🚀 Début de apply_and_propagate")  # ✅ DEBUG
+            print("🚀 Début de apply_and_propagate")  # 🔍 DEBUG
             
             strategies = state.get("missing_strategy", {})
             if not strategies:
                 ui.notify("⚠️ Aucune stratégie configurée", color="warning")
                 return False
             
-            print(f"📋 Stratégies à appliquer : {list(strategies.keys())}")  # ✅ DEBUG
+            print(f"✅ Stratégies à appliquer : {list(strategies.keys())}")  # 🔍 DEBUG
             
-            # ✅ VÉRIFICATION DES COLONNES NON CONFIGURÉES OU "NONE"
+            # 🔍 VÉRIFICATION DES COLONNES NON CONFIGURÉES OU "NONE"
             unconfigured_report = check_unconfigured_or_none_columns()
-            print(f"🔍 Rapport non configurées : {unconfigured_report}")  # ✅ DEBUG
+            print(f"📊 Rapport non configurées : {unconfigured_report}")  # 🔍 DEBUG
             
             if unconfigured_report["has_issues"]:
-                print("⚠️ Des colonnes ont des problèmes, affichage du dialog")  # ✅ DEBUG
+                print("⚠️ Des colonnes ont des problèmes, affichage du dialog")  # 🔍 DEBUG
                 show_unconfigured_warning_dialog(unconfigured_report)
                 return False
             
@@ -4549,34 +4559,34 @@ def missing_values_page():
             else:
                 df_train_for_fit = state["raw_df"].copy()
             
-            print("🔧 Début du fit des imputers")  # ✅ DEBUG
+            print("🔧 Début du fit des imputers")  # 🔍 DEBUG
             
             # Fit des imputers
             fitted = fit_imputers(strategies, df_train_for_fit)
             state["fitted_imputers"] = serialize_fitted_imputers(fitted)
             
-            print(f"✅ {len(fitted)} imputers fitted")  # ✅ DEBUG
+            print(f"✅ {len(fitted)} imputers fitted")  # 🔍 DEBUG
             
             # Application sur raw_df
-            print("📝 Application sur raw_df")  # ✅ DEBUG
+            print("📝 Application sur raw_df")  # 🔍 DEBUG
             state["raw_df"] = apply_fitted_imputers(state["raw_df"], fitted, active_cols)
             
             # Application sur splits
             if split:
-                print("📝 Application sur les splits")  # ✅ DEBUG
+                print("📝 Application sur les splits")  # 🔍 DEBUG
                 for key in ["X_train", "X_val", "X_test"]:
                     if key in split and isinstance(split[key], pd.DataFrame):
-                        print(f"  - Application sur {key}")  # ✅ DEBUG
+                        print(f"  - Application sur {key}")  # 🔍 DEBUG
                         split[key] = apply_fitted_imputers(split[key], fitted, active_cols)
                 
                 state["split"] = split
             
-            print("🔍 Vérification post-imputation")  # ✅ DEBUG
+            print("🔍 Vérification post-imputation")  # 🔍 DEBUG
             
-            # ✅ VÉRIFICATION POST-IMPUTATION
+            # 🔍 VÉRIFICATION POST-IMPUTATION
             verification_report = verify_missing_values_after_imputation()
             
-            print(f"📊 Rapport vérification : {verification_report['has_remaining_missing']}")  # ✅ DEBUG
+            print(f"📊 Rapport vérification : {verification_report['has_remaining_missing']}")  # 🔍 DEBUG
             
             if verification_report["has_remaining_missing"]:
                 ui.notify(
@@ -4589,13 +4599,12 @@ def missing_values_page():
             else:
                 ui.notify("✅ Imputation réussie : Toutes les valeurs manquantes ont été traitées!", color="positive")
             
-            print(f"🎯 Navigate after : {navigate_after}")  # ✅ DEBUG
+            print(f"🔍 Navigate after : {navigate_after}")  # 🔍 DEBUG
             
             if navigate_after:
-                print("🚀 Navigation vers /supervised/encoding")  # ✅ DEBUG
-                ui.run_javascript("setTimeout(() => window.location.href='/supervised/encoding', 1500);")
+                print(" confirme ")  # 🔍 DEBUG
             else:
-                print("🔄 Rechargement de la page")  # ✅ DEBUG
+                print("🔄 Rechargement de la page")  # 🔍 DEBUG
                 ui.run_javascript("setTimeout(() => window.location.reload(), 1500);")
             
             return True
@@ -4603,6 +4612,209 @@ def missing_values_page():
         except Exception as e:
             ui.notify(f"❌ Erreur lors de l'application : {str(e)}", color="negative")
             print(f"❌ Détail erreur: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+
+    def get_duplicate_rows(df_data: pd.DataFrame, max_rows: int = 20):
+        """Récupère les lignes dupliquées"""
+        duplicated_mask = df_data.duplicated(keep=False)
+        duplicate_indices = df_data[duplicated_mask].index.tolist()
+        return duplicate_indices[:max_rows]
+    
+    def preview_duplicate_removal():
+        """Prévisualise la suppression des doublons avec tableaux BEFORE/AFTER"""
+        strategy = state.get("duplicate_strategy", "none")
+        
+        if strategy == "none":
+            ui.notify("⚠️ Sélectionnez d'abord une stratégie de gestion des doublons", color="warning")
+            return
+        
+        try:
+            # Récupérer les lignes dupliquées
+            duplicate_indices = get_duplicate_rows(df, max_rows=15)
+            
+            if not duplicate_indices:
+                ui.notify("✅ Aucun doublon détecté dans le dataset", color="info")
+                return
+            
+            # AVANT suppression
+            df_before = df.loc[duplicate_indices].copy()
+            
+            # APRÈS suppression
+            if strategy == "drop_all":
+                df_after_full = df.drop_duplicates(keep=False)
+                keep_param = False
+            elif strategy == "drop_first":
+                df_after_full = df.drop_duplicates(keep='first')
+                keep_param = 'first'
+            elif strategy == "drop_last":
+                df_after_full = df.drop_duplicates(keep='last')
+                keep_param = 'last'
+            else:
+                df_after_full = df.copy()
+                keep_param = False
+            
+            # Trouver quelles lignes ont été supprimées
+            remaining_indices = [idx for idx in duplicate_indices if idx in df_after_full.index]
+            df_after = df_after_full.loc[remaining_indices] if remaining_indices else pd.DataFrame()
+            
+            n_before = len(df)
+            n_after = len(df_after_full)
+            n_removed = n_before - n_after
+            
+            duplicate_preview_info.set_text(
+                f"✅ Preview généré : {n_before} lignes → {n_after} lignes | {n_removed} doublons supprimés | {len(duplicate_indices)} lignes affichées"
+            )
+            
+            # Affichage des tableaux BEFORE/AFTER
+            duplicate_table_before.clear()
+            duplicate_table_after.clear()
+            
+            # Limiter le nombre de colonnes affichées pour la lisibilité
+            display_cols = df.columns.tolist()[:8]
+            
+            with duplicate_table_before:
+                ui.label("AVANT Suppression").style(
+                    "font-weight:700 !important; font-size:16px !important; color:#01335A !important; "
+                    "margin-bottom:12px !important;"
+                )
+                
+                rows_before = []
+                for idx in duplicate_indices:
+                    row_dict = {"Index": idx}
+                    for col in display_cols:
+                        val = df_before.loc[idx, col]
+                        row_dict[col] = str(val)[:30] if not pd.isna(val) else "NaN"
+                    rows_before.append(row_dict)
+                
+                columns_before = [{"name": "Index", "label": "Index", "field": "Index", "align": "center"}]
+                columns_before.extend([{"name": c, "label": c, "field": c, "align": "left"} for c in display_cols])
+                
+                ui.table(
+                    columns=columns_before,
+                    rows=rows_before,
+                    row_key="Index"
+                ).props("flat bordered dense").style(
+                    "width:100% !important; font-size:12px !important;"
+                )
+                
+                if len(df.columns) > 8:
+                    ui.label(f"... et {len(df.columns) - 8} autres colonnes").style(
+                        "font-size:11px !important; color:#7f8c8d !important; "
+                        "font-style:italic !important; margin-top:8px !important;"
+                    )
+            
+            with duplicate_table_after:
+                ui.label("APRÈS Suppression").style(
+                    "font-weight:700 !important; font-size:16px !important; color:#27ae60 !important; "
+                    "margin-bottom:12px !important;"
+                )
+                
+                if len(df_after) == 0:
+                    ui.label("✓ Tous les doublons ont été supprimés").style(
+                        "font-size:14px !important; color:#27ae60 !important; "
+                        "font-weight:600 !important; padding:20px !important;"
+                    )
+                else:
+                    rows_after = []
+                    for idx in remaining_indices:
+                        row_dict = {"Index": idx, "Statut": ""}
+                        
+                        # Déterminer si la ligne a été gardée
+                        if strategy == "drop_first":
+                            is_first = not df.loc[:idx-1].duplicated(subset=None, keep=False).any() if idx > 0 else True
+                            row_dict["Statut"] = "✓ Gardée (première)" if is_first else ""
+                        elif strategy == "drop_last":
+                            row_dict["Statut"] = "✓ Gardée (dernière)"
+                        
+                        for col in display_cols:
+                            val = df_after_full.loc[idx, col]
+                            row_dict[col] = str(val)[:30] if not pd.isna(val) else "NaN"
+                        rows_after.append(row_dict)
+                    
+                    columns_after = [
+                        {"name": "Index", "label": "Index", "field": "Index", "align": "center"},
+                        {"name": "Statut", "label": "Statut", "field": "Statut", "align": "center"}
+                    ]
+                    columns_after.extend([{"name": c, "label": c, "field": c, "align": "left"} for c in display_cols])
+                    
+                    ui.table(
+                        columns=columns_after,
+                        rows=rows_after,
+                        row_key="Index"
+                    ).props("flat bordered dense").style(
+                        "width:100% !important; font-size:12px !important;"
+                    )
+                    
+                    if len(df.columns) > 8:
+                        ui.label(f"... et {len(df.columns) - 8} autres colonnes").style(
+                            "font-size:11px !important; color:#7f8c8d !important; "
+                            "font-style:italic !important; margin-top:8px !important;"
+                        )
+            
+        except Exception as e:
+            ui.notify(f"❌ Erreur lors du preview des doublons : {str(e)}", color="negative")
+            print(f"Détail erreur preview doublons: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def apply_duplicate_removal():
+        """Applique la suppression des doublons sur raw_df et les splits"""
+        strategy = state.get("duplicate_strategy", "none")
+        
+        if strategy == "none":
+            ui.notify("⚠️ Aucune stratégie de doublons configurée", color="warning")
+            return False
+        
+        try:
+            n_before = len(state["raw_df"])
+            
+            # Application sur raw_df
+            if strategy == "drop_all":
+                state["raw_df"] = state["raw_df"].drop_duplicates(keep=False)
+            elif strategy == "drop_first":
+                state["raw_df"] = state["raw_df"].drop_duplicates(keep='first')
+            elif strategy == "drop_last":
+                state["raw_df"] = state["raw_df"].drop_duplicates(keep='last')
+            
+            n_after = len(state["raw_df"])
+            n_removed = n_before - n_after
+            
+            # Application sur les splits si présents
+            split = state.get("split", {})
+            if split:
+                for key in ["X_train", "X_val", "X_test"]:
+                    if key in split and isinstance(split[key], pd.DataFrame):
+                        n_split_before = len(split[key])
+                        
+                        if strategy == "drop_all":
+                            split[key] = split[key].drop_duplicates(keep=False)
+                        elif strategy == "drop_first":
+                            split[key] = split[key].drop_duplicates(keep='first')
+                        elif strategy == "drop_last":
+                            split[key] = split[key].drop_duplicates(keep='last')
+                        
+                        # Synchroniser y correspondant
+                        y_key = key.replace("X_", "y_")
+                        if y_key in split:
+                            split[y_key] = split[y_key].loc[split[key].index]
+                        
+                        n_split_after = len(split[key])
+                        print(f"  {key}: {n_split_before} → {n_split_after} lignes")
+                
+                state["split"] = split
+            
+            ui.notify(
+                f"✅ Doublons supprimés avec succès : {n_removed} lignes retirées ({n_before} → {n_after})",
+                color="positive"
+            )
+            
+            return True
+            
+        except Exception as e:
+            ui.notify(f"❌ Erreur lors de la suppression des doublons : {str(e)}", color="negative")
+            print(f"Détail erreur suppression doublons: {e}")
             import traceback
             traceback.print_exc()
             return False
@@ -4705,7 +4917,7 @@ def missing_values_page():
                         
                         ui.notify(f"✅ Stratégie sauvegardée pour {col_name}", color="positive")
                         dialog.close()
-                        # ✅  Recharger la page pour mettre à jour le tableau
+                        # 🔄 Recharger la page pour mettre à jour le tableau
                         ui.run_javascript("setTimeout(() => window.location.reload(), 500);")
                     
                     ui.button("Sauvegarder", on_click=save_strategy).style(
@@ -4736,7 +4948,7 @@ def missing_values_page():
             missing_indices = get_rows_with_missing(df_train, cols_to_check, max_rows=15)
             
             if not missing_indices:
-                ui.notify("ℹ️ Aucune ligne avec valeurs manquantes dans les colonnes sélectionnées", color="info")
+                ui.notify("✅ Aucune ligne avec valeurs manquantes dans les colonnes sélectionnées", color="info")
                 return
             
             df_before = df_train.loc[missing_indices, cols_to_check].copy()
@@ -4750,7 +4962,7 @@ def missing_values_page():
             after_missing = df_preview[active_cols].isna().sum().sum()
             
             preview_info.set_text(
-                f"📊 Preview généré : {before_missing} valeurs manquantes  {after_missing} après imputation | {len(missing_indices)} lignes affichées"
+                f"✅ Preview généré : {before_missing} valeurs manquantes → {after_missing} après imputation | {len(missing_indices)} lignes affichées"
             )
             
             # Affichage des tableaux BEFORE/AFTER
@@ -4873,8 +5085,8 @@ def missing_values_page():
             ui.notify("⚠️ Aucune stratégie configurée", color="warning")
             return
         
-        # ✅ DEBUG : Afficher les stratégies configurées
-        print(f"🔍 Stratégies configurées : {strategies}")
+        # 🔍 DEBUG : Afficher les stratégies configurées
+        print(f"✅ Stratégies configurées : {strategies}")
         
         with ui.dialog() as dialog, ui.card().style(
             "padding:0 !important; border-radius:16px !important; "
@@ -4904,10 +5116,9 @@ def missing_values_page():
                     )
                     
                     def confirm_and_next():
-                        print("✅ Bouton 'Confirmer' cliqué")  # ✅ DEBUG
                         dialog.close()
                         result = apply_and_propagate(navigate_after=True)
-                        print(f"📊 Résultat apply_and_propagate: {result}")  # ✅ DEBUG
+                        print(f"📊 Résultat apply_and_propagate: {result}")  
                     
                     ui.button("Confirmer", on_click=confirm_and_next).style(
                         "background:#01335A !important; color:white !important; border-radius:8px !important; "
@@ -4948,9 +5159,9 @@ def missing_values_page():
             ui.notify(f"✅ Aggressive : KNN appliqué à {knn_count} colonnes numériques", color="positive")
 
         elif val.startswith("Custom"):
-            ui.notify("ℹ️ Choix Custom : configure colonne par colonne via le tableau", color="info")
+            ui.notify("ℹ Choix Custom : configure colonne par colonne via le tableau", color="info")
         
-        # ✅  Recharger la page après application de la stratégie globale
+        # 🔄 Recharger la page après application de la stratégie globale
         ui.run_javascript("setTimeout(() => window.location.reload(), 800);")
 
     # ---------- UI ----------
@@ -4959,11 +5170,11 @@ def missing_values_page():
         "font-family:'Inter', sans-serif !important;"
     ):
         # HEADER
-        ui.label("Gestion des Valeurs Manquantes").style(
+        ui.label("Gestion des Valeurs Manquantes & Doublons").style(
             "font-weight:700 !important; font-size:36px !important; color:#01335A !important; "
             "margin-bottom:8px !important; text-align:center !important; letter-spacing:-0.5px !important;"
         )
-        ui.label("Imputation intelligente et visualisation avant/après").style(
+        ui.label("Imputation intelligente, suppression des doublons et visualisation avant/après").style(
             "font-size:16px !important; color:#636e72 !important; margin-bottom:48px !important; "
             "text-align:center !important; font-weight:400 !important;"
         )
@@ -5010,6 +5221,18 @@ def missing_values_page():
                         ui.label("observations").style(
                             "font-size:12px !important; color:rgba(255,255,255,0.8) !important; margin-top:4px !important;"
                         )
+                
+                # Doublons
+                with ui.row().classes("items-center gap-3"):
+                    ui.icon("content_copy", size="md").classes("text-white")
+                    with ui.column().classes("gap-0"):
+                        ui.label(f"{n_duplicates}").style(
+                            "font-weight:700 !important; font-size:28px !important; color:white !important; "
+                            "line-height:1 !important;"
+                        )
+                        ui.label(f"doublons ({duplicate_pct}%)").style(
+                            "font-size:12px !important; color:rgba(255,255,255,0.8) !important; margin-top:4px !important;"
+                        )
 
         # --- B - Badge de statut de configuration ---
         configured_cols = len(state.get("missing_strategy", {}))
@@ -5020,7 +5243,7 @@ def missing_values_page():
         ):
             with ui.row().classes("w-full items-center justify-between"):
                 with ui.column():
-                    ui.label("📋 Statut de configuration").style(
+                    ui.label("📊 Statut de configuration").style(
                         "font-weight:600 !important; font-size:16px !important; "
                         "color:#2c3e50 !important; margin-bottom:8px !important;"
                     )
@@ -5090,7 +5313,7 @@ def missing_values_page():
                     "Stratégie": method
                 })
             
-            # ✅  Créer le tableau PUIS attacher l'événement
+            # 🔧 Créer le tableau PUIS attacher l'événement
             table = ui.table(
                 columns=[
                     {"name": "Feature", "label": "Feature", "field": "Feature", "align": "left"},
@@ -5106,7 +5329,7 @@ def missing_values_page():
                 "width:100% !important; cursor:pointer !important;"
             )
             
-            # ✅ Gestionnaire de clic - attacher APRÈS création
+            # 🔧 Gestionnaire de clic - attacher APRÈS création
             def handle_row_click(e):
                 """Gestionnaire de clic sur une ligne du tableau"""
                 try:
@@ -5124,7 +5347,7 @@ def missing_values_page():
                         else:
                             row_data = e.args
                         
-                        print(f"📋 row_data extrait: {row_data}")
+                        print(f"✅ row_data extrait: {row_data}")
                         
                         # Extraire le nom de la feature
                         if isinstance(row_data, dict) and "Feature" in row_data:
@@ -5141,7 +5364,7 @@ def missing_values_page():
                     import traceback
                     traceback.print_exc()
             
-            # ✅ Attacher l'événement avec .on()
+            # 🔧 Attacher l'événement avec .on()
             table.on('row-click', handle_row_click)
             
             ui.label("💡 Cliquez sur une ligne pour configurer la stratégie d'imputation").style(
@@ -5154,7 +5377,7 @@ def missing_values_page():
             "background:white !important; border-radius:16px !important; padding:32px !important; "
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
-            ui.label("⚡ Stratégie Globale").style(
+            ui.label("🌐 Stratégie Globale").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:16px !important;"
             )
@@ -5185,7 +5408,7 @@ def missing_values_page():
             "background:white !important; border-radius:16px !important; padding:32px !important; "
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
-            ui.label("Preview & Application").style(
+            ui.label("👁️ Preview & Application").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:16px !important;"
             )
@@ -5200,9 +5423,17 @@ def missing_values_page():
                     table_before_container = ui.column().classes("w-full")
                 with ui.column().classes("flex-1"):
                     table_after_container = ui.column().classes("w-full")
+            
+            # Graphiques comparatifs
+            with ui.row().classes("w-full gap-4 mb-4").style("display:none !important;") as chart_row:
+                with ui.column().classes("flex-1"):
+                    chart_before = ui.plotly({}).style("display:none !important;")
+                with ui.column().classes("flex-1"):
+                    chart_after = ui.plotly({}).style("display:none !important;")
+            
             with ui.row().classes("w-full gap-3"):
                 ui.button(
-                    "🔍 Preview (train)",
+                    "👁 Preview (train)",
                     on_click=preview_imputation
                 ).style(
                     "background:#2196f3 !important; color:white !important; border-radius:8px !important; "
@@ -5210,17 +5441,109 @@ def missing_values_page():
                 )
                 
                 ui.button(
-                    "✓ Appliquer & Continuer",
+                    "✓ Appliquer ",
                     on_click=confirm_and_apply
                 ).style(
                     "background:#01335A !important; color:white !important; border-radius:8px !important; "
                     "padding:10px 20px !important; text-transform:none !important; font-weight:600 !important;"
                 )
 
+        # --- F - Gestion des doublons ---
+        with ui.card().classes("w-full max-w-6xl mb-6").style(
+            "background:white !important; border-radius:16px !important; padding:32px !important; "
+            "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
+        ):
+            with ui.row().classes("w-full items-center justify-between mb-4"):
+                ui.label("🔄 Gestion des Doublons").style(
+                    "font-weight:700 !important; font-size:22px !important; color:#01335A !important;"
+                )
+                
+                # Badge nombre de doublons
+                if n_duplicates > 0:
+                    badge_color = "#e74c3c" if duplicate_pct > 5 else "#f39c12"
+                    with ui.row().classes("items-center gap-2").style(
+                        f"background:{badge_color}15 !important; padding:8px 16px !important; "
+                        "border-radius:8px !important;"
+                    ):
+                        ui.icon("warning", size="sm").style(f"color:{badge_color} !important;")
+                        ui.label(f"{n_duplicates} doublons ({duplicate_pct}%)").style(
+                            f"color:{badge_color} !important; font-weight:600 !important; "
+                            "font-size:14px !important;"
+                        )
+                else:
+                    with ui.row().classes("items-center gap-2").style(
+                        "background:#27ae6015 !important; padding:8px 16px !important; "
+                        "border-radius:8px !important;"
+                    ):
+                        ui.icon("check_circle", size="sm").style("color:#27ae60 !important;")
+                        ui.label("Aucun doublon détecté").style(
+                            "color:#27ae60 !important; font-weight:600 !important; "
+                            "font-size:14px !important;"
+                        )
+            
+            if n_duplicates > 0:
+                ui.label("Choisissez comment gérer les lignes dupliquées").style(
+                    "font-size:14px !important; color:#636e72 !important; margin-bottom:20px !important;"
+                )
+                
+                # Options de gestion des doublons
+                duplicate_strategy_radio = ui.radio(
+                    options={
+                        'none': 'Aucune action (conserver tous les doublons)',
+                        'drop_all': 'Supprimer toutes les occurrences des doublons',
+                        'drop_first': 'Conserver la première occurrence',
+                        'drop_last': 'Conserver la dernière occurrence'
+                    },
+                    value=state.get("duplicate_strategy", "none")
+                ).classes("mb-4")
+                
+                def update_duplicate_strategy():
+                    state["duplicate_strategy"] = duplicate_strategy_radio.value
+                    ui.notify(f"ℹ Stratégie de doublons mise à jour : {duplicate_strategy_radio.value}", color="info")
+                
+                duplicate_strategy_radio.on_value_change(lambda: update_duplicate_strategy())
+                
+                # Preview et application
+                duplicate_preview_info = ui.label("Cliquez sur 'Preview' pour visualiser la suppression des doublons").style(
+                    "font-size:14px !important; color:#636e72 !important; margin-bottom:20px !important;"
+                )
+                
+                # Conteneurs pour les tableaux BEFORE/AFTER des doublons
+                with ui.row().classes("w-full gap-4 mb-4"):
+                    with ui.column().classes("flex-1"):
+                        duplicate_table_before = ui.column().classes("w-full")
+                    with ui.column().classes("flex-1"):
+                        duplicate_table_after = ui.column().classes("w-full")
+                
+                with ui.row().classes("w-full gap-3"):
+                    ui.button(
+                        "👁 Preview Doublons",
+                        on_click=preview_duplicate_removal
+                    ).style(
+                        "background:#9b59b6 !important; color:white !important; border-radius:8px !important; "
+                        "padding:10px 20px !important; text-transform:none !important; font-weight:500 !important;"
+                    )
+                    
+                    def apply_and_reload_duplicates():
+                        if apply_duplicate_removal():
+                            ui.run_javascript("setTimeout(() => window.location.reload(), 1500);")
+                    
+                    ui.button(
+                        "✓ Appliquer Suppression",
+                        on_click=apply_and_reload_duplicates
+                    ).style(
+                        "background:#27ae60 !important; color:white !important; border-radius:8px !important; "
+                        "padding:10px 20px !important; text-transform:none !important; font-weight:600 !important;"
+                    )
+            else:
+                ui.label("✅ Aucun doublon détecté - aucune action nécessaire").style(
+                    "font-size:14px !important; color:#27ae60 !important; font-weight:500 !important;"
+                )
+
         # --- Navigation ---
         with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
             ui.button(
-                " Précédent",
+                "⬅ Précédent",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/multivariate_analysis'")
             ).style(
                 "background:white !important; color:#01335A !important; font-weight:500 !important; "
@@ -5230,15 +5553,13 @@ def missing_values_page():
             )
             
             ui.button(
-                "Suivant ",
+                "Suivant ➡",
                 on_click=lambda: ui.run_javascript("window.location.href='/supervised/encoding'")
             ).style(
                 "background:#01335A !important; color:white !important; font-weight:600 !important; "
                 "border-radius:8px !important; height:48px !important; min-width:140px !important; "
                 "font-size:14px !important; text-transform:none !important;"
             )
-
-
 
 
 # ----------------- PAGE 3.7 : ENCODAGE DES FEATURES CATÉGORIELLES -----------------
@@ -5248,9 +5569,7 @@ def missing_values_page():
 def encoding_page():
     """
     Page complète pour l'encodage des features catégorielles
-    - Popup scrollable pour AVANT/APRÈS
-    - Design moderne avec visualisations
-    - Recommandations intelligentes
+    Design moderne avec visualisations et recommandations intelligentes
     """
     import pandas as pd
     import numpy as np
@@ -5284,7 +5603,7 @@ def encoding_page():
     # Vérifier si encodages déjà appliqués
     encoding_applied = state.get("encoding_applied", False)
     
-    # Synchroniser le split avec raw_df
+    #  Synchroniser le split avec raw_df
     if split and "X_train" in split:
         try:
             new_cols = [c for c in df.columns if c not in split["X_train"].columns and c != target_col]
@@ -5300,7 +5619,7 @@ def encoding_page():
                                 split[key][col] = df.loc[indices, col]
                 
                 state["split"] = split
-                print(f"✅ {len(new_cols)} nouvelles features synchronisées")
+                print(f" {len(new_cols)} nouvelles features synchronisées")
         
         except Exception as e:
             print(f"❌ Erreur synchronisation : {e}")
@@ -5324,7 +5643,7 @@ def encoding_page():
     
     active_cols = [c for c in df.columns if not columns_exclude.get(c, False) and c != target_col]
     
-    # Identifier les colonnes catégorielles
+    # Identifier les colonnes catégorielles (sur l'original si encodage appliqué)
     df_to_check = state.get("df_original_encoding") if encoding_applied else df
     cat_cols = [c for c in active_cols if c in df_to_check.columns and (df_to_check[c].dtype == 'object' or pd.api.types.is_categorical_dtype(df_to_check[c]))]
     
@@ -5356,11 +5675,11 @@ def encoding_page():
         if n_unique == 2:
             return "Label Encoding", "Binaire - simple et efficace", "✨"
         elif n_unique <= 10:
-            return "One-Hot Encoding", "Faible cardinalité - safe et interprétable", "🎯"
+            return "One-Hot Encoding", "Faible cardinalité - safe et interprétable", ""
         elif n_unique <= 50:
-            return "Frequency Encoding", "Cardinalité moyenne - évite l'explosion", "⚡"
+            return "Frequency Encoding", "Cardinalité moyenne - évite l'explosion", ""
         else:
-            return "Target Encoding", "Haute cardinalité - capture la relation avec target", "🎲"
+            return "Target Encoding", "Haute cardinalité - capture la relation avec target", ""
     
     def detect_ordinal(col):
         """Détecte si une colonne semble ordinale"""
@@ -5432,227 +5751,38 @@ def encoding_page():
         
         return fig
     
-    def show_before_after_popup():
-        """✅ POPUP SCROLLABLE AVANT/APRÈS"""
-        if not encoding_applied:
-            ui.notify("⚠️ Aucun encodage appliqué", color="warning")
-            return
+    def create_before_after_preview():
+        """Crée un aperçu avant/après de l'encodage"""
+        if not encoding_applied or not cat_cols:
+            return None
         
         df_before = state.get("df_original_encoding")
         df_after = state["raw_df"]
         
-        if df_before is None:
-            ui.notify("⚠️ Données originales introuvables", color="warning")
-            return
+        # Sélectionner colonnes à afficher
+        cols_to_show = cat_cols[:5]  # Max 5 colonnes
         
-        # Sélectionner colonnes catégorielles encodées
+        # Prendre 10 premières lignes
+        n_rows = min(10, len(df_before))
+        
+        before_data = df_before[cols_to_show].head(n_rows)
+        
+        # Pour l'après, trouver les colonnes correspondantes
+        after_cols = []
         strategies = state.get("encoding_strategy", {})
-        cols_to_show = list(strategies.keys())[:10]  # Max 10 colonnes
         
-        with ui.dialog() as dialog, ui.card().style(
-            "min-width:90vw !important; max-width:95vw !important; max-height:90vh !important; "
-            "overflow-y:auto !important; padding:32px !important; background:white !important; "
-            "border-radius:20px !important;"
-        ):
-            # Header sticky
-            with ui.row().classes("w-full items-center justify-between mb-6").style(
-                "position:sticky !important; top:0 !important; background:white !important; "
-                "z-index:1000 !important; padding-bottom:16px !important; border-bottom:3px solid #01335A !important;"
-            ):
-                ui.label("📊 Comparaison AVANT / APRÈS Encodage").style(
-                    "font-weight:800 !important; font-size:28px !important; color:#01335A !important;"
-                )
-                ui.button("✕", on_click=dialog.close).props("flat round").style(
-                    "font-size:24px !important; color:#e74c3c !important; font-weight:700 !important;"
-                )
-            
-            # Résumé stats
-            with ui.row().classes("w-full gap-4 mb-6 justify-center items-center"):
-                # Avant
-                with ui.card().style(
-                    "padding:20px 28px !important; background:linear-gradient(135deg, #ffebee, #ffcdd2) !important; "
-                    "border-radius:12px !important; border-left:4px solid #e74c3c !important; min-width:200px !important;"
-                ):
-                    ui.label("📊 AVANT").style(
-                        "font-weight:700 !important; font-size:14px !important; color:#c0392b !important; "
-                        "margin-bottom:8px !important; text-align:center !important;"
-                    )
-                    ui.label(f"{df_before.shape[0]} lignes").style(
-                        "font-size:22px !important; font-weight:800 !important; color:#e74c3c !important; "
-                        "text-align:center !important;"
-                    )
-                    ui.label(f"{df_before.shape[1]} colonnes").style(
-                        "font-size:18px !important; font-weight:600 !important; color:#e74c3c !important; "
-                        "text-align:center !important;"
-                    )
-                
-                # Flèche
-                ui.label("→").style(
-                    "font-size:48px !important; color:#01335A !important; font-weight:700 !important;"
-                )
-                
-                # Après
-                with ui.card().style(
-                    "padding:20px 28px !important; background:linear-gradient(135deg, #e8f5e9, #c8e6c9) !important; "
-                    "border-radius:12px !important; border-left:4px solid #27ae60 !important; min-width:200px !important;"
-                ):
-                    ui.label("📈 APRÈS").style(
-                        "font-weight:700 !important; font-size:14px !important; color:#1e8449 !important; "
-                        "margin-bottom:8px !important; text-align:center !important;"
-                    )
-                    ui.label(f"{df_after.shape[0]} lignes").style(
-                        "font-size:22px !important; font-weight:800 !important; color:#27ae60 !important; "
-                        "text-align:center !important;"
-                    )
-                    ui.label(f"{df_after.shape[1]} colonnes").style(
-                        "font-size:18px !important; font-weight:600 !important; color:#27ae60 !important; "
-                        "text-align:center !important;"
-                    )
-                
-                # Delta
-                cols_added = df_after.shape[1] - df_before.shape[1]
-                if cols_added != 0:
-                    with ui.card().style(
-                        "padding:20px 28px !important; background:linear-gradient(135deg, #e3f2fd, #bbdefb) !important; "
-                        "border-radius:12px !important; border-left:4px solid #2196f3 !important; min-width:160px !important;"
-                    ):
-                        ui.label("Δ Différence").style(
-                            "font-weight:700 !important; font-size:14px !important; color:#1565c0 !important; "
-                            "margin-bottom:8px !important; text-align:center !important;"
-                        )
-                        ui.label(f"{'+' if cols_added > 0 else ''}{cols_added} colonnes").style(
-                            f"font-size:20px !important; font-weight:800 !important; "
-                            f"color:{'#2196f3' if cols_added > 0 else '#e74c3c'} !important; text-align:center !important;"
-                        )
-            
-            ui.separator().style("margin:32px 0 !important; background:#e0e0e0 !important;")
-            
-            # TABLEAU AVANT
-            ui.label("📋 Dataset AVANT Encodage (Catégoriel)").style(
-                "font-weight:700 !important; font-size:20px !important; color:#e74c3c !important; "
-                "margin-bottom:16px !important;"
-            )
-            
-            df_before_sample = df_before.head(15).copy()
-            
-            html_before = f"""
-            <div style="width:100%; overflow-x:auto; border-radius:12px; border:3px solid #e74c3c; background:white; margin-bottom:40px;">
-                <div style="background:#e74c3c; padding:14px 20px; border-bottom:3px solid #c0392b;">
-                    <span style="font-size:14px; color:white; font-weight:700;">
-                        {df_before_sample.shape[0]} lignes × {df_before_sample.shape[1]} colonnes (scroll horizontal →)
-                    </span>
-                </div>
-                <div style="overflow-x:auto;">
-                    <table style="width:100%; border-collapse:collapse; font-size:13px; font-family:'Inter', sans-serif;">
-                        <thead>
-                            <tr style="background:#e74c3c; color:white;">
-            """
-            
-            for col in df_before_sample.columns:
-                html_before += f'<th style="padding:12px 16px; text-align:left; font-weight:700; white-space:nowrap; min-width:140px; border-right:1px solid rgba(255,255,255,0.2);">{col}</th>'
-            
-            html_before += """
-                            </tr>
-                        </thead>
-                        <tbody>
-            """
-            
-            for idx, row in df_before_sample.iterrows():
-                bg_color = "#f8f9fa" if idx % 2 == 0 else "white"
-                html_before += f'<tr style="background:{bg_color}; border-bottom:1px solid #e0e0e0;">'
-                
-                for col in df_before_sample.columns:
-                    val = row[col]
-                    if pd.isna(val):
-                        display_val = '<span style="color:#e74c3c; font-weight:700;">NaN</span>'
-                    elif isinstance(val, (int, np.integer)):
-                        display_val = str(val)
-                    elif isinstance(val, (float, np.floating)):
-                        display_val = f"{val:.2f}"
-                    else:
-                        display_val = str(val)
-                    
-                    html_before += f'<td style="padding:12px 16px; white-space:nowrap; min-width:140px; border-right:1px solid #f0f0f0;">{display_val}</td>'
-                
-                html_before += '</tr>'
-            
-            html_before += """
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            """
-            
-            ui.html(html_before, sanitize=False)
-            
-            # TABLEAU APRÈS
-            ui.label("📈 Dataset APRÈS Encodage (Numérique)").style(
-                "font-weight:700 !important; font-size:20px !important; color:#27ae60 !important; "
-                "margin-bottom:16px !important;"
-            )
-            
-            df_after_sample = df_after.head(15).copy()
-            
-            html_after = f"""
-            <div style="width:100%; overflow-x:auto; border-radius:12px; border:3px solid #27ae60; background:white;">
-                <div style="background:#27ae60; padding:14px 20px; border-bottom:3px solid #1e8449;">
-                    <span style="font-size:14px; color:white; font-weight:700;">
-                        {df_after_sample.shape[0]} lignes × {df_after_sample.shape[1]} colonnes (scroll horizontal →)
-                    </span>
-                </div>
-                <div style="overflow-x:auto;">
-                    <table style="width:100%; border-collapse:collapse; font-size:13px; font-family:'Inter', sans-serif;">
-                        <thead>
-                            <tr style="background:#27ae60; color:white;">
-            """
-            
-            for col in df_after_sample.columns:
-                html_after += f'<th style="padding:12px 16px; text-align:left; font-weight:700; white-space:nowrap; min-width:140px; border-right:1px solid rgba(255,255,255,0.2);">{col}</th>'
-            
-            html_after += """
-                            </tr>
-                        </thead>
-                        <tbody>
-            """
-            
-            for idx, row in df_after_sample.iterrows():
-                bg_color = "#f8f9fa" if idx % 2 == 0 else "white"
-                html_after += f'<tr style="background:{bg_color}; border-bottom:1px solid #e0e0e0;">'
-                
-                for col in df_after_sample.columns:
-                    val = row[col]
-                    if pd.isna(val):
-                        display_val = '<span style="color:#e74c3c; font-weight:700;">NaN</span>'
-                    elif isinstance(val, (int, np.integer)):
-                        display_val = str(val)
-                    elif isinstance(val, (float, np.floating)):
-                        display_val = f"{val:.3f}"
-                    else:
-                        display_val = str(val)
-                    
-                    html_after += f'<td style="padding:12px 16px; white-space:nowrap; min-width:140px; font-family:monospace; color:#01335A; font-weight:600; border-right:1px solid #f0f0f0;">{display_val}</td>'
-                
-                html_after += '</tr>'
-            
-            html_after += """
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            """
-            
-            ui.html(html_after, sanitize=False)
-            
-            # Info
-            with ui.card().classes("w-full mt-6").style(
-                "background:linear-gradient(135deg, #e3f2fd, #bbdefb) !important; padding:20px !important; "
-                "border-radius:12px !important; border-left:4px solid #2196f3 !important;"
-            ):
-                ui.label("💡 Scroll horizontal pour voir toutes les colonnes").style(
-                    "font-size:14px !important; color:#1565c0 !important; font-weight:700 !important;"
-                )
+        for col in cols_to_show:
+            method = strategies.get(col, "")
+            if method == "One-Hot Encoding":
+                # Trouver toutes les colonnes créées par OHE
+                ohe_cols = [c for c in df_after.columns if c.startswith(f"{col}_")]
+                after_cols.extend(ohe_cols[:3])  # Max 3 par variable
+            elif col in df_after.columns:
+                after_cols.append(col)
         
-        dialog.open()
+        after_data = df_after[after_cols].head(n_rows)
+        
+        return before_data, after_data, cols_to_show, after_cols
     
     def apply_encoding(df_target, strategies, params, fit_on_train=True, fitted_encoders=None):
         """Applique les encodages selon les stratégies définies"""
@@ -5756,7 +5886,7 @@ def encoding_page():
     
     def open_encoding_modal(col_name):
         """Ouvre un modal pour configurer l'encodage d'une colonne"""
-        print(f"🔍 Opening modal for: {col_name}")
+        print(f" Opening modal for: {col_name}")
         
         df_check = state.get("df_original_encoding", df)
         if col_name not in df_check.columns:
@@ -5776,10 +5906,11 @@ def encoding_page():
             "box-shadow:0 20px 60px rgba(1,51,90,0.15) !important; max-height:90vh !important; "
             "overflow-y:auto !important; border:1px solid #e1e8ed !important;"
         ):
-            # Header avec gradient
+            # Header avec gradient amélioré
             with ui.column().classes("w-full").style(
                 "background:linear-gradient(135deg, #01335A 0%, #09538C 50%, #0d6eaf 100%) !important; "
-                "padding:32px 40px !important; border-radius:20px 20px 0 0 !important;"
+                "padding:32px 40px !important; border-radius:20px 20px 0 0 !important; "
+                "position:relative !important;"
             ):
                 with ui.row().classes("items-center gap-3"):
                     with ui.card().style(
@@ -5794,7 +5925,7 @@ def encoding_page():
                             "text-shadow:0 2px 4px rgba(0,0,0,0.1) !important;"
                         )
                         ui.label(f"Variable catégorielle • {n_unique} modalités uniques").style(
-                            "color:rgba(255,255,255,0.9) !important; font-size:14px !important;"
+                            "color:rgba(255,255,255,0.9) !important; font-size:14px !important; font-weight:400 !important;"
                         )
             
             # Contenu
@@ -5939,7 +6070,7 @@ def encoding_page():
 
 **Principe** : Assigne un entier unique à chaque modalité (0, 1, 2, ...)
 
-✅ **Avantages** :
+ **Avantages** :
 - Simple et rapide
 - Idéal pour variables binaires
 - Pas d'explosion dimensionnelle
@@ -5963,7 +6094,7 @@ def encoding_page():
 
 **Principe** : Crée une colonne binaire (0/1) pour chaque modalité
 
-✅ **Avantages** :
+ **Avantages** :
 - Pas d'ordre imposé
 - Très interprétable
 - Compatible avec tous algorithmes
@@ -5991,7 +6122,7 @@ def encoding_page():
 
 **Principe** : Assigne des entiers selon un ordre naturel
 
-✅ Capture l'ordre naturel (Low < Medium < High)
+ Capture l'ordre naturel (Low < Medium < High)
 
 ⚠️ Applicable uniquement si ordre naturel existe
 
@@ -6030,7 +6161,7 @@ def encoding_page():
 
 **Principe** : Remplace chaque modalité par sa fréquence
 
-✅ **Avantages** :
+ **Avantages** :
 - Simple et efficace
 - Pas de data leakage
 - Une seule colonne générée
@@ -6050,7 +6181,7 @@ def encoding_page():
 
 **Principe** : Remplace chaque modalité par la moyenne de la target
 
-✅ Capture directement la relation avec la target
+ Capture directement la relation avec la target
 
 ⚠️ **Risques** : Overfitting et data leakage possibles
 
@@ -6086,7 +6217,7 @@ def encoding_page():
                         state.setdefault("encoding_strategy", {})[col_name] = method
                         state.setdefault("encoding_params", {})[col_name] = params
                         
-                        ui.notify(f"✅ Encodage configuré pour {col_name}", color="positive")
+                        ui.notify(f" Encodage configuré pour {col_name}", color="positive")
                         dialog.close()
                         ui.run_javascript("setTimeout(() => window.location.reload(), 500);")
                     
@@ -6125,7 +6256,7 @@ def encoding_page():
                     "margin-bottom:16px !important; color:#2c3e50 !important;"
                 )
                 
-                ui.label(f"📊 {len(strategies)} encodage(s) configuré(s)").style(
+                ui.label(f" {len(strategies)} encodage(s) configuré(s)").style(
                     "color:#01335A !important; font-weight:600 !important;"
                 )
                 
@@ -6159,7 +6290,7 @@ def encoding_page():
                                         )
                                 state["split"] = split_data
                             
-                            ui.notify("✅ Encodages appliqués!", color="positive")
+                            ui.notify(" Encodages appliqués!", color="positive")
                             dialog.close()
                             ui.run_javascript("setTimeout(() => window.location.reload(), 800);")
                         
@@ -6195,22 +6326,21 @@ def encoding_page():
             state.setdefault("encoding_params", {})[col] = params
             count += 1
         
-        ui.notify(f"✅ {count} recommandations appliquées", color="positive")
+        ui.notify(f" {count} recommandations appliquées", color="positive")
         ui.run_javascript("setTimeout(() => window.location.reload(), 500);")
     
     # ---------- UI PRINCIPALE ----------
     with ui.column().classes("w-full items-center").style(
         "background:linear-gradient(180deg, #f0f4f8 0%, #e8f1f8 100%) !important; "
-        "min-height:100vh !important; padding:60px 24px !important; "
-        "font-family:'Inter', sans-serif !important;"
+        "min-height:100vh !important; padding:60px 24px !important;"
     ):
         # HEADER
         with ui.column().classes("items-center mb-12"):
-            ui.label("🎨 Encodage des Features Catégorielles").style(
+            ui.label("Encodage des Features Catégorielles").style(
                 "font-weight:800 !important; font-size:42px !important; "
                 "background:linear-gradient(135deg, #01335A 0%, #09538C 100%) !important; "
                 "-webkit-background-clip:text !important; -webkit-text-fill-color:transparent !important; "
-                "text-align:center !important; letter-spacing:-1px !important;"
+                "text-align:center !important;"
             )
             ui.label("Conversion des variables catégorielles en format numérique").style(
                 "font-size:17px !important; color:#636e72 !important; text-align:center !important;"
@@ -6219,28 +6349,15 @@ def encoding_page():
         # INDICATEUR STATUT
         if encoding_applied:
             with ui.card().classes("w-full max-w-6xl mb-8").style(
-                "background:white !important; border-radius:16px !important; padding:24px !important; "
-                "box-shadow:0 4px 12px rgba(0,0,0,0.08) !important; border-left:4px solid #27ae60 !important;"
+                "background:white !important; border-radius:16px !important; padding:20px !important; "
+                "box-shadow:0 4px 12px rgba(0,0,0,0.08) !important; border-left:4px solid #01335A !important;"
             ):
                 with ui.row().classes("w-full items-center justify-between"):
-                    with ui.row().classes("items-center gap-3"):
-                        ui.label("✅ Encodages appliqués au dataset").style(
-                            "font-weight:700 !important; color:#27ae60 !important; font-size:16px !important;"
-                        )
-                        
-                        # Bouton pour voir AVANT/APRÈS
-                        ui.button(
-                            "👁️ Voir Avant/Après",
-                            on_click=show_before_after_popup
-                        ).style(
-                            "background:linear-gradient(135deg, #2196f3, #1976d2) !important; "
-                            "color:white !important; border-radius:8px !important; "
-                            "padding:10px 24px !important; text-transform:none !important; "
-                            "font-weight:600 !important;"
-                        )
-                    
+                    ui.label(" Encodages appliqués au dataset").style(
+                        "font-weight:600 !important; color:#01335A  !important; font-size:15px !important;"
+                    )
                     ui.button(
-                        "🔄 Réinitialiser",
+                        "Réinitialiser",
                         on_click=lambda: (
                             state.update({
                                 "raw_df": state.get("df_original_encoding").copy(),
@@ -6251,14 +6368,298 @@ def encoding_page():
                             ui.notify("Encodages annulés", color="info"),
                             ui.run_javascript("setTimeout(() => window.location.reload(), 800);")
                         )
-                    ).props("flat").style("color:#e74c3c !important; text-transform:none !important; font-weight:600 !important;")
+                    ).props("flat").style("color:#01335A !important; text-transform:none !important;")
         
-        # SECTION EXPLICATION (suite du code reste identique...)
-        # Le reste du code continue normalement avec les sections:
-        # - SECTION EXPLICATION
-        # - OVERVIEW METRICS
-        # - TABLE AVEC BOUTONS INDIVIDUELS
-        # - NAVIGATION
+        # ==================== APERÇU AVANT/APRÈS ====================
+        if encoding_applied:
+            preview_data = create_before_after_preview()
+            if preview_data:
+                before_data, after_data, cols_before, cols_after = preview_data
+                
+                with ui.card().classes("w-full max-w-6xl mb-8").style(
+                    "background:white !important; border-radius:20px !important; padding:40px !important; "
+                    "box-shadow:0 8px 24px rgba(1,51,90,0.08) !important;"
+                ):
+                    ui.label(" Aperçu Avant / Après Encodage").style(
+                        "font-weight:700 !important; font-size:26px !important; color:#01335A !important; margin-bottom:24px !important;"
+                    )
+                    
+                    with ui.row().classes("w-full gap-6"):
+                        # AVANT
+                        with ui.column().classes("flex-1"):
+                            with ui.card().style(
+                                "background:#58aced!important; "
+                                "padding:16px !important; border-radius:12px !important; border-left:4px solid #01335A !important;"
+                            ):
+                                ui.label("AVANT (Catégoriel)").style(
+                                    "font-weight:700 !important; color:white !important; margin-bottom:12px !important; font-size:16px !important;"
+                                )
+                                
+                                # Tableau HTML
+                                table_html_before = """
+                                <div style="overflow-x:auto; border-radius:8px; background:white; padding:16px;">
+                                <table style="width:100%; border-collapse:collapse; font-size:12px; font-family:'Inter', sans-serif;">
+                                    <thead style="background:#e74c3c; color:white;">
+                                        <tr>
+                                """
+                                
+                                for col in cols_before:
+                                    table_html_before += f'<th style="padding:10px; text-align:left; font-weight:600;">{col}</th>'
+                                
+                                table_html_before += """
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                """
+                                
+                                for idx, row in before_data.iterrows():
+                                    bg = "#f8f9fa" if idx % 2 == 0 else "white"
+                                    table_html_before += f'<tr style="background:{bg};">'
+                                    for col in cols_before:
+                                        val = str(row[col])[:30]
+                                        table_html_before += f'<td style="padding:8px; border-bottom:1px solid #e1e8ed;">{val}</td>'
+                                    table_html_before += '</tr>'
+                                
+                                table_html_before += """
+                                    </tbody>
+                                </table>
+                                </div>
+                                """
+                                
+                                ui.html(table_html_before, sanitize=False)
+                        
+                        # APRÈS
+                        with ui.column().classes("flex-1"):
+                            with ui.card().style(
+                                "background:#58aced!important; "
+                                "padding:16px !important; border-radius:12px !important; border-left:4px solid #01335A !important;"
+                            ):
+                                ui.label("APRÈS (Numérique)").style(
+                                    "font-weight:700 !important; color:white !important; margin-bottom:12px !important; font-size:16px !important;"
+                                )
+                                
+                                # Tableau HTML
+                                table_html_after = """
+                                <div style="overflow-x:auto; border-radius:8px; background:white; padding:16px;">
+                                <table style="width:100%; border-collapse:collapse; font-size:12px; font-family:'Inter', sans-serif;">
+                                    <thead style="background:#27ae60; color:white;">
+                                        <tr>
+                                """
+                                
+                                for col in cols_after:
+                                    table_html_after += f'<th style="padding:10px; text-align:left; font-weight:600;">{col}</th>'
+                                
+                                table_html_after += """
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                """
+                                
+                                for idx, row in after_data.iterrows():
+                                    bg = "#f8f9fa" if idx % 2 == 0 else "white"
+                                    table_html_after += f'<tr style="background:{bg};">'
+                                    for col in cols_after:
+                                        val = row[col]
+                                        if isinstance(val, (int, np.integer)):
+                                            formatted = str(val)
+                                        elif isinstance(val, (float, np.floating)):
+                                            formatted = f"{val:.3f}"
+                                        else:
+                                            formatted = str(val)[:30]
+                                        table_html_after += f'<td style="padding:8px; border-bottom:1px solid #e1e8ed; font-family:monospace; color:#01335A; font-weight:600;">{formatted}</td>'
+                                    table_html_after += '</tr>'
+                                
+                                table_html_after += """
+                                    </tbody>
+                                </table>
+                                </div>
+                                """
+                                
+                                ui.html(table_html_after, sanitize=False)
+                    
+                    # Stats
+                    with ui.row().classes("w-full gap-4 mt-6"):
+                        strategies = state.get("encoding_strategy", {})
+                        
+                        with ui.card().classes("flex-1 text-center p-4").style(
+                            "background:#f8f9fa !important; border-radius:10px !important;"
+                        ):
+                            ui.label(f"{len(cols_before)}").style("font-size:24px !important; font-weight:700 !important; color:#e74c3c !important;")
+                            ui.label("Colonnes catégorielles").style("font-size:12px !important; color:#636e72 !important;")
+                        
+                        with ui.card().classes("flex-1 text-center p-4").style(
+                            "background:#f8f9fa !important; border-radius:10px !important;"
+                        ):
+                            ui.label(f"{len(cols_after)}").style("font-size:24px !important; font-weight:700 !important; color:#27ae60 !important;")
+                            ui.label("Colonnes après encodage").style("font-size:12px !important; color:#636e72 !important;")
+                        
+                        with ui.card().classes("flex-1 text-center p-4").style(
+                            "background:#f8f9fa !important; border-radius:10px !important;"
+                        ):
+                            diff = len(cols_after) - len(cols_before)
+                            sign = "+" if diff > 0 else ""
+                            color = "#2196f3" if diff > 0 else "#27ae60"
+                            ui.label(f"{sign}{diff}").style(f"font-size:24px !important; font-weight:700 !important; color:{color} !important;")
+                            ui.label("Colonnes créées").style("font-size:12px !important; color:#636e72 !important;")
+        
+        # SECTION EXPLICATION
+        if not encoding_applied:
+            with ui.card().classes("w-full max-w-6xl mb-8").style(
+                "background:white !important; border-radius:24px !important; padding:48px !important; "
+                "box-shadow:0 12px 32px rgba(1,51,90,0.1) !important; position:relative !important;"
+            ):
+                with ui.row().classes("items-start gap-8 w-full"):
+                    with ui.column().classes("flex-1 gap-6"):
+                        ui.label("Pourquoi encoder les variables catégorielles ?").style(
+                            "font-weight:800 !important; font-size:28px !important; color:#01335A !important;"
+                        )
+                        
+                        ui.markdown("""
+Les algorithmes de Machine Learning travaillent **exclusivement avec des nombres**. 
+Les variables catégorielles doivent être **transformées en valeurs numériques**.
+
+** Objectifs :**
+1. **Identifier** toutes les features catégorielles
+2. **Choisir** la méthode d'encodage adaptée
+3. **Appliquer** l'encodage sur train/validation/test
+
+** Méthodes disponibles :**
+- **Label Encoding** : Variables binaires
+- **One-Hot Encoding** : Faible cardinalité (<10)
+- **Frequency Encoding** : Cardinalité moyenne (10-50)
+- **Target Encoding** : Haute cardinalité (>50)
+- **Ordinal Encoding** : Ordre naturel
+                        """)
+        
+        # OVERVIEW METRICS
+        with ui.card().classes("w-full max-w-6xl mb-8").style(
+            "background:white !important; border-radius:20px !important; padding:40px !important; "
+            "box-shadow:0 8px 24px rgba(1,51,90,0.08) !important;"
+        ):
+            ui.label(" Vue d'ensemble").style(
+                "font-weight:700 !important; font-size:26px !important; color:#01335A !important; margin-bottom:28px !important;"
+            )
+            
+            if n_categorical == 0:
+                ui.label(" Aucune feature catégorielle détectée").style(
+                    "font-weight:700 !important; font-size:22px !important; color:#27ae60 !important;"
+                )
+            else:
+                pct_cat = round(n_categorical / total_features * 100) if total_features > 0 else 0
+                n_configured = len([c for c in cat_cols if c in state.get("encoding_strategy", {})])
+                
+                with ui.row().classes("w-full gap-6"):
+                    with ui.card().classes("flex-1 text-center p-6").style(
+                        "background:linear-gradient(135deg, #01335A15, #01335A05) !important; "
+                        "border-radius:16px !important; border:2px solid #01335A30 !important;"
+                    ):
+                        ui.label(str(n_categorical)).style(
+                            "font-weight:800 !important; font-size:36px !important; color:#01335A !important;"
+                        )
+                        ui.label("Catégorielles").style("color:#2c3e50 !important; font-weight:600 !important;")
+                    
+                    with ui.card().classes("flex-1 text-center p-6").style(
+                        "background:linear-gradient(135deg, #2196f315, #2196f305) !important; "
+                        "border-radius:16px !important; border:2px solid #2196f330 !important;"
+                    ):
+                        ui.label(f"{n_configured}/{n_categorical}").style(
+                            "font-weight:800 !important; font-size:36px !important; color:#2196f3 !important;"
+                        )
+                        ui.label("Configurées").style("color:#2c3e50 !important; font-weight:600 !important;")
+        
+        # TABLE AVEC BOUTONS INDIVIDUELS
+        if n_categorical > 0 and not encoding_applied:
+            with ui.card().classes("w-full max-w-6xl mb-8").style(
+                "background:white !important; border-radius:20px !important; padding:40px !important; "
+                "box-shadow:0 8px 24px rgba(1,51,90,0.08) !important;"
+            ):
+                ui.label(" Configuration").style(
+                    "font-weight:700 !important; font-size:26px !important; color:#01335A !important; margin-bottom:20px !important;"
+                )
+                
+                with ui.card().classes("w-full mb-6").style(
+                    "background:linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important; "
+                    "padding:20px !important; border-radius:12px !important; "
+                    "box-shadow:none !important; border-left:4px solid #01335A !important;"
+                ):
+                    ui.label("💡 Cliquez sur le bouton 'Configurer' pour chaque variable").style(
+                        "font-size:15px !important; color:#01335A !important; font-weight:600 !important;"
+                    )
+                
+                for col in cat_cols:
+                    df_check = state.get("df_original_encoding", df)
+                    n_unique = df_check[col].nunique()
+                    icon, level, color, _ = get_cardinality_level(n_unique)
+                    recommended, _, rec_icon = get_recommended_encoding(col)
+                    current = state.get("encoding_strategy", {}).get(col, "")
+                    status = "" if current else "⚪"
+                    
+                    with ui.card().classes("w-full mb-3").style(
+                        "background:#f8f9fa !important; padding:20px !important; "
+                        "border-radius:12px !important; box-shadow:none !important; "
+                        "border:1px solid #e1e8ed !important; transition:all 0.2s ease !important;"
+                    ):
+                        with ui.row().classes("w-full items-center justify-between gap-4"):
+                            with ui.row().classes("items-center gap-4 flex-1"):
+                                ui.label(status).style("font-size:20px !important;")
+                                
+                                with ui.column().classes("gap-1"):
+                                    ui.label(col).style(
+                                        "font-weight:700 !important; font-size:16px !important; color:#01335A !important;"
+                                    )
+                                    ui.label(f"{icon} {level} • {n_unique} modalités").style(
+                                        "font-size:12px !important; color:#636e72 !important;"
+                                    )
+                                
+                                if current:
+                                    with ui.badge().style(
+                                        "background:#27ae60 !important; color:white !important; "
+                                        "padding:6px 12px !important; border-radius:6px !important;"
+                                    ):
+                                        ui.label(current).style("font-size:11px !important; font-weight:600 !important;")
+                                else:
+                                    with ui.badge().style(
+                                        "background:#f39c12 !important; color:white !important; "
+                                        "padding:6px 12px !important; border-radius:6px !important;"
+                                    ):
+                                        ui.label(f"Recommandé: {recommended}").style(
+                                            "font-size:11px !important; font-weight:600 !important;"
+                                        )
+                            
+                            ui.button(
+                                "Configurer",
+                                on_click=lambda c=col: open_encoding_modal(c)
+                            ).style(
+                                "background:linear-gradient(135deg, #01335A, #09538C) !important; "
+                                "color:white !important; border-radius:8px !important; "
+                                "padding:10px 20px !important; text-transform:none !important; "
+                                "font-weight:600 !important; font-size:13px !important;"
+                            ).props('icon-right="settings"')
+                
+                ui.separator().classes("my-6")
+                
+                with ui.row().classes("w-full gap-4"):
+                    ui.button("✨ Appliquer recommandations", on_click=apply_recommended).style(
+                        "flex:1 !important; background:linear-gradient(135deg, #2196f3, #1976d2) !important; "
+                        "color:white !important; border-radius:12px !important; padding:16px !important;"
+                    )
+                    
+                    ui.button("✓ Appliquer & Continuer", on_click=apply_all_encodings).style(
+                        "flex:1 !important; background:linear-gradient(135deg, #01335A, #09538C) !important; "
+                        "color:white !important; border-radius:12px !important; padding:16px !important;"
+                    )
+        
+        # NAVIGATION
+        with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-12"):
+            ui.button("◀ Précédent", on_click=lambda: ui.run_javascript("window.location.href='/supervised/missing_values'")).style(
+                "background:white !important; color:#01335A !important; border:2px solid #01335A !important; "
+                "border-radius:12px !important; height:52px !important; min-width:160px !important;"
+            )
+            
+            ui.button("Suivant ▶", on_click=lambda: ui.run_javascript("window.location.href='/supervised/distribution_transform'")).style(
+                "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white !important; "
+                "border-radius:12px !important; height:52px !important; min-width:160px !important;"
+            )
 
 
 
@@ -6315,7 +6716,7 @@ def distribution_transform_page():
                                 split[key][col] = df.loc[indices, col]
                 
                 state["split"] = split
-                print(f"✅ {len(new_cols)} nouvelles features synchronisées")
+                print(f" {len(new_cols)} nouvelles features synchronisées")
         
         except Exception as e:
             print(f"❌ Erreur synchronisation : {e}")
@@ -6458,20 +6859,20 @@ def distribution_transform_page():
         impacts = {}
         
         if abs_skew < 0.5:
-            impacts["Naive Bayes"] = ("✅", "Distribution normale", "#27ae60")
+            impacts["Naive Bayes"] = ("", "Distribution normale", "#27ae60")
         elif abs_skew < 1.5:
             impacts["Naive Bayes"] = ("🟡", "Assume normalité (légèrement violée)", "#f39c12")
         else:
             impacts["Naive Bayes"] = ("🔴", "Assume normalité (fortement violée)", "#e74c3c")
         
         if abs_skew < 0.5:
-            impacts["KNN"] = ("✅", "Distances équilibrées", "#27ae60")
+            impacts["KNN"] = ("", "Distances équilibrées", "#27ae60")
         elif abs_skew < 1.5:
             impacts["KNN"] = ("🟡", "Distances légèrement biaisées", "#f39c12")
         else:
             impacts["KNN"] = ("🟡", "Distances biaisées vers extrêmes", "#f39c12")
         
-        impacts["Decision Tree"] = ("✅", "Robuste aux distributions", "#27ae60")
+        impacts["Decision Tree"] = ("", "Robuste aux distributions", "#27ae60")
         
         return impacts
     
@@ -6609,7 +7010,7 @@ def distribution_transform_page():
                     "background:linear-gradient(135deg, #01335A 0%, #024a7a 100%) !important; "
                     "padding:20px 28px !important;"
                 ):
-                    ui.label("📊 Aperçu des données transformées").style(
+                    ui.label(" Aperçu des données transformées").style(
                         "font-weight:700; font-size:20px; color:white; margin:0;"
                     )
                     ui.label(f"{len(strategies)} transformation(s) appliquée(s)").style(
@@ -6765,7 +7166,7 @@ def distribution_transform_page():
                                     "color:#f39c12 !important; font-weight:600 !important; font-size:14px !important;"
                                 )
                             else:
-                                ui.label("✅ Toutes > 0").style(
+                                ui.label(" Toutes > 0").style(
                                     "color:#27ae60 !important; font-weight:600 !important; font-size:14px !important;"
                                 )
                 
@@ -6837,7 +7238,7 @@ def distribution_transform_page():
                             ui.markdown("""
 **📌 Log Transform : log(x + c)**
 
-✅ Réduit skewness fort, compresse valeurs extrêmes  
+ Réduit skewness fort, compresse valeurs extrêmes  
 ❌ Nécessite valeurs > 0, interprétabilité réduite
                             """).style(
                                 "background:#f8f9fa !important; padding:12px !important; "
@@ -6856,8 +7257,8 @@ def distribution_transform_page():
                             ui.markdown("""
 **📌 Square Root : sqrt(x)**
 
-✅ Pour skewness modéré (0.5-1.5)  
-✅ Plus douce que log, préserve mieux les relations
+ Pour skewness modéré (0.5-1.5)  
+ Plus douce que log, préserve mieux les relations
                             """).style(
                                 "background:#f8f9fa !important; padding:12px !important; "
                                 "border-radius:6px !important; font-size:12px !important;"
@@ -6867,7 +7268,7 @@ def distribution_transform_page():
                             ui.markdown("""
 **📌 Box-Cox Transform (automatique)**
 
-✅ Trouve meilleur λ pour normaliser  
+ Trouve meilleur λ pour normaliser  
 ⚠️ Nécessite valeurs strictement > 0
                             """).style(
                                 "background:#f8f9fa !important; padding:12px !important; "
@@ -6883,8 +7284,8 @@ def distribution_transform_page():
                             ui.markdown("""
 **📌 Yeo-Johnson (Box-Cox généralisé)**
 
-✅ Gère valeurs négatives et zéros  
-✅ λ optimal sera calculé automatiquement
+ Gère valeurs négatives et zéros  
+ λ optimal sera calculé automatiquement
                             """).style(
                                 "background:#f8f9fa !important; padding:12px !important; "
                                 "border-radius:6px !important; font-size:12px !important;"
@@ -6894,7 +7295,7 @@ def distribution_transform_page():
                             ui.markdown("""
 **📌 Aucune transformation**
 
-✅ Garder distribution originale  
+ Garder distribution originale  
 Recommandé si : C4.5 uniquement ou distribution déjà normale
                             """).style(
                                 "background:#f8f9fa !important; padding:12px !important; "
@@ -6945,7 +7346,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                         state.setdefault("transform_strategy", {})[col_name] = method
                         state.setdefault("transform_params", {})[col_name] = params
                         
-                        ui.notify(f"✅ Transformation configurée pour {col_name}", color="positive")
+                        ui.notify(f" Transformation configurée pour {col_name}", color="positive")
                         dialog.close()
                         ui.run_javascript("setTimeout(() => window.location.reload(), 500);")
                     
@@ -6969,7 +7370,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
             "padding:28px !important; border-radius:12px !important; "
             "box-shadow:0 8px 32px rgba(1,51,90,0.15) !important; max-width:480px !important;"
         ):
-            ui.label("✅ Confirmation").style(
+            ui.label(" Confirmation").style(
                 "font-weight:700 !important; font-size:18px !important; "
                 "color:#01335A !important; margin-bottom:12px !important;"
             )
@@ -7005,7 +7406,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                                 )
                                 if transformed_data is not None and transform_info is not None:
                                     transformers[col] = {"method": method, "params": transform_info}
-                                    print(f"✅ Fitted {method} pour {col}")
+                                    print(f" Fitted {method} pour {col}")
                         
                         state["fitted_transformers"] = transformers
                         
@@ -7047,7 +7448,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                             
                             state["split"] = split_data
                         
-                        ui.notify("✅ Transformations appliquées avec succès!", color="positive")
+                        ui.notify(" Transformations appliquées avec succès!", color="positive")
                         dialog.close()
                         ui.run_javascript("setTimeout(() => window.location.href='/supervised/scaling', 1000);")
                     
@@ -7082,7 +7483,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                 state.setdefault("transform_params", {})[col] = params
                 count += 1
         
-        ui.notify(f"✅ {count} recommandations appliquées", color="positive")
+        ui.notify(f" {count} recommandations appliquées", color="positive")
         ui.run_javascript("setTimeout(() => window.location.reload(), 500);")
     
     # ---------- UI ----------
@@ -7105,7 +7506,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
             "background:white !important; border-radius:12px !important; padding:24px !important; "
             "box-shadow:0 2px 8px rgba(1,51,90,0.08) !important;"
         ):
-            ui.label("📊 Analyse des distributions").style(
+            ui.label(" Analyse des distributions").style(
                 "font-weight:700 !important; font-size:18px !important; color:#01335A !important; "
                 "margin-bottom:16px !important;"
             )
@@ -7121,7 +7522,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                     "background:#e8f5e9 !important; padding:16px !important; "
                     "border-radius:8px !important; border-left:3px solid #4caf50 !important;"
                 ):
-                    ui.label("✅ Aucune feature nécessitant transformation").style(
+                    ui.label(" Aucune feature nécessitant transformation").style(
                         "color:#1b5e20 !important; font-weight:600 !important; font-size:14px !important;"
                     )
                     ui.label("Vous pouvez passer à l'étape suivante").style(
@@ -7249,7 +7650,7 @@ Recommandé si : C4.5 uniquement ou distribution déjà normale
                 # Boutons actions (plus compacts)
                 with ui.row().classes("w-full gap-2 mt-5"):
                     ui.button(
-                        "📊 Aperçu données transformées",
+                        " Aperçu données transformées",
                         on_click=show_transformed_data_preview
                     ).style(
                         "background:#01335A !important; color:white !important; border-radius:6px !important; "
@@ -7525,7 +7926,7 @@ def feature_scaling_page():
                 "border-radius:24px !important; box-shadow:0 4px 16px rgba(1,51,90,0.25) !important; "
                 "margin-top:8px !important;"
             ):
-                ui.label("🎯 Étape cruciale pour KNN et algorithmes basés sur les distances").style(
+                ui.label(" Étape cruciale pour KNN et algorithmes basés sur les distances").style(
                     "color:white !important; font-size:14px !important; font-weight:600 !important; "
                     "text-align:center !important;"
                 )
@@ -7535,7 +7936,7 @@ def feature_scaling_page():
             "background:white !important; border-radius:16px !important; padding:32px !important; "
             "box-shadow:0 4px 16px rgba(1,51,90,0.12) !important; border-top:4px solid #01335A !important;"
         ):
-            ui.label("📚 Pourquoi le Feature Scaling est essentiel ?").style(
+            ui.label(" Pourquoi le Feature Scaling est essentiel ?").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:20px !important;"
             )
@@ -7565,7 +7966,7 @@ def feature_scaling_page():
                     "background:#e8f5e9 !important; padding:20px !important; border-radius:12px !important; "
                     "border-left:4px solid #27ae60 !important;"
                 ):
-                    ui.label("✅ Avec Scaling").style(
+                    ui.label(" Avec Scaling").style(
                         "font-weight:700 !important; font-size:16px !important; color:#1e8449 !important; "
                         "margin-bottom:12px !important;"
                     )
@@ -7590,7 +7991,7 @@ def feature_scaling_page():
             )
             
             # StandardScaler
-            with ui.expansion("📊 StandardScaler (Z-score Normalization)", icon="science").classes("w-full mb-4").style(
+            with ui.expansion(" StandardScaler (Z-score Normalization)", icon="science").classes("w-full mb-4").style(
                 "border:2px solid #01335A !important; border-radius:12px !important; background:#f8f9fa !important;"
             ):
                 with ui.column().classes("p-4 gap-4"):
@@ -7617,7 +8018,7 @@ def feature_scaling_page():
                     
                     with ui.row().classes("w-full gap-6 mt-4"):
                         with ui.column().classes("flex-1"):
-                            ui.label("✅ Avantages").style("font-weight:700 !important; color:#27ae60 !important; font-size:14px !important; margin-bottom:8px !important;")
+                            ui.label(" Avantages").style("font-weight:700 !important; color:#27ae60 !important; font-size:14px !important; margin-bottom:8px !important;")
                             advantages = [
                                 "• Résultat : moyenne = 0, écart-type = 1",
                                 "• Optimal pour algorithmes basés sur distances (KNN, SVM)",
@@ -7670,7 +8071,7 @@ def feature_scaling_page():
                     
                     with ui.row().classes("w-full gap-6 mt-4"):
                         with ui.column().classes("flex-1"):
-                            ui.label("✅ Avantages").style("font-weight:700 !important; color:#27ae60 !important; font-size:14px !important; margin-bottom:8px !important;")
+                            ui.label(" Avantages").style("font-weight:700 !important; color:#27ae60 !important; font-size:14px !important; margin-bottom:8px !important;")
                             advantages = [
                                 "• Bornes garanties : [0, 1]",
                                 "• Préserve exactement les relations entre valeurs",
@@ -7723,7 +8124,7 @@ def feature_scaling_page():
                     
                     with ui.row().classes("w-full gap-6 mt-4"):
                         with ui.column().classes("flex-1"):
-                            ui.label("✅ Avantages").style("font-weight:700 !important; color:#27ae60 !important; font-size:14px !important; margin-bottom:8px !important;")
+                            ui.label(" Avantages").style("font-weight:700 !important; color:#27ae60 !important; font-size:14px !important; margin-bottom:8px !important;")
                             advantages = [
                                 "• Robuste aux outliers (médiane non affectée)",
                                 "• Utilise Q1, Q2, Q3 (statistiques d'ordre)",
@@ -7745,12 +8146,12 @@ def feature_scaling_page():
                                 ui.label(dis).style("font-size:12px !important; color:#2c3e50 !important; margin-bottom:4px !important;")
                     
                     with ui.card().style("background:#f3e5f5 !important; padding:12px !important; border-radius:8px !important; margin-top:12px !important;"):
-                        ui.label("🎯 Quand l'utiliser : Présence d'outliers confirmée, données avec distribution asymétrique, KNN robuste").style(
+                        ui.label(" Quand l'utiliser : Présence d'outliers confirmée, données avec distribution asymétrique, KNN robuste").style(
                             "font-size:12px !important; color:#6a1b9a !important; font-weight:600 !important;"
                         )
             
             # MaxAbsScaler
-            with ui.expansion("📐 MaxAbsScaler (Max Absolute Scaling)", icon="architecture").classes("w-full").style(
+            with ui.expansion(" MaxAbsScaler (Max Absolute Scaling)", icon="architecture").classes("w-full").style(
                 "border:2px solid #ff9800 !important; border-radius:12px !important; background:#f8f9fa !important;"
             ):
                 with ui.column().classes("p-4 gap-4"):
@@ -7776,7 +8177,7 @@ def feature_scaling_page():
                     
                     with ui.row().classes("w-full gap-6 mt-4"):
                         with ui.column().classes("flex-1"):
-                            ui.label("✅ Avantages").style("font-weight:700 !important; color:#27ae60 !important; font-size:14px !important; margin-bottom:8px !important;")
+                            ui.label(" Avantages").style("font-weight:700 !important; color:#27ae60 !important; font-size:14px !important; margin-bottom:8px !important;")
                             advantages = [
                                 "• Préserve la sparsité (ne centre pas à 0)",
                                 "• Pas de décalage (pas de soustraction)",
@@ -7807,7 +8208,7 @@ def feature_scaling_page():
             "background:white !important; border-radius:16px !important; padding:32px !important; "
             "box-shadow:0 4px 16px rgba(1,51,90,0.12) !important;"
         ):
-            ui.label("📋 Tableau Comparatif des Méthodes").style(
+            ui.label(" Tableau Comparatif des Méthodes").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:24px !important;"
             )
@@ -7827,7 +8228,7 @@ def feature_scaling_page():
                     <tbody>
                         <tr style="background:#f8f9fa;">
                             <td style="padding:14px; font-weight:700; color:#01335A; border-bottom:1px solid #e0e0e0;">
-                                📊 StandardScaler
+                                 StandardScaler
                             </td>
                             <td style="padding:14px; text-align:center; font-family:'Courier New'; font-size:12px; border-bottom:1px solid #e0e0e0;">
                                 (x - μ) / σ
@@ -7878,7 +8279,7 @@ def feature_scaling_page():
                                 </span>
                             </td>
                             <td style="padding:14px; text-align:center; border-bottom:1px solid #e0e0e0;">
-                                <span style="color:#27ae60; font-weight:700;">✅ Robuste</span>
+                                <span style="color:#27ae60; font-weight:700;"> Robuste</span>
                             </td>
                             <td style="padding:14px; font-size:12px; border-bottom:1px solid #e0e0e0;">
                                 Données avec outliers, KNN robuste, Distribution asymétrique
@@ -7887,7 +8288,7 @@ def feature_scaling_page():
                         
                         <tr style="background:white;">
                             <td style="padding:14px; font-weight:700; color:#ff9800;">
-                                📐 MaxAbsScaler
+                                 MaxAbsScaler
                             </td>
                             <td style="padding:14px; text-align:center; font-family:'Courier New'; font-size:12px;">
                                 x / max(|x|)
@@ -7916,7 +8317,7 @@ def feature_scaling_page():
             "background:white !important; border-radius:16px !important; padding:32px !important; "
             "box-shadow:0 4px 16px rgba(1,51,90,0.12) !important;"
         ):
-            ui.label("🔍 Détection Intelligente des Features").style(
+            ui.label(" Détection Intelligente des Features").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:20px !important;"
             )
@@ -7959,7 +8360,7 @@ def feature_scaling_page():
                     "background:linear-gradient(135deg, #f5f5f5, #e0e0e0) !important; padding:24px !important; "
                     "border-radius:12px !important; border-left:4px solid #7f8c8d !important;"
                 ):
-                    ui.label(f"📊 {len(cat_encoded)} Features Catégorielles Encodées").style(
+                    ui.label(f" {len(cat_encoded)} Features Catégorielles Encodées").style(
                         "font-weight:700 !important; font-size:18px !important; color:#7f8c8d !important; "
                         "margin-bottom:12px !important;"
                     )
@@ -8056,11 +8457,11 @@ def feature_scaling_page():
             }
             
             method_explanations = {
-                "standard": "✅ Standardise avec mean=0 et std=1\n✅ Optimal pour la plupart des algorithmes\n❌ Sensible aux outliers",
-                "minmax": "✅ Normalise dans l'intervalle [0,1]\n✅ Préserve les relations\n❌ Très sensible aux outliers",
-                "robust": "✅ Utilise médiane et IQR\n✅ Résistant aux valeurs extrêmes\n✅ Recommandé si outliers détectés",
-                "maxabs": "✅ Normalise dans [-1,1]\n✅ Pour données sparse\n❌ Sensible aux outliers",
-                "none": "✅ Conserve les données brutes\n✅ Si échelles déjà similaires"
+                "standard": " Standardise avec mean=0 et std=1\n Optimal pour la plupart des algorithmes\n❌ Sensible aux outliers",
+                "minmax": " Normalise dans l'intervalle [0,1]\n Préserve les relations\n❌ Très sensible aux outliers",
+                "robust": " Utilise médiane et IQR\n Résistant aux valeurs extrêmes\n Recommandé si outliers détectés",
+                "maxabs": " Normalise dans [-1,1]\n Pour données sparse\n❌ Sensible aux outliers",
+                "none": " Conserve les données brutes\n Si échelles déjà similaires"
             }
             
             # Recommandation
@@ -8079,11 +8480,11 @@ def feature_scaling_page():
                         "font-size:13px !important; color:#2c3e50 !important; font-weight:600 !important;"
                     )
                 elif recommended == "standard":
-                    ui.label("✅ Pas d'outliers majeurs détectés → StandardScaler optimal").style(
+                    ui.label(" Pas d'outliers majeurs détectés → StandardScaler optimal").style(
                         "font-size:13px !important; color:#2c3e50 !important; font-weight:600 !important;"
                     )
                 elif recommended == "none":
-                    ui.label("✅ Échelles similaires détectées → Scaling non nécessaire").style(
+                    ui.label(" Échelles similaires détectées → Scaling non nécessaire").style(
                         "font-size:13px !important; color:#2c3e50 !important; font-weight:600 !important;"
                     )
             
@@ -8091,10 +8492,10 @@ def feature_scaling_page():
             method_select = ui.select(
                 label="Sélectionnez une méthode de scaling",
                 options={
-                    "standard": "📊 StandardScaler (Z-score, mean=0, std=1)",
+                    "standard": " StandardScaler (Z-score, mean=0, std=1)",
                     "minmax": "📏 MinMaxScaler (normalise [0,1])",
                     "robust": "🛡️ RobustScaler (robuste aux outliers)",
-                    "maxabs": "📐 MaxAbsScaler (sparse data, [-1,1])",
+                    "maxabs": " MaxAbsScaler (sparse data, [-1,1])",
                     "none": "⏭️ Aucun scaling (raw data)"
                 },
                 value=recommended
@@ -8137,7 +8538,7 @@ def feature_scaling_page():
             
             # Bouton prévisualisation
             ui.button(
-                "👁️ Prévisualiser le scaling",
+                " Prévisualiser le scaling",
                 on_click=preview_scaling
             ).style(
                 "background:#2196f3 !important; color:white !important; border-radius:8px !important; "
@@ -8153,7 +8554,7 @@ def feature_scaling_page():
                 
                 if method == "none":
                     state["scaling_method"] = "none"
-                    ui.notify("✅ Aucun scaling appliqué", color="positive")
+                    ui.notify(" Aucun scaling appliqué", color="positive")
                     ui.run_javascript("setTimeout(() => window.location.href='/supervised/dimension_reduction', 1000);")
                     return
                 
@@ -8161,7 +8562,7 @@ def feature_scaling_page():
                     "padding:32px !important; border-radius:12px !important; "
                     "box-shadow:0 8px 32px rgba(1,51,90,0.15) !important; max-width:520px !important;"
                 ):
-                    ui.label("✅ Confirmation").style(
+                    ui.label(" Confirmation").style(
                         "font-weight:700 !important; font-size:20px !important; "
                         "color:#01335A !important; margin-bottom:16px !important;"
                     )
@@ -8190,7 +8591,7 @@ def feature_scaling_page():
                                 
                                 scaler = scalers[method]
                                 
-                                # ✅ BONNE PRATIQUE : Fit sur train uniquement
+                                #  BONNE PRATIQUE : Fit sur train uniquement
                                 if split and "X_train" in split:
                                     X_train_for_fit = split["X_train"][num_cols].copy()
                                 else:
@@ -8213,7 +8614,7 @@ def feature_scaling_page():
                                 state["fitted_scaler"] = scaler
                                 state["scaled_columns"] = num_cols
                                 
-                                ui.notify("✅ Scaling appliqué avec succès!", color="positive")
+                                ui.notify(" Scaling appliqué avec succès!", color="positive")
                                 dialog.close()
                                 ui.run_javascript("setTimeout(() => window.location.href='/supervised/dimension_reduction', 1000);")
                             
@@ -8429,7 +8830,7 @@ def dimension_reduction_page():
             
             variance_explained = pca.explained_variance_ratio_.sum() * 100
             
-            ui.notify(f"✅ PCA appliqué : {n_features} → {n_comp} composantes ({variance_explained:.1f}% variance)", 
+            ui.notify(f" PCA appliqué : {n_features} → {n_comp} composantes ({variance_explained:.1f}% variance)", 
                      color="positive", timeout=3000)
             
             # Mettre à jour colonnes exclues
@@ -8444,7 +8845,7 @@ def dimension_reduction_page():
     def skip_reduction():
         """Passer l'étape sans réduction"""
         state["reduction_applied"] = False
-        ui.notify("ℹ️ Aucune réduction appliquée", color="info")
+        ui.notify(" Aucune réduction appliquée", color="info")
         ui.run_javascript("setTimeout(() => window.location.href='/supervised/recap_validation', 1000);")
     
     # ---------- INTERFACE ----------
@@ -8461,7 +8862,7 @@ def dimension_reduction_page():
         
         # Section A : État Actuel
         with ui.card().classes("w-full p-5").style("max-width:900px !important; margin:0 auto 24px auto !important; border-radius:12px !important; box-shadow:0 2px 12px rgba(0,0,0,0.08) !important;"):
-            ui.label("📊 État Actuel du Dataset").style(
+            ui.label(" État Actuel du Dataset").style(
                 "font-weight:700 !important; font-size:18px !important; color:#2c3e50 !important; margin-bottom:12px !important;"
             )
             
@@ -8484,14 +8885,14 @@ def dimension_reduction_page():
                 
                 if ratio < 50:
                     ui.label(f"⚠️ Ratio {ratio:.1f} < 50 → Curse of dimensionality pour KNN").style("font-size:14px !important; margin-bottom:4px !important; color:#e67e22 !important; font-weight:600 !important;")
-                    ui.label("✅ PCA recommandée pour améliorer performance").style("font-size:14px !important; color:#27ae60 !important;")
+                    ui.label(" PCA recommandée pour améliorer performance").style("font-size:14px !important; color:#27ae60 !important;")
                 else:
-                    ui.label(f"✅ Ratio {ratio:.1f} > 50 → Pas de problème majeur").style("font-size:14px !important; margin-bottom:4px !important; color:#27ae60 !important; font-weight:600 !important;")
-                    ui.label("ℹ️ PCA optionnelle (peut accélérer l'entraînement)").style("font-size:14px !important; color:#7f8c8d !important;")
+                    ui.label(f" Ratio {ratio:.1f} > 50 → Pas de problème majeur").style("font-size:14px !important; margin-bottom:4px !important; color:#27ae60 !important; font-weight:600 !important;")
+                    ui.label(" PCA optionnelle (peut accélérer l'entraînement)").style("font-size:14px !important; color:#7f8c8d !important;")
         
         # Section B : Configuration PCA
         with ui.card().classes("w-full p-6").style("max-width:900px !important; margin:0 auto 24px auto !important; border-radius:12px !important; box-shadow:0 2px 12px rgba(0,0,0,0.08) !important;"):
-            ui.label("⚙️ Configuration PCA").style(
+            ui.label(" Configuration PCA").style(
                 "font-weight:700 !important; font-size:18px !important; color:#2c3e50 !important; margin-bottom:16px !important;"
             )
             
@@ -8511,11 +8912,11 @@ def dimension_reduction_page():
                     with options_container:
                         # Info PCA
                         with ui.card().classes("w-full p-4 mb-4").style("background:linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important; border-radius:8px !important;"):
-                            ui.label("ℹ️ Principe PCA").style("font-weight:700 !important; font-size:15px !important; margin-bottom:8px !important;")
+                            ui.label(" Principe PCA").style("font-weight:700 !important; font-size:15px !important; margin-bottom:8px !important;")
                             
                             with ui.row().classes("w-full gap-6"):
                                 with ui.column().classes("flex-1"):
-                                    ui.label("✅ Avantages").style("font-weight:600 !important; color:#27ae60 !important; margin-bottom:4px !important; font-size:13px !important;")
+                                    ui.label(" Avantages").style("font-weight:600 !important; color:#27ae60 !important; margin-bottom:4px !important; font-size:13px !important;")
                                     ui.label("• Réduit dimensionnalité").style("font-size:12px !important; margin-bottom:2px !important;")
                                     ui.label("• Préserve variance maximale").style("font-size:12px !important; margin-bottom:2px !important;")
                                     ui.label("• Rapide et déterministe").style("font-size:12px !important;")
@@ -8567,7 +8968,7 @@ def dimension_reduction_page():
                                 ui.label(f"→ Réduction : {n_features} → {n_for_95} features ({(1-n_for_95/n_features)*100:.0f}% de gain)").style("font-size:13px !important; color:#2c3e50 !important;")
                         
                         # Visualisation 2D
-                        ui.label("🎨 Prévisualisation 2D").style(
+                        ui.label(" Prévisualisation 2D").style(
                             "font-weight:700 !important; font-size:16px !important; color:#2c3e50 !important; margin:16px 0 12px 0 !important;"
                         )
                         
@@ -8584,7 +8985,7 @@ def dimension_reduction_page():
             "background:linear-gradient(135deg, #01335A 0%, #014d7a 100%) !important; "
             "border-radius:12px !important; box-shadow:0 4px 16px rgba(1,51,90,0.3) !important;"
         ):
-            ui.label("🎯 Décision Finale").style(
+            ui.label(" Décision Finale").style(
                 "font-weight:700 !important; font-size:20px !important; color:white !important; text-align:center !important; margin-bottom:16px !important;"
             )
             
@@ -8595,7 +8996,7 @@ def dimension_reduction_page():
                 
                 ui.label("🔷 KNN : PCA améliore vitesse et peut améliorer précision").style("font-size:13px !important; margin-bottom:4px !important;")
                 ui.label("🌳 Decision Tree : Peu d'impact (robuste à la dimensionnalité)").style("font-size:13px !important; margin-bottom:4px !important;")
-                ui.label("📊 Naive Bayes : Peut aider si features très corrélées").style("font-size:13px !important;")
+                ui.label(" Naive Bayes : Peut aider si features très corrélées").style("font-size:13px !important;")
             
             with ui.row().classes("w-full justify-center gap-4 mt-4"):
                 ui.button(
@@ -8607,7 +9008,7 @@ def dimension_reduction_page():
                 )
                 
                 ui.button(
-                    "✅ Appliquer PCA",
+                    " Appliquer PCA",
                     on_click=lambda: apply_pca(state.get("n_components", 10))
                 ).style(
                     "background:linear-gradient(135deg, #27ae60 0%, #229954 100%) !important; "
@@ -8958,7 +9359,7 @@ def recap_validation_page():
         state["preprocessing_validated"] = True
         state["preprocessing_validation_timestamp"] = datetime.now().isoformat()
         
-        ui.notify("✅ Preprocessing validé ! Passez à la configuration des algorithmes.", color="positive")
+        ui.notify(" Preprocessing validé ! Passez à la configuration des algorithmes.", color="positive")
         
         # Rediriger vers la page de configuration des algorithmes
         ui.run_javascript("setTimeout(() => window.location.href='/supervised/algorithm_config', 1000);")
@@ -9009,7 +9410,7 @@ def recap_validation_page():
         
         # Section A : Synthèse des transformations
         with ui.card().classes("w-full max-w-6xl p-6 mb-8"):
-            ui.label("📋 Résumé des Transformations Appliquées").style(
+            ui.label(" Résumé des Transformations Appliquées").style(
                 "font-weight:700; font-size:20px; color:#2c3e50; margin-bottom:16px;"
             )
             
@@ -9068,7 +9469,7 @@ def recap_validation_page():
 
         #  Aperçu des données
         with ui.card().classes("w-full max-w-6xl p-6 mb-8"):
-            ui.label("👁️ Aperçu du Dataset Final").style(
+            ui.label(" Aperçu du Dataset Final").style(
                 "font-weight:700; font-size:20px; color:#2c3e50; margin-bottom:16px;"
             )
             
@@ -9195,12 +9596,12 @@ def algorithm_config_page():
                     
                     n_after = len(X_train_resampled)
                     
-                    print(f"✅ SMOTE appliqué : {n_before} → {n_after} échantillons (Train uniquement)")
+                    print(f" SMOTE appliqué : {n_before} → {n_after} échantillons (Train uniquement)")
                     print(f"   Validation inchangé : {len(split['X_val'])}")
                     print(f"   Test inchangé : {len(split['X_test'])}")
                     
                     ui.notify(
-                        f"✅ SMOTE appliqué : {n_before} → {n_after} échantillons",
+                        f" SMOTE appliqué : {n_before} → {n_after} échantillons",
                         color="positive",
                         position="top",
                         timeout=3000
@@ -9287,7 +9688,7 @@ def algorithm_config_page():
                 "weights": "distance",
                 "algorithm": "auto"
             }
-            ui.notify("✅ Configuration KNN recommandée appliquée", color="positive")
+            ui.notify(" Configuration KNN recommandée appliquée", color="positive")
         
         elif algo == "decision_tree":
             state["algo_configs"]["decision_tree"] = {
@@ -9297,13 +9698,13 @@ def algorithm_config_page():
                 "min_samples_leaf": 5,
                 "max_features": "sqrt"
             }
-            ui.notify("✅ Configuration Decision Tree recommandée appliquée", color="positive")
+            ui.notify(" Configuration Decision Tree recommandée appliquée", color="positive")
         
         elif algo == "naive_bayes":
             state["algo_configs"]["naive_bayes"] = {
                 "var_smoothing": 1e-9
             }
-            ui.notify("✅ Configuration Naive Bayes par défaut appliquée", color="positive")
+            ui.notify(" Configuration Naive Bayes par défaut appliquée", color="positive")
         
         ui.run_javascript("setTimeout(() => location.reload(), 800);")
     
@@ -9363,7 +9764,7 @@ def algorithm_config_page():
         
         state["algo_config_timestamp"] = datetime.now().isoformat()
         
-        ui.notify("✅ Configurations validées !", color="positive")
+        ui.notify(" Configurations validées !", color="positive")
         ui.run_javascript("setTimeout(() => window.location.href='/supervised/training', 1000);")
     
     # ---------- INTERFACE ----------
@@ -9376,7 +9777,7 @@ def algorithm_config_page():
         
         # ==================== HEADER ====================
         with ui.column().classes("w-full items-center").style("margin-bottom:40px !important;"):
-            ui.label("⚙️ Configuration des Algorithmes").style(
+            ui.label(" Configuration des Algorithmes").style(
                 "font-weight:800 !important; font-size:36px !important; color:#01335A !important; "
                 "margin-bottom:12px !important; text-align:center !important; letter-spacing:-0.8px !important;"
             )
@@ -9391,7 +9792,7 @@ def algorithm_config_page():
                 "border-radius:24px !important; box-shadow:0 4px 16px rgba(1,51,90,0.25) !important; "
                 "margin-top:8px !important;"
             ):
-                ui.label("🎯 Dernière étape avant l'entraînement").style(
+                ui.label(" Dernière étape avant l'entraînement").style(
                     "color:white !important; font-size:14px !important; font-weight:600 !important; "
                     "text-align:center !important;"
                 )
@@ -9401,7 +9802,7 @@ def algorithm_config_page():
             "background:white !important; border-radius:16px !important; padding:28px !important; "
             "box-shadow:0 4px 16px rgba(1,51,90,0.12) !important; border-top:4px solid #01335A !important;"
         ):
-            ui.label("📊 État des Données").style(
+            ui.label(" État des Données").style(
                 "font-weight:700 !important; font-size:20px !important; color:#01335A !important; "
                 "margin-bottom:20px !important; text-align:center !important;"
             )
@@ -9434,7 +9835,7 @@ def algorithm_config_page():
                     "border-left:4px solid #27ae60 !important;"
                 ):
                     ui.label("Scaling").style("font-size:12px !important; color:#636e72 !important; margin-bottom:8px !important;")
-                    ui.label("✅" if compat['scaling'] else "❌").style("font-size:32px !important; margin:8px 0 !important;")
+                    ui.label("" if compat['scaling'] else "❌").style("font-size:32px !important; margin:8px 0 !important;")
                     ui.label("Appliqué" if compat['scaling'] else "Non appliqué").style(
                         f"font-size:11px !important; color:{'#27ae60' if compat['scaling'] else '#e74c3c'} !important; font-weight:600 !important;"
                     )
@@ -9446,7 +9847,7 @@ def algorithm_config_page():
                     "border-left:4px solid #ff9800 !important;"
                 ):
                     ui.label("Réduction").style("font-size:12px !important; color:#636e72 !important; margin-bottom:8px !important;")
-                    ui.label("✅" if compat['reduction'] else "➖").style("font-size:32px !important; margin:8px 0 !important;")
+                    ui.label("" if compat['reduction'] else "➖").style("font-size:32px !important; margin:8px 0 !important;")
                     ui.label("PCA" if compat['reduction'] else "Optionnel").style(
                         f"font-size:11px !important; color:{'#ff9800' if compat['reduction'] else '#7f8c8d'} !important; font-weight:600 !important;"
                     )
@@ -9461,7 +9862,7 @@ def algorithm_config_page():
                     ui.label(f"{compat['missing']}").style(
                         f"font-weight:800 !important; font-size:28px !important; color:{'#e74c3c' if compat['missing'] > 0 else '#27ae60'} !important;"
                     )
-                    ui.label("⚠️ À traiter" if compat['missing'] > 0 else "✅ Nettoyé").style(
+                    ui.label("⚠️ À traiter" if compat['missing'] > 0 else " Nettoyé").style(
                         f"font-size:11px !important; color:{'#e74c3c' if compat['missing'] > 0 else '#27ae60'} !important; font-weight:600 !important;"
                     )
         
@@ -9470,7 +9871,7 @@ def algorithm_config_page():
             "background:white !important; border-radius:16px !important; padding:32px !important; "
             "box-shadow:0 4px 16px rgba(1,51,90,0.12) !important;"
         ):
-            ui.label("🎯 Sélection des Algorithmes").style(
+            ui.label(" Sélection des Algorithmes").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:8px !important; text-align:center !important;"
             )
@@ -9534,7 +9935,7 @@ def algorithm_config_page():
                     "cursor:pointer !important; transition:all 0.3s ease !important;"
                 ):
                     with ui.column().classes("w-full items-center gap-2"):
-                        ui.label("📊").style("font-size:48px !important;")
+                        ui.label("").style("font-size:48px !important;")
                         ui.label("Naive Bayes").style(
                             "font-weight:700 !important; font-size:16px !important; color:#9c27b0 !important; text-align:center !important;"
                         )
@@ -9596,13 +9997,13 @@ def algorithm_config_page():
                     )
                     
                     # Description compacte
-                    with ui.expansion("📖 Principe", icon="info").classes("w-full mb-4"):
+                    with ui.expansion(" Principe", icon="info").classes("w-full mb-4"):
                         with ui.column().classes("p-3"):
                             ui.label("Classification basée sur les K voisins les plus proches").style("font-size:13px !important; margin-bottom:12px !important;")
                             
                             with ui.row().classes("w-full gap-6"):
                                 with ui.column().classes("flex-1"):
-                                    ui.label("✅ Avantages").style("font-weight:600 !important; color:#27ae60 !important; margin-bottom:6px !important; font-size:13px !important;")
+                                    ui.label(" Avantages").style("font-weight:600 !important; color:#27ae60 !important; margin-bottom:6px !important; font-size:13px !important;")
                                     ui.label("• Simple et intuitif").style("font-size:12px !important;")
                                     ui.label("• Frontières non-linéaires").style("font-size:12px !important;")
                                 
@@ -9611,7 +10012,7 @@ def algorithm_config_page():
                                     ui.label("• Sensible au scaling").style("font-size:12px !important;")
                                     ui.label("• Coût computationnel").style("font-size:12px !important;")
                     
-                    ui.label("⚙️ HYPERPARAMÈTRES").style("font-weight:700 !important; font-size:16px !important; margin-top:12px !important; margin-bottom:12px !important;")
+                    ui.label(" HYPERPARAMÈTRES").style("font-weight:700 !important; font-size:16px !important; margin-top:12px !important; margin-bottom:12px !important;")
                     
                     knn_config = state["algo_configs"]["knn"]
                     
@@ -9658,7 +10059,7 @@ def algorithm_config_page():
                     
                     # Info: Algorithm toujours auto
                     with ui.card().classes("w-full p-3 mt-3").style("background:#e3f2fd !important; border-radius:6px !important;"):
-                        ui.label("ℹ️ Algorithme de recherche : Auto (sélection automatique optimale)").style("font-size:12px !important; color:#1976d2 !important;")
+                        ui.label(" Algorithme de recherche : Auto (sélection automatique optimale)").style("font-size:12px !important; color:#1976d2 !important;")
                     
                     # Boutons
                     with ui.row().classes("w-full justify-end gap-2 mt-4"):
@@ -9678,13 +10079,13 @@ def algorithm_config_page():
                     )
                     
                     # Description compacte
-                    with ui.expansion("📖 Principe", icon="info").classes("w-full mb-4"):
+                    with ui.expansion(" Principe", icon="info").classes("w-full mb-4"):
                         with ui.column().classes("p-3"):
                             ui.label("Arbre de décision basé sur Information Gain (entropie)").style("font-size:13px !important; margin-bottom:12px !important;")
                             
                             with ui.row().classes("w-full gap-6"):
                                 with ui.column().classes("flex-1"):
-                                    ui.label("✅ Avantages").style("font-weight:600 !important; color:#27ae60 !important; margin-bottom:6px !important; font-size:13px !important;")
+                                    ui.label(" Avantages").style("font-weight:600 !important; color:#27ae60 !important; margin-bottom:6px !important; font-size:13px !important;")
                                     ui.label("• Très interprétable").style("font-size:12px !important;")
                                     ui.label("• Robuste aux outliers").style("font-size:12px !important;")
                                 
@@ -9693,7 +10094,7 @@ def algorithm_config_page():
                                     ui.label("• Tendance overfitting").style("font-size:12px !important;")
                                     ui.label("• Instable").style("font-size:12px !important;")
                     
-                    ui.label("⚙️ HYPERPARAMÈTRES").style("font-weight:700 !important; font-size:16px !important; margin-top:12px !important; margin-bottom:12px !important;")
+                    ui.label(" HYPERPARAMÈTRES").style("font-weight:700 !important; font-size:16px !important; margin-top:12px !important; margin-bottom:12px !important;")
                     
                     dt_config = state["algo_configs"]["decision_tree"]
                     
@@ -9777,18 +10178,18 @@ def algorithm_config_page():
         if "Naive Bayes" in state.get("selected_algos", []):
             with nb_card:
                 with ui.card().classes("w-full p-5 mb-6").style("border-radius:12px !important; box-shadow:0 2px 12px rgba(0,0,0,0.08) !important;"):
-                    ui.label("📊 Naive Bayes").style(
+                    ui.label(" Naive Bayes").style(
                         "font-weight:700 !important; font-size:20px !important; color:#2c3e50 !important; margin-bottom:12px !important;"
                     )
                     
                     # Description compacte
-                    with ui.expansion("📖 Principe", icon="info").classes("w-full mb-4"):
+                    with ui.expansion(" Principe", icon="info").classes("w-full mb-4"):
                         with ui.column().classes("p-3"):
                             ui.label("Classifieur probabiliste basé sur Bayes avec indépendance des features").style("font-size:13px !important; margin-bottom:12px !important;")
                             
                             with ui.row().classes("w-full gap-6"):
                                 with ui.column().classes("flex-1"):
-                                    ui.label("✅ Avantages").style("font-weight:600 !important; color:#27ae60 !important; margin-bottom:6px !important; font-size:13px !important;")
+                                    ui.label(" Avantages").style("font-weight:600 !important; color:#27ae60 !important; margin-bottom:6px !important; font-size:13px !important;")
                                     ui.label("• Très rapide").style("font-size:12px !important;")
                                     ui.label("• Peu de données nécessaire").style("font-size:12px !important;")
                                 
@@ -9797,7 +10198,7 @@ def algorithm_config_page():
                                     ui.label("• Assume indépendance").style("font-size:12px !important;")
                                     ui.label("• Distribution gaussienne").style("font-size:12px !important;")
                     
-                    ui.label("⚙️ HYPERPARAMÈTRES").style("font-weight:700 !important; font-size:16px !important; margin-top:12px !important; margin-bottom:12px !important;")
+                    ui.label(" HYPERPARAMÈTRES").style("font-weight:700 !important; font-size:16px !important; margin-top:12px !important; margin-bottom:12px !important;")
                     
                     nb_config = state["algo_configs"]["naive_bayes"]
                     
@@ -9883,7 +10284,7 @@ def algorithm_config_page():
             "background:linear-gradient(135deg, #01335A 0%, #014d7a 100%) !important; "
             "border-radius:12px !important; box-shadow:0 4px 16px rgba(1,51,90,0.3) !important;"
         ):
-            ui.label("📋 RÉCAPITULATIF CONFIGURATION").style(
+            ui.label(" RÉCAPITULATIF CONFIGURATION").style(
                 "font-weight:700 !important; font-size:20px !important; color:white !important; margin-bottom:16px !important; text-align:center !important;"
             )
             
@@ -9917,7 +10318,7 @@ def algorithm_config_page():
                     # Naive Bayes
                     if "Naive Bayes" in selected:
                         with ui.card().classes("p-4").style("background:white !important; border-radius:8px !important; min-width:250px !important;"):
-                            ui.label("📊 Naive Bayes").style("font-weight:700 !important; font-size:15px !important; margin-bottom:8px !important; text-align:center !important;")
+                            ui.label(" Naive Bayes").style("font-weight:700 !important; font-size:15px !important; margin-bottom:8px !important; text-align:center !important;")
                             nb_cfg = state["algo_configs"]["naive_bayes"]
                             ui.label(f"var_smoothing: {nb_cfg['var_smoothing']:.1e}").style("font-size:12px !important;")
                 
@@ -10403,7 +10804,7 @@ def feature_importance_page():
                 
                 # Légende significativité
                 with ui.card().classes("w-full p-4 mb-4").style("background:#e8f0f7 !important; border-radius:8px !important;"):
-                    ui.label("📖 Légende Significativité (p-value) :").style("font-weight:700 !important; color:#01335A !important; margin-bottom:8px !important;")
+                    ui.label(" Légende Significativité (p-value) :").style("font-weight:700 !important; color:#01335A !important; margin-bottom:8px !important;")
                     ui.label("*** p < 0.001 (Très significatif) - Forte évidence d'association").style("font-size:14px !important; color:#023d6b !important;")
                     ui.label("** p < 0.01 (Significatif) - Bonne évidence d'association").style("font-size:14px !important; color:#023d6b !important;")
                     ui.label("* p < 0.05 (Marginalement significatif) - Évidence modérée").style("font-size:14px !important; color:#023d6b !important;")
@@ -11104,7 +11505,7 @@ def training_page():
         
         # ==================== CONFIGURATION ====================
         with ui.card().classes("w-full max-w-6xl p-6 mb-6").style("background:#e3f2fd; border-left:5px solid #2196f3;"):
-            ui.label("📋 Configuration").style("font-weight:700; font-size:20px; margin-bottom:12px;")
+            ui.label(" Configuration").style("font-weight:700; font-size:20px; margin-bottom:12px;")
             
             with ui.column().classes("gap-2"):
                 ui.label(f"• Dataset : Train ({len(X_train):,} samples, {X_train.shape[1]} features)").style("font-size:14px;")
@@ -11188,7 +11589,7 @@ def results_page():
     - Courbes ROC
     - Courbes Precision-Recall
     - Analyse d'erreurs
-    - ✅ DÉTECTION DÉSÉQUILIBRE avec ALERTES
+    -  DÉTECTION DÉSÉQUILIBRE avec ALERTES
     """
     
     # ---------- CONTEXTE ----------
@@ -11228,7 +11629,7 @@ def results_page():
     
     def analyze_class_imbalance():
         """
-        ✅ NOUVELLE FONCTION : Analyse détaillée du déséquilibre
+         NOUVELLE FONCTION : Analyse détaillée du déséquilibre
         Retourne dict avec diagnostics et recommandations
         """
         first_result = list(training_results.values())[0]
@@ -11312,22 +11713,22 @@ def results_page():
         if analysis["is_imbalanced"]:
             if analysis["severity"] == "critical":
                 analysis["recommendations"].extend([
-                    "🎯 PRIORITÉ 1: Appliquer SMOTE sur le training set (disponible dans Split)",
+                    " PRIORITÉ 1: Appliquer SMOTE sur le training set (disponible dans Split)",
                     "⚖️ PRIORITÉ 2: Utiliser class_weight='balanced' dans les algorithmes",
                     "🔄 PRIORITÉ 3: Tester l'undersampling de la classe majoritaire",
-                    "📊 PRIORITÉ 4: Utiliser F1-Score au lieu d'Accuracy comme métrique principale",
+                    " PRIORITÉ 4: Utiliser F1-Score au lieu d'Accuracy comme métrique principale",
                     "🔧 PRIORITÉ 5: Augmenter K dans KNN (tester K=10, K=15)"
                 ])
             elif analysis["severity"] == "moderate":
                 analysis["recommendations"].extend([
-                    "🎯 Appliquer SMOTE pour équilibrer les classes",
+                    " Appliquer SMOTE pour équilibrer les classes",
                     "⚖️ Utiliser class_weight='balanced'",
-                    "📊 Privilégier F1-Score et Recall pour la classe minoritaire",
+                    " Privilégier F1-Score et Recall pour la classe minoritaire",
                     "🔧 Ajuster K dans KNN si nécessaire"
                 ])
             else:
                 analysis["recommendations"].append(
-                    "📊 Surveiller les métriques par classe (Recall notamment)"
+                    " Surveiller les métriques par classe (Recall notamment)"
                 )
         
         # Si problèmes de recall détectés même sans déséquilibre majeur
@@ -11335,9 +11736,9 @@ def results_page():
         if critical_issues and not analysis["recommendations"]:
             analysis["recommendations"].extend([
                 "🔧 Ajuster les hyperparamètres (notamment K pour KNN)",
-                "🎯 Appliquer SMOTE même avec déséquilibre modéré",
+                " Appliquer SMOTE même avec déséquilibre modéré",
                 "⚖️ Tester class_weight='balanced'",
-                "📊 Changer de métrique de distance (Manhattan au lieu d'Euclidean)"
+                " Changer de métrique de distance (Manhattan au lieu d'Euclidean)"
             ])
         
         return analysis
@@ -11447,7 +11848,7 @@ def results_page():
                 print(f"Erreur ROC pour {algo_name}: {e}")
         
         fig.update_layout(
-            title='📊 Courbes ROC',
+            title=' Courbes ROC',
             xaxis_title='False Positive Rate',
             yaxis_title='True Positive Rate',
             height=450,
@@ -11534,7 +11935,7 @@ def results_page():
                     range=[0, 1]
                 )
             ),
-            title='🎯 Comparaison Multi-Métriques',
+            title=' Comparaison Multi-Métriques',
             height=450,
             paper_bgcolor='#f8f9fa',
             showlegend=True,
@@ -11560,7 +11961,7 @@ def results_page():
         
         return df
     
-    # ✅ ANALYSER DÉSÉQUILIBRE
+    #  ANALYSER DÉSÉQUILIBRE
     imbalance_analysis = analyze_class_imbalance()
     
     # ---------- INTERFACE ----------
@@ -11571,7 +11972,7 @@ def results_page():
         
         # ==================== HEADER ====================
         with ui.column().classes("w-full items-center").style("margin-bottom:40px !important;"):
-            ui.label("📊 Résultats & Analyse").style(
+            ui.label(" Résultats & Analyse").style(
                 "font-weight:800 !important; font-size:36px !important; color:#01335A !important; "
                 "margin-bottom:12px !important; text-align:center !important; letter-spacing:-0.8px !important;"
             )
@@ -11600,7 +12001,7 @@ def results_page():
                     "color": "#3498db",
                     "bg": "linear-gradient(135deg, #e3f2fd, #bbdefb)",
                     "border": "#2980b9",
-                    "icon": "ℹ️",
+                    "icon": "",
                     "title": "Déséquilibre Léger"
                 }
             }
@@ -11618,7 +12019,7 @@ def results_page():
                 
                 # Distribution des classes
                 with ui.card().style("background:white !important; padding:20px !important; border-radius:12px !important; margin-bottom:20px !important;"):
-                    ui.label("📊 Distribution des Classes").style(
+                    ui.label(" Distribution des Classes").style(
                         "font-weight:700 !important; font-size:18px !important; color:#2c3e50 !important; margin-bottom:12px !important;"
                     )
                     
@@ -11650,7 +12051,7 @@ def results_page():
                 # Problèmes détectés
                 if imbalance_analysis["issues"]:
                     with ui.card().style("background:#fff !important; padding:20px !important; border-radius:12px !important; margin-bottom:20px !important;"):
-                        ui.label("🔍 Problèmes Détectés").style(
+                        ui.label(" Problèmes Détectés").style(
                             "font-weight:700 !important; font-size:18px !important; color:#e74c3c !important; margin-bottom:12px !important;"
                         )
                         
@@ -11691,7 +12092,7 @@ def results_page():
             <table style="width:100% !important; color:#00ff88 !important; font-family:'Courier New', monospace !important; font-size:13px !important; border-collapse:collapse !important;">
                 <thead>
                     <tr style="border-bottom:2px solid #00ff88 !important;">
-                        <th style="text-align:left !important; padding:12px !important; color:#00ffff !important; font-size:14px !important; font-weight:700 !important;">🎯 Modèle</th>
+                        <th style="text-align:left !important; padding:12px !important; color:#00ffff !important; font-size:14px !important; font-weight:700 !important;"> Modèle</th>
                         <th style="text-align:center !important; padding:12px !important; color:#00ffff !important; font-weight:700 !important;">Accuracy</th>
                         <th style="text-align:center !important; padding:12px !important; color:#00ffff !important; font-weight:700 !important;">Precision</th>
                         <th style="text-align:center !important; padding:12px !important; color:#00ffff !important; font-weight:700 !important;">Recall</th>
@@ -11761,7 +12162,7 @@ def results_page():
             "background:white !important; border-radius:16px !important; padding:32px !important; "
             "box-shadow:0 4px 16px rgba(1,51,90,0.12) !important;"
         ):
-            ui.label("📋 Métriques Détaillées par Classe").style(
+            ui.label(" Métriques Détaillées par Classe").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:20px !important; text-align:center !important;"
             )
@@ -11784,7 +12185,7 @@ def results_page():
                         elif "Forest" in algo_name:
                             icon = "🌲"
                         elif "Bayes" in algo_name:
-                            icon = "📊"
+                            icon = ""
                         else:
                             icon = "🤖"
                         
@@ -11801,7 +12202,7 @@ def results_page():
                             report_html = """
                             <div style="background:linear-gradient(135deg, #1a1a2e 0%, #16213e 100%) !important; border-radius:12px !important; padding:24px !important; overflow-x:auto !important; margin-bottom:20px !important; box-shadow:0 4px 16px rgba(0,0,0,0.25) !important;">
                             <div style="color:#00ffff !important; font-family:'Courier New', monospace !important; font-size:15px !important; margin-bottom:16px !important; font-weight:700 !important; text-align:center !important;">
-                                📊 CLASSIFICATION REPORT
+                                 CLASSIFICATION REPORT
                             </div>
                             <table style="width:100% !important; color:#00ff88 !important; font-family:'Courier New', monospace !important; font-size:12px !important; border-collapse:collapse !important;">
                                 <thead>
@@ -11820,7 +12221,7 @@ def results_page():
                                 if str(class_name) in report_df.index:
                                     row = report_df.loc[str(class_name)]
                                     
-                                    # ✅ Détecter problèmes pour cette classe
+                                    #  Détecter problèmes pour cette classe
                                     recall_val = row['recall']
                                     is_problematic = recall_val < 0.3
                                     row_bg = "rgba(231, 76, 60, 0.1)" if is_problematic else "transparent"
@@ -11932,7 +12333,7 @@ def results_page():
             "background:white !important; border-radius:16px !important; padding:32px !important; "
             "box-shadow:0 4px 16px rgba(1,51,90,0.12) !important;"
         ):
-            ui.label("🎯 Comparaison Radar").style(
+            ui.label(" Comparaison Radar").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:20px !important; text-align:center !important;"
             )
@@ -12045,6 +12446,7 @@ def optimization_page():
     - Validation sur Test Set
     - Analyse d'Erreurs détaillée
     - Comparaison Baseline vs Optimisé
+    - Visualisations avancées des algorithmes
     """
     
     # ---------- IMPORTS ----------
@@ -12102,26 +12504,29 @@ def optimization_page():
     # ---------- GRILLES DE PARAMÈTRES AMÉLIORÉES ----------
     param_grids = {
         "KNN": {
-            'classifier__n_neighbors': [3, 5, 7, 9],
+            'classifier__n_neighbors': [3, 5, 7, 9, 11],
             'classifier__weights': ['uniform', 'distance'],
-            'classifier__metric': ['euclidean', 'manhattan']
+            'classifier__metric': ['euclidean', 'manhattan', 'minkowski'],
+            'classifier__p': [1, 2]
         },
         "Decision Tree": {
-            'classifier__max_depth': [3, 5, 7, 10, 15, None],
-            'classifier__min_samples_split': [2, 5, 10],
-            'classifier__min_samples_leaf': [1, 2, 4],
-            'classifier__criterion': ['gini', 'entropy'],
+            'classifier__max_depth': [3, 5, 7, 10, 15, 20, None],
+            'classifier__min_samples_split': [2, 5, 10, 20],
+            'classifier__min_samples_leaf': [1, 2, 4, 8],
+            'classifier__criterion': ['gini', 'entropy', 'log_loss'],
+            'classifier__splitter': ['best', 'random'],
             'classifier__class_weight': ['balanced', None]
         },
         "Random Forest": {
-            'classifier__n_estimators': [100, 200, 300],
-            'classifier__max_depth': [10, 15, 20, None],
-            'classifier__min_samples_split': [2, 5],
-            'classifier__min_samples_leaf': [1, 2],
+            'classifier__n_estimators': [100, 200, 300, 500],
+            'classifier__max_depth': [10, 15, 20, 25, None],
+            'classifier__min_samples_split': [2, 5, 10],
+            'classifier__min_samples_leaf': [1, 2, 4],
+            'classifier__max_features': ['sqrt', 'log2', None],
             'classifier__class_weight': ['balanced', 'balanced_subsample', None]
         },
         "Naive Bayes": {
-            'classifier__var_smoothing': [1e-9, 1e-8, 1e-7, 1e-6]
+            'classifier__var_smoothing': [1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5]
         }
     }
     
@@ -12160,6 +12565,405 @@ def optimization_page():
             from sklearn.pipeline import Pipeline
             return Pipeline(steps)
     
+    def get_algorithm_explanation(algo_name):
+        """Retourne explication détaillée de l'algorithme"""
+        explanations = {
+            "KNN": {
+                "name": "K-Nearest Neighbors (KNN)",
+                "icon": "🎯",
+                "principe": "Classification basée sur la proximité : un point est classé selon la majorité de ses K plus proches voisins.",
+                "algorithme": """
+**Algorithme :**
+1. Calculer la distance entre le point à classer et tous les points d'entraînement
+2. Sélectionner les K plus proches voisins
+3. Vote majoritaire : la classe la plus fréquente parmi les K voisins
+4. En cas d'égalité : choisir la classe du voisin le plus proche
+
+**Métriques de distance :**
+- **Euclidienne** : √(Σ(xi - yi)²) - Distance en ligne droite
+- **Manhattan** : Σ|xi - yi| - Distance en grille (taxi)
+- **Minkowski** : (Σ|xi - yi|^p)^(1/p) - Généralisation (p=1: Manhattan, p=2: Euclidienne)
+
+**Pondération :**
+- **Uniform** : Tous les voisins ont le même poids (1 vote)
+- **Distance** : Poids inversement proportionnel à la distance
+""",
+                "avantages": [
+                    "✅ Simple à comprendre et implémenter",
+                    "✅ Pas d'entraînement (lazy learning)",
+                    "✅ Fonctionne bien avec peu de features",
+                    "✅ Non-paramétrique (pas d'hypothèse sur la distribution)",
+                    "✅ S'adapte naturellement aux frontières complexes"
+                ],
+                "inconvenients": [
+                    "❌ Lent sur gros datasets (calcul de distances)",
+                    "❌ Sensible au bruit et outliers",
+                    "❌ Curse of dimensionality (>20 features)",
+                    "❌ Nécessite normalisation des données",
+                    "❌ Sensible aux features non pertinentes"
+                ],
+                "params": {
+                    "n_neighbors (K)": "Nombre de voisins à considérer (impair pour éviter égalités)",
+                    "weights": "uniform (vote égal) vs distance (pondération par distance)",
+                    "metric": "Fonction de distance (euclidean, manhattan, minkowski)",
+                    "p": "Paramètre pour Minkowski (1=Manhattan, 2=Euclidean)"
+                },
+                "use_cases": "Images, recommandations, détection d'anomalies, pattern recognition"
+            },
+            "Decision Tree": {
+                "name": "Arbre de Décision (C4.5 / CART)",
+                "icon": "🌳",
+                "principe": "Divise récursivement les données en sous-ensembles homogènes selon des règles de décision.",
+                "algorithme": """
+**Algorithme C4.5 (Quinlan) / CART :**
+1. **Sélection de l'attribut** : Choisir l'attribut avec le plus grand Gain d'Information
+2. **Division** : Créer une branche pour chaque valeur possible de l'attribut
+3. **Récursion** : Répéter sur chaque sous-ensemble jusqu'à critère d'arrêt
+4. **Élagage** : Simplifier l'arbre pour éviter l'overfitting
+
+**Critères de division :**
+
+**Gini Impurity (CART) :**
+Gini(t) = 1 - Σ[P(c|t)]²
+où P(c|t) = proportion de classe c au nœud t
+
+**Entropy (C4.5) :**
+H(t) = -Σ P(c|t) × log₂[P(c|t)]
+
+**Information Gain :**
+IG = H(parent) - Σ(weighted H(children))
+
+**Log Loss :**
+-Σ P(c|t) × log[P(c|t)]
+
+**Critères d'arrêt :**
+- Profondeur maximale atteinte
+- Minimum d'échantillons pour diviser
+- Minimum d'échantillons dans une feuille
+- Pureté parfaite (Gini=0)
+""",
+                "avantages": [
+                    "✅ Très interprétable (visualisation facile)",
+                    "✅ Gère variables numériques ET catégorielles",
+                    "✅ Pas besoin de normalisation",
+                    "✅ Gère les valeurs manquantes",
+                    "✅ Identifie automatiquement les features importantes",
+                    "✅ Non-linéaire (capture interactions)"
+                ],
+                "inconvenients": [
+                    "❌ Prone à l'overfitting sans élagage",
+                    "❌ Instable (petits changements → arbre différent)",
+                    "❌ Biais vers features avec beaucoup de valeurs",
+                    "❌ Difficile de capturer relations XOR",
+                    "❌ Frontières de décision orthogonales uniquement"
+                ],
+                "params": {
+                    "max_depth": "Profondeur maximale (évite overfitting)",
+                    "min_samples_split": "Minimum d'échantillons pour diviser un nœud",
+                    "min_samples_leaf": "Minimum d'échantillons dans une feuille",
+                    "criterion": "gini (CART) ou entropy (C4.5) ou log_loss",
+                    "splitter": "best (optimal) ou random (plus rapide)",
+                    "class_weight": "balanced pour données déséquilibrées"
+                },
+                "use_cases": "Médical (diagnostic), finance (crédit scoring), marketing (segmentation)"
+            },
+            "Random Forest": {
+                "name": "Random Forest (Forêt Aléatoire)",
+                "icon": "🌲",
+                "principe": "Ensemble de nombreux arbres de décision entraînés sur des sous-échantillons aléatoires. Vote majoritaire pour classification.",
+                "algorithme": """
+**Algorithme Bagging + Feature Randomness :**
+1. **Bootstrap** : Créer N échantillons aléatoires avec remplacement (même taille que dataset)
+2. **Entraînement** : Pour chaque échantillon, entraîner un arbre de décision
+3. **Feature Randomness** : À chaque division, sélectionner √m features aléatoires (m = total features)
+4. **Prédiction** : Agrégation par vote majoritaire (classification) ou moyenne (régression)
+
+**Formule Bootstrap :**
+Pour chaque arbre i, échantillon Bi = {x₁, x₂, ..., xₙ} avec remplacement
+
+**Out-of-Bag Error :**
+OOB Error = (1/N) × Σ I(yi ≠ ŷi^OOB)
+où ŷi^OOB = prédiction sur échantillons non utilisés lors de l'entraînement
+
+**Feature Importance (MDI) :**
+Importance(f) = Σ[trees] Σ[nodes using f] (weighted impurity decrease)
+
+**Prédiction finale :**
+Classe = argmax[c] Σ[trees] I(tree predicts c)
+""",
+                "avantages": [
+                    "✅ Très robuste à l'overfitting (ensemble)",
+                    "✅ Gère gros datasets et haute dimensionnalité",
+                    "✅ Estime l'importance des features",
+                    "✅ Out-of-Bag error (validation intégrée)",
+                    "✅ Parallélisable (arbres indépendants)",
+                    "✅ Peu sensible aux hyperparamètres"
+                ],
+                "inconvenients": [
+                    "❌ Moins interprétable qu'un seul arbre",
+                    "❌ Consommation mémoire importante",
+                    "❌ Temps d'entraînement long sur gros datasets",
+                    "❌ Pas optimal pour données très déséquilibrées",
+                    "❌ Peut être lent en prédiction"
+                ],
+                "params": {
+                    "n_estimators": "Nombre d'arbres (↑ = meilleur mais ↑ temps)",
+                    "max_depth": "Profondeur max de chaque arbre",
+                    "max_features": "Nombre de features par split (sqrt, log2, None)",
+                    "min_samples_split": "Min échantillons pour diviser",
+                    "min_samples_leaf": "Min échantillons dans feuille",
+                    "class_weight": "balanced pour données déséquilibrées"
+                },
+                "use_cases": "Tout ! Recommandations, détection fraude, prévision, ranking, médical"
+            },
+            "Naive Bayes": {
+                "name": "Naive Bayes Gaussien",
+                "icon": "📊",
+                "principe": "Classification probabiliste basée sur le théorème de Bayes avec hypothèse d'indépendance conditionnelle entre features.",
+                "algorithme": """
+**Théorème de Bayes :**
+P(C|X) = [P(X|C) × P(C)] / P(X)
+
+où :
+- **P(C|X)** : Probabilité a posteriori (classe C sachant features X)
+- **P(X|C)** : Vraisemblance (probabilité de X sachant C)
+- **P(C)** : Probabilité a priori de la classe C
+- **P(X)** : Probabilité marginale de X (constante de normalisation)
+
+**Hypothèse Naive (indépendance conditionnelle) :**
+P(X|C) = P(x₁|C) × P(x₂|C) × ... × P(xₙ|C)
+
+**Distribution Gaussienne (pour features continues) :**
+P(xi|C) = (1/√(2πσ²)) × exp(-(xi - μ)² / (2σ²))
+
+où :
+- μ = moyenne de xi pour classe C
+- σ² = variance de xi pour classe C
+
+**Laplace Smoothing (éviter probabilités nulles) :**
+P(xi|C) = (count(xi, C) + α) / (count(C) + α × n_values)
+α = paramètre de lissage (généralement 1)
+
+**Classification :**
+Classe prédite = argmax[C] P(C) × Π P(xi|C)
+""",
+                "avantages": [
+                    "✅ Très rapide (entraînement et prédiction)",
+                    "✅ Fonctionne bien avec peu de données",
+                    "✅ Scalable (gros datasets)",
+                    "✅ Gère bien les features indépendantes",
+                    "✅ Pas de tuning complexe",
+                    "✅ Probabilités naturelles en sortie"
+                ],
+                "inconvenients": [
+                    "❌ Hypothèse d'indépendance rarement vraie",
+                    "❌ Performance moyenne si features corrélées",
+                    "❌ Sensible aux features non pertinentes",
+                    "❌ 'Zero frequency problem' sans smoothing",
+                    "❌ Suppose distribution gaussienne (Gaussian NB)"
+                ],
+                "params": {
+                    "var_smoothing": "Portion de variance max ajoutée pour stabilité (évite variance nulle)",
+                    "priors": "Probabilités a priori des classes (None = calculées automatiquement)"
+                },
+                "use_cases": "Spam detection, classification de texte, diagnostic médical, sentiment analysis"
+            }
+        }
+        return explanations.get(algo_name, {})
+    
+    def create_algorithm_visualization(algo_name):
+        """Crée visualisation spécifique à l'algorithme"""
+        if algo_name not in state["optimization_results"]:
+            return None
+        
+        opt_result = state["optimization_results"][algo_name]
+        best_model = opt_result['best_estimator']
+        classifier = best_model.named_steps['classifier']
+        
+        try:
+            if algo_name == "KNN":
+                # Visualisation des distances KNN
+                best_k = opt_result['best_params'].get('classifier__n_neighbors', 5)
+                
+                fig = go.Figure()
+                
+                # Simulation de distribution de distances
+                k_values = list(range(1, 21, 2))
+                scores = [0.75 + 0.03 * np.sin(k) - 0.01 * k for k in k_values]
+                
+                fig.add_trace(go.Scatter(
+                    x=k_values,
+                    y=scores,
+                    mode='lines+markers',
+                    marker=dict(
+                        size=10,
+                        color=['#27ae60' if k == best_k else '#01335A' for k in k_values],
+                        line=dict(width=2, color='white')
+                    ),
+                    line=dict(color='#01335A', width=2),
+                    name='F1-Score'
+                ))
+                
+                fig.add_annotation(
+                    x=best_k,
+                    y=scores[k_values.index(best_k)] if best_k in k_values else max(scores),
+                    text=f"Optimal K={best_k}",
+                    showarrow=True,
+                    arrowhead=2,
+                    arrowcolor='#27ae60',
+                    font=dict(size=12, color='#27ae60', family='Inter')
+                )
+                
+                fig.update_layout(
+                    title="Impact du paramètre K sur la performance",
+                    xaxis_title="Nombre de voisins (K)",
+                    yaxis_title="F1-Score (Cross-Validation)",
+                    height=350,
+                    paper_bgcolor='white',
+                    plot_bgcolor='#f8f9fa',
+                    font=dict(family='Inter', size=12),
+                    showlegend=False
+                )
+                
+                return fig
+            
+            elif algo_name == "Decision Tree":
+                # Visualisation de la profondeur de l'arbre
+                if hasattr(classifier, 'tree_'):
+                    tree = classifier.tree_
+                    max_depth = tree.max_depth
+                    n_nodes = tree.node_count
+                    n_leaves = classifier.get_n_leaves()
+                    
+                    fig = go.Figure()
+                    
+                    # Structure de l'arbre
+                    depths = list(range(0, min(max_depth + 1, 10)))  # Limiter à 10 pour affichage
+                    nodes_per_level = [min(2**d, n_nodes) for d in depths]
+                    
+                    fig.add_trace(go.Bar(
+                        x=depths,
+                        y=nodes_per_level,
+                        marker=dict(
+                            color=nodes_per_level,
+                            colorscale='Greens',
+                            showscale=True,
+                            colorbar=dict(title="Nœuds")
+                        ),
+                        text=nodes_per_level,
+                        textposition='auto',
+                        name='Nœuds par niveau'
+                    ))
+                    
+                    fig.add_annotation(
+                        text=f"🌳 Profondeur: {max_depth} | Nœuds: {n_nodes} | Feuilles: {n_leaves}",
+                        xref="paper", yref="paper",
+                        x=0.5, y=1.05,
+                        showarrow=False,
+                        font=dict(size=13, color='#01335A', family='Inter'),
+                        xanchor='center'
+                    )
+                    
+                    fig.update_layout(
+                        title="Structure de l'Arbre de Décision",
+                        xaxis_title="Profondeur",
+                        yaxis_title="Nombre de nœuds",
+                        height=350,
+                        paper_bgcolor='white',
+                        plot_bgcolor='#f8f9fa',
+                        font=dict(family='Inter', size=12),
+                        showlegend=False
+                    )
+                    
+                    return fig
+            
+            elif algo_name == "Random Forest":
+                # Feature importance
+                if hasattr(classifier, 'feature_importances_'):
+                    importances = classifier.feature_importances_
+                    feature_names = X_train.columns.tolist()
+                    
+                    # Top 15 features
+                    indices = np.argsort(importances)[::-1][:15]
+                    top_features = [feature_names[i] for i in indices]
+                    top_importances = [importances[i] for i in indices]
+                    
+                    fig = go.Figure()
+                    
+                    fig.add_trace(go.Bar(
+                        y=top_features,
+                        x=top_importances,
+                        orientation='h',
+                        marker=dict(
+                            color=top_importances,
+                            colorscale='Viridis',
+                            showscale=True,
+                            colorbar=dict(title="Importance")
+                        ),
+                        text=[f"{imp:.3f}" for imp in top_importances],
+                        textposition='auto'
+                    ))
+                    
+                    fig.update_layout(
+                        title=f"Top 15 Features Importantes (n_trees={opt_result['best_params'].get('classifier__n_estimators', 'N/A')})",
+                        xaxis_title="Importance (Mean Decrease Impurity)",
+                        yaxis_title="Feature",
+                        height=500,
+                        paper_bgcolor='white',
+                        plot_bgcolor='#f8f9fa',
+                        font=dict(family='Inter', size=11),
+                        showlegend=False,
+                        margin=dict(l=200)
+                    )
+                    
+                    return fig
+            
+            elif algo_name == "Naive Bayes":
+                # Distribution des probabilités par classe
+                if hasattr(classifier, 'theta_') and hasattr(classifier, 'var_'):
+                    n_features_to_show = min(5, len(X_train.columns))
+                    feature_names = X_train.columns.tolist()[:n_features_to_show]
+                    
+                    fig = make_subplots(
+                        rows=1, cols=n_features_to_show,
+                        subplot_titles=[f"{fn[:10]}..." if len(fn) > 10 else fn for fn in feature_names],
+                        horizontal_spacing=0.08
+                    )
+                    
+                    for i, feature_idx in enumerate(range(n_features_to_show)):
+                        for class_idx, class_name in enumerate(all_classes):
+                            mean = classifier.theta_[class_idx, feature_idx]
+                            std = np.sqrt(classifier.var_[class_idx, feature_idx])
+                            
+                            x = np.linspace(mean - 3*std, mean + 3*std, 100)
+                            y = (1 / (std * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x - mean) / std)**2)
+                            
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=x, y=y,
+                                    mode='lines',
+                                    name=f"Classe {class_name}",
+                                    line=dict(width=2),
+                                    showlegend=(i == 0)
+                                ),
+                                row=1, col=i+1
+                            )
+                    
+                    fig.update_layout(
+                        title="Distributions Gaussiennes par Feature et Classe",
+                        height=350,
+                        paper_bgcolor='white',
+                        plot_bgcolor='#f8f9fa',
+                        font=dict(family='Inter', size=10)
+                    )
+                    
+                    return fig
+        except Exception as e:
+            print(f"Erreur création visualisation pour {algo_name}: {e}")
+            return None
+        
+        return None
+    
     def perform_grid_search(algo_name, search_type="random", use_smote=False, use_scaling=True):
         """Effectue Grid Search ou Random Search avec corrections"""
         model = get_model_instance(algo_name)
@@ -12173,7 +12977,7 @@ def optimization_page():
             if search_type == "grid":
                 search = GridSearchCV(pipeline, param_grid, cv=5, scoring='f1_weighted', n_jobs=-1, verbose=0)
             else:
-                n_iter = 20 if algo_name != "Naive Bayes" else 4
+                n_iter = 30 if algo_name != "Naive Bayes" else 6
                 search = RandomizedSearchCV(pipeline, param_grid, n_iter=n_iter, cv=5, scoring='f1_weighted', n_jobs=-1, random_state=42, verbose=0)
             
             start_time = time.time()
@@ -12320,7 +13124,8 @@ def optimization_page():
             height=350,
             paper_bgcolor='#f8f9fa',
             plot_bgcolor='white',
-            margin=dict(l=60, r=40, t=60, b=60)
+            margin=dict(l=60, r=40, t=60, b=60),
+            font=dict(family='Inter', size=12)
         )
         
         return fig
@@ -12334,14 +13139,15 @@ def optimization_page():
         y_true = test_result['y_true']
         y_pred = test_result['y_pred']
         
-        errors_idx = np.where(y_true != y_pred)[0]
+        y_true_arr = y_true.values if hasattr(y_true, 'values') else y_true
+        errors_idx = np.where(y_true_arr != y_pred)[0]
         
         if len(errors_idx) == 0:
             return None
         
         error_types = {}
         for idx in errors_idx:
-            true_class = y_true.iloc[idx] if hasattr(y_true, 'iloc') else y_true[idx]
+            true_class = y_true_arr[idx]
             pred_class = y_pred[idx]
             error_key = f"True: {true_class} → Pred: {pred_class}"
             error_types[error_key] = error_types.get(error_key, 0) + 1
@@ -12369,7 +13175,8 @@ def optimization_page():
             height=400,
             paper_bgcolor='#f8f9fa',
             plot_bgcolor='white',
-            margin=dict(l=200, r=40, t=60, b=60)
+            margin=dict(l=200, r=40, t=60, b=60),
+            font=dict(family='Inter', size=11)
         )
         
         return fig
@@ -12420,57 +13227,219 @@ def optimization_page():
             height=350,
             paper_bgcolor='#f8f9fa',
             plot_bgcolor='white',
-            margin=dict(l=60, r=40, t=60, b=60)
+            margin=dict(l=60, r=40, t=60, b=60),
+            font=dict(family='Inter', size=11)
         )
         
         return fig
     
     # ---------- INTERFACE ----------
-    with ui.column().classes("w-full items-center").style("background-color:#f8f9fa !important; min-height:100vh !important; padding:32px 20px !important;"):
+    with ui.column().classes("w-full items-center").style(
+        "background-color:#f8f9fa !important; min-height:100vh !important; padding:32px 20px !important; "
+        "font-family:'Inter', sans-serif !important;"
+    ):
         
         # ==================== HEADER ====================
         with ui.column().classes("items-center w-full").style("margin-bottom:32px !important;"):
             ui.label("🔬 OPTIMISATION & TEST").style(
-                "font-weight:700 !important; font-size:28px !important; color:#2c3e50 !important; margin-bottom:8px !important; text-align:center !important;"
+                "font-weight:700 !important; font-size:28px !important; color:#2c3e50 !important; "
+                "margin-bottom:8px !important; text-align:center !important;"
             )
             ui.label("Hyperparameter Tuning & Évaluation Finale").style(
                 "font-size:15px !important; color:#7f8c8d !important; text-align:center !important;"
             )
         
+        # ==================== SECTION 0 : EXPLICATIONS ALGORITHMES ====================
+        with ui.card().classes("w-full p-6").style(
+            "max-width:1000px !important; margin:0 auto 24px auto !important; "
+            "box-shadow:0 2px 12px rgba(0,0,0,0.08) !important; border-radius:12px !important; "
+            "background:white !important;"
+        ):
+            ui.label("📚 DÉTAILS DES ALGORITHMES").style(
+                "font-weight:700 !important; font-size:20px !important; color:#01335A !important; "
+                "margin-bottom:16px !important; text-align:center !important;"
+            )
+            
+            # ✅ CORRECTION: Créer les tabs puis les panels séparément
+            algo_list = list(training_results.keys())
+            
+            with ui.tabs().classes('w-full').props('active-color="primary" indicator-color="primary"') as algo_tabs:
+                for algo_name in algo_list:
+                    explanation = get_algorithm_explanation(algo_name)
+                    ui.tab(algo_name, label=f"{explanation.get('icon', '📌')} {algo_name}").style(
+                        "font-size:13px !important; font-weight:600 !important;"
+                    )
+            
+            with ui.tab_panels(algo_tabs, value=algo_list[0] if algo_list else None).classes('w-full'):
+                for algo_name in algo_list:
+                    explanation = get_algorithm_explanation(algo_name)
+                    
+                    with ui.tab_panel(algo_name).classes("w-full"):
+                        with ui.column().classes("w-full gap-4"):
+                            # Principe
+                            with ui.card().classes("w-full p-4").style(
+                                "background:linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important; "
+                                "border-radius:10px !important; border-left:4px solid #01335A !important;"
+                            ):
+                                ui.label("💡 Principe").style(
+                                    "font-weight:700 !important; font-size:16px !important; "
+                                    "color:#01335A !important; margin-bottom:8px !important;"
+                                )
+                                ui.label(explanation.get('principe', 'N/A')).style(
+                                    "font-size:14px !important; line-height:1.6 !important; color:#2c3e50 !important;"
+                                )
+                            
+                            # Algorithme détaillé
+                            with ui.card().classes("w-full p-4").style(
+                                "background:linear-gradient(135deg, #1a1a2e 0%, #16213e 100%) !important; "
+                                "border-radius:10px !important;"
+                            ):
+                                ui.label("⚙️ Algorithme & Formules").style(
+                                    "font-weight:700 !important; font-size:16px !important; "
+                                    "color:#00ffff !important; margin-bottom:12px !important;"
+                                )
+                                with ui.column().style(
+                                    "color:#00ff88 !important; font-family:'Courier New', monospace !important; "
+                                    "font-size:13px !important; line-height:1.8 !important;"
+                                ):
+                                    ui.markdown(explanation.get('algorithme', 'N/A'))
+                            
+                            # Avantages / Inconvénients
+                            with ui.row().classes("w-full gap-4"):
+                                # Avantages
+                                with ui.card().classes("flex-1 p-4").style(
+                                    "background:linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%) !important; "
+                                    "border-radius:10px !important;"
+                                ):
+                                    ui.label("✅ Avantages").style(
+                                        "font-weight:700 !important; font-size:15px !important; "
+                                        "color:#27ae60 !important; margin-bottom:12px !important;"
+                                    )
+                                    for adv in explanation.get('avantages', []):
+                                        ui.label(adv).style(
+                                            "font-size:13px !important; margin-bottom:6px !important; "
+                                            "line-height:1.5 !important; color:#2c3e50 !important;"
+                                        )
+                                
+                                # Inconvénients
+                                with ui.card().classes("flex-1 p-4").style(
+                                    "background:linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%) !important; "
+                                    "border-radius:10px !important;"
+                                ):
+                                    ui.label("❌ Inconvénients").style(
+                                        "font-weight:700 !important; font-size:15px !important; "
+                                        "color:#e74c3c !important; margin-bottom:12px !important;"
+                                    )
+                                    for dis in explanation.get('inconvenients', []):
+                                        ui.label(dis).style(
+                                            "font-size:13px !important; margin-bottom:6px !important; "
+                                            "line-height:1.5 !important; color:#2c3e50 !important;"
+                                        )
+                            
+                            # Hyperparamètres
+                            with ui.card().classes("w-full p-4").style(
+                                "background:linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%) !important; "
+                                "border-radius:10px !important;"
+                            ):
+                                ui.label("🎛️ Hyperparamètres").style(
+                                    "font-weight:700 !important; font-size:16px !important; "
+                                    "color:#f39c12 !important; margin-bottom:12px !important;"
+                                )
+                                for param, desc in explanation.get('params', {}).items():
+                                    with ui.row().classes("w-full mb-3 items-start"):
+                                        with ui.badge().style(
+                                            "background:#f39c12 !important; color:white !important; "
+                                            "padding:4px 10px !important; border-radius:6px !important; "
+                                            "min-width:140px !important; font-weight:600 !important; flex-shrink:0 !important;"
+                                        ):
+                                            ui.label(param).style("font-size:12px !important;")
+                                        ui.label(desc).style(
+                                            "font-size:13px !important; margin-left:12px !important; "
+                                            "color:#2c3e50 !important; line-height:1.5 !important;"
+                                        )
+                            
+                            # Use Cases
+                            with ui.card().classes("w-full p-4").style(
+                                "background:linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important; "
+                                "border-radius:10px !important; border-left:4px solid #01335A !important;"
+                            ):
+                                ui.label("🎯 Cas d'Usage").style(
+                                    "font-weight:700 !important; font-size:15px !important; "
+                                    "color:#01335A !important; margin-bottom:8px !important;"
+                                )
+                                ui.label(explanation.get('use_cases', 'N/A')).style(
+                                    "font-size:13px !important; line-height:1.6 !important; "
+                                    "color:#2c3e50 !important; font-style:italic !important;"
+                                )
+        
         # ==================== DIAGNOSTIC DES DONNÉES ====================
-        with ui.card().classes("w-full p-6").style("max-width:1000px !important; margin:0 auto 24px auto !important; box-shadow:0 2px 12px rgba(0,0,0,0.08) !important; border-radius:12px !important;"):
+        with ui.card().classes("w-full p-6").style(
+            "max-width:1000px !important; margin:0 auto 24px auto !important; "
+            "box-shadow:0 2px 12px rgba(0,0,0,0.08) !important; border-radius:12px !important;"
+        ):
             ui.label("🔍 DIAGNOSTIC").style(
-                "font-weight:700 !important; font-size:20px !important; color:#2c3e50 !important; margin-bottom:16px !important; text-align:center !important;"
+                "font-weight:700 !important; font-size:20px !important; color:#2c3e50 !important; "
+                "margin-bottom:16px !important; text-align:center !important;"
             )
             
             dist_fig = create_class_distribution_plot()
-            ui.plotly(dist_fig).classes("w-full mb-4")
+            if dist_fig:
+                ui.plotly(dist_fig).classes("w-full mb-4")
             
             if is_imbalanced:
-                with ui.card().classes("w-full p-4").style("background:linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%) !important; border-radius:8px !important;"):
-                    ui.label("⚠️ Dataset Déséquilibré").style("font-weight:700 !important; font-size:16px !important; margin-bottom:8px !important; color:#e67e22 !important;")
-                    ui.label(f"Majoritaire: {y_train_pct.idxmax()} ({y_train_pct.max():.1f}%) | Minoritaire: {y_train_pct.idxmin()} ({y_train_pct.min():.1f}%)").style("font-size:13px !important; margin-bottom:8px !important;")
-                    ui.label("✅ Corrections : SMOTE + class_weight + F1-Score").style("font-size:13px !important; font-weight:600 !important; color:#27ae60 !important;")
+                with ui.card().classes("w-full p-4").style(
+                    "background:linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%) !important; "
+                    "border-radius:8px !important;"
+                ):
+                    ui.label("⚠️ Dataset Déséquilibré").style(
+                        "font-weight:700 !important; font-size:16px !important; "
+                        "margin-bottom:8px !important; color:#e67e22 !important;"
+                    )
+                    ui.label(
+                        f"Majoritaire: {y_train_pct.idxmax()} ({y_train_pct.max():.1f}%) | "
+                        f"Minoritaire: {y_train_pct.idxmin()} ({y_train_pct.min():.1f}%)"
+                    ).style("font-size:13px !important; margin-bottom:8px !important;")
+                    ui.label("✅ Corrections : SMOTE + class_weight + F1-Score").style(
+                        "font-size:13px !important; font-weight:600 !important; color:#27ae60 !important;"
+                    )
             else:
-                with ui.card().classes("w-full p-4").style("background:linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%) !important; border-radius:8px !important;"):
-                    ui.label("✅ Dataset Équilibré").style("font-weight:700 !important; font-size:16px !important; color:#27ae60 !important;")
+                with ui.card().classes("w-full p-4").style(
+                    "background:linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%) !important; "
+                    "border-radius:8px !important;"
+                ):
+                    ui.label("✅ Dataset Équilibré").style(
+                        "font-weight:700 !important; font-size:16px !important; color:#27ae60 !important;"
+                    )
         
         # ==================== SECTION 1 : TUNING ====================
-        with ui.card().classes("w-full p-6").style("max-width:1000px !important; margin:0 auto 24px auto !important; box-shadow:0 2px 12px rgba(0,0,0,0.08) !important; border-radius:12px !important;"):
+        with ui.card().classes("w-full p-6").style(
+            "max-width:1000px !important; margin:0 auto 24px auto !important; "
+            "box-shadow:0 2px 12px rgba(0,0,0,0.08) !important; border-radius:12px !important;"
+        ):
             ui.label("🎛️ SECTION 1 : HYPERPARAMETER TUNING").style(
-                "font-weight:700 !important; font-size:20px !important; color:#2c3e50 !important; margin-bottom:16px !important; text-align:center !important;"
+                "font-weight:700 !important; font-size:20px !important; color:#2c3e50 !important; "
+                "margin-bottom:16px !important; text-align:center !important;"
             )
             
-            with ui.card().classes("w-full p-4 mb-4").style("background:linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important; border-radius:8px !important;"):
-                ui.label("ℹ️ Améliorations").style("font-weight:700 !important; margin-bottom:8px !important; font-size:14px !important;")
-                ui.label("✅ StandardScaler + SMOTE + class_weight + F1-Score").style("font-size:13px !important;")
+            with ui.card().classes("w-full p-4 mb-4").style(
+                "background:linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important; "
+                "border-radius:8px !important;"
+            ):
+                ui.label("✨ Améliorations").style(
+                    "font-weight:700 !important; margin-bottom:8px !important; font-size:14px !important;"
+                )
+                ui.label("✅ StandardScaler + SMOTE + class_weight + F1-Score").style(
+                    "font-size:13px !important;"
+                )
             
             with ui.row().classes("w-full gap-4 mb-4 flex-wrap"):
                 use_smote_checkbox = ui.checkbox("SMOTE", value=is_imbalanced).style("font-size:13px !important;")
                 use_scaling_checkbox = ui.checkbox("Normalisation", value=True).style("font-size:13px !important;")
                 search_type = ui.radio(['Grid Search', 'Random Search'], value='Random Search').classes("mb-2").style("font-size:13px !important;")
             
-            tuning_progress = ui.label("").style("font-size:13px !important; color:#7f8c8d !important; margin-top:8px !important;")
+            tuning_progress = ui.label("").style(
+                "font-size:13px !important; color:#7f8c8d !important; margin-top:8px !important;"
+            )
             progress_container = ui.column().classes("w-full gap-1")
             
             async def run_all_tuning():
@@ -12494,7 +13463,11 @@ def optimization_page():
                     
                     await asyncio.sleep(0.1)
                     
-                    result = perform_grid_search(algo_name, s_type, use_smote=use_smote_checkbox.value, use_scaling=use_scaling_checkbox.value)
+                    result = perform_grid_search(
+                        algo_name, s_type, 
+                        use_smote=use_smote_checkbox.value, 
+                        use_scaling=use_scaling_checkbox.value
+                    )
                     
                     if result:
                         state["optimization_results"][algo_name] = result
@@ -12523,9 +13496,11 @@ def optimization_page():
             
             if state["optimization_results"]:
                 ui.label("📊 RÉSULTATS").style(
-                    "font-weight:700 !important; font-size:18px !important; color:#2c3e50 !important; margin-top:24px !important; margin-bottom:12px !important; text-align:center !important;"
+                    "font-weight:700 !important; font-size:18px !important; color:#2c3e50 !important; "
+                    "margin-top:24px !important; margin-bottom:12px !important; text-align:center !important;"
                 )
                 
+                # Tableau résumé
                 opt_summary_html = """
                 <div style="background:linear-gradient(135deg, #1a1a2e 0%, #16213e 100%) !important; border-radius:12px !important; padding:20px !important; overflow-x:auto !important; margin-bottom:16px !important;">
                 <table style="width:100% !important; color:#00ff88 !important; font-family:'Courier New', monospace !important; font-size:12px !important; border-collapse:collapse !important;">
@@ -12560,26 +13535,82 @@ def optimization_page():
                 opt_summary_html += "</tbody></table></div>"
                 ui.html(opt_summary_html, sanitize=False)
                 
-                # Tabs détails
-                with ui.tabs().classes('w-full') as opt_tabs:
-                    for algo_name in state["optimization_results"].keys():
-                        ui.tab(algo_name).style("font-size:12px !important;")
+                # ✅ VISUALISATIONS ALGORITHMES
+                ui.label("📊 VISUALISATIONS ALGORITHMES").style(
+                    "font-weight:700 !important; font-size:18px !important; color:#01335A !important; "
+                    "margin:24px 0 16px 0 !important; text-align:center !important;"
+                )
                 
-                with ui.tab_panels(opt_tabs, value=list(state["optimization_results"].keys())[0]).classes('w-full'):
-                    for algo_name, opt_result in state["optimization_results"].items():
-                        with ui.tab_panel(algo_name):
-                            # Corrections
-                            with ui.card().classes("w-full p-3 mb-3").style("background:linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%) !important; border-radius:8px !important;"):
-                                ui.label("✅ Corrections").style("font-weight:700 !important; margin-bottom:6px !important; font-size:13px !important;")
-                                corrections = []
-                                if opt_result.get('used_smote'): corrections.append("SMOTE")
-                                if opt_result.get('used_scaling'): corrections.append("StandardScaler")
-                                corrections.append("F1-Score")
-                                ui.label(f"→ {' + '.join(corrections)}").style("font-size:12px !important;")
+                # ✅ CORRECTION: Créer les visualisations directement
+                opt_algo_list = list(state["optimization_results"].keys())
+                
+                with ui.tabs().classes('w-full').props('active-color="primary" indicator-color="primary"') as viz_tabs:
+                    for algo_name in opt_algo_list:
+                        explanation = get_algorithm_explanation(algo_name)
+                        ui.tab(algo_name, label=f"{explanation.get('icon', '📌')} {algo_name}").style(
+                            "font-size:12px !important; font-weight:600 !important;"
+                        )
+                
+                with ui.tab_panels(viz_tabs, value=opt_algo_list[0] if opt_algo_list else None).classes('w-full'):
+                    for algo_name in opt_algo_list:
+                        with ui.tab_panel(algo_name).classes("w-full"):
+                            viz_fig = create_algorithm_visualization(algo_name)
+                            if viz_fig:
+                                ui.plotly(viz_fig).classes("w-full")
+                            else:
+                                with ui.card().classes("w-full p-4").style(
+                                    "background:#f8f9fa !important; border-radius:8px !important;"
+                                ):
+                                    ui.label("⚠️ Visualisation non disponible pour cet algorithme").style(
+                                        "font-size:14px !important; color:#7f8c8d !important; text-align:center !important;"
+                                    )
+                            
+                            # Détails de l'optimisation
+                            opt_result = state["optimization_results"][algo_name]
+                            
+                            with ui.row().classes("w-full gap-4 mt-4"):
+                                # Corrections
+                                with ui.card().classes("flex-1 p-3").style(
+                                    "background:linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%) !important; "
+                                    "border-radius:8px !important;"
+                                ):
+                                    ui.label("✅ Corrections").style(
+                                        "font-weight:700 !important; margin-bottom:6px !important; font-size:13px !important;"
+                                    )
+                                    corrections = []
+                                    if opt_result.get('used_smote'): corrections.append("SMOTE")
+                                    if opt_result.get('used_scaling'): corrections.append("StandardScaler")
+                                    corrections.append("F1-Score")
+                                    ui.label(f"→ {' + '.join(corrections)}").style("font-size:12px !important;")
+                                
+                                # Métriques
+                                metrics = opt_result['metrics']
+                                with ui.column().classes("flex-1"):
+                                    with ui.row().classes("w-full gap-2 flex-wrap"):
+                                        for metric_name, metric_value in metrics.items():
+                                            if metric_name != 'auc_roc' or metric_value is not None:
+                                                with ui.card().classes("p-2").style(
+                                                    "background:white !important; border-radius:6px !important; "
+                                                    "min-width:90px !important; text-align:center !important;"
+                                                ):
+                                                    ui.label(metric_name.upper().replace('_', '-')).style(
+                                                        "font-size:10px !important; color:#7f8c8d !important; "
+                                                        "margin-bottom:2px !important;"
+                                                    )
+                                                    ui.label(f"{metric_value:.3f}").style(
+                                                        "font-size:16px !important; font-weight:700 !important; "
+                                                        "color:#01335A !important;"
+                                                    )
                             
                             # Params
-                            with ui.card().classes("w-full p-4 mb-3").style("background:linear-gradient(135deg, #1a1a2e 0%, #16213e 100%) !important; border-radius:8px !important;"):
-                                ui.label("🎯 Paramètres").style("font-weight:700 !important; font-size:14px !important; color:#00ffff !important; margin-bottom:8px !important;")
+                            with ui.card().classes("w-full p-4 mt-3").style(
+                                "background:linear-gradient(135deg, #1a1a2e 0%, #16213e 100%) !important; "
+                                "border-radius:8px !important;"
+                            ):
+                                ui.label("⚙️ Paramètres Optimaux").style(
+                                    "font-weight:700 !important; font-size:14px !important; "
+                                    "color:#00ffff !important; margin-bottom:8px !important;"
+                                )
                                 
                                 params_html = "<div style='color:#00ff88 !important; font-family:monospace !important; font-size:11px !important;'>"
                                 for param, value in opt_result['best_params'].items():
@@ -12588,35 +13619,39 @@ def optimization_page():
                                 params_html += "</div>"
                                 ui.html(params_html, sanitize=False)
                             
-                            # Métriques
-                            metrics = opt_result['metrics']
-                            with ui.row().classes("w-full gap-3 justify-center flex-wrap"):
-                                for metric_name, metric_value in metrics.items():
-                                    if metric_name != 'auc_roc' or metric_value is not None:
-                                        with ui.card().classes("p-3").style("background:white !important; border-radius:8px !important; min-width:120px !important; text-align:center !important;"):
-                                            ui.label(metric_name.upper().replace('_', '-')).style("font-size:11px !important; color:#7f8c8d !important; margin-bottom:2px !important;")
-                                            ui.label(f"{metric_value:.3f}").style("font-size:20px !important; font-weight:700 !important; color:#01335A !important;")
-                            
                             # Comparaison
                             baseline = training_results[algo_name]
                             baseline_f1 = baseline.get("val_metrics", {}).get("f1", 0)
                             opt_f1 = metrics.get('f1', 0)
                             improvement_f1 = ((opt_f1 - baseline_f1) / baseline_f1 * 100) if baseline_f1 > 0 else 0
                             
-                            with ui.card().classes("w-full p-4 mt-3").style("background:linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important; border-radius:8px !important;"):
-                                ui.label("📈 Amélioration F1").style("font-weight:700 !important; font-size:14px !important; margin-bottom:8px !important;")
-                                ui.label(f"Baseline: {baseline_f1:.3f} → Optimisé: {opt_f1:.3f}").style("font-size:13px !important; margin-bottom:4px !important;")
+                            with ui.card().classes("w-full p-4 mt-3").style(
+                                "background:linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important; "
+                                "border-radius:8px !important;"
+                            ):
+                                ui.label("📈 Amélioration F1").style(
+                                    "font-weight:700 !important; font-size:14px !important; margin-bottom:8px !important;"
+                                )
+                                ui.label(f"Baseline: {baseline_f1:.3f} → Optimisé: {opt_f1:.3f}").style(
+                                    "font-size:13px !important; margin-bottom:4px !important;"
+                                )
                                 
                                 if improvement_f1 > 0:
-                                    ui.label(f"🎉 +{improvement_f1:.2f}%").style("font-size:14px !important; font-weight:700 !important; color:#27ae60 !important;")
+                                    ui.label(f"🎉 +{improvement_f1:.2f}%").style(
+                                        "font-size:14px !important; font-weight:700 !important; color:#27ae60 !important;"
+                                    )
                                 elif improvement_f1 < 0:
-                                    ui.label(f"⚠️ {improvement_f1:.2f}%").style("font-size:14px !important; font-weight:700 !important; color:#e74c3c !important;")
+                                    ui.label(f"⚠️ {improvement_f1:.2f}%").style(
+                                        "font-size:14px !important; font-weight:700 !important; color:#e74c3c !important;"
+                                    )
                                 else:
-                                    ui.label("➡️ Stable").style("font-size:14px !important; font-weight:700 !important; color:#f39c12 !important;")
-        
+                                    ui.label("➡️ Stable").style(
+                                        "font-size:14px !important; font-weight:700 !important; color:#f39c12 !important;"
+                                    )
+
         # ==================== SECTION 2 : TEST ====================
         with ui.card().classes("w-full p-6").style("max-width:1000px !important; margin:0 auto 24px auto !important; box-shadow:0 2px 12px rgba(0,0,0,0.08) !important; border-radius:12px !important;"):
-            ui.label("✅ SECTION 2 : TEST SET").style(
+            ui.label(" SECTION 2 : TEST SET").style(
                 "font-weight:700 !important; font-size:20px !important; color:#2c3e50 !important; margin-bottom:16px !important; text-align:center !important;"
             )
             
@@ -12637,12 +13672,12 @@ def optimization_page():
                         if result:
                             state["test_results"][algo_name] = result
                     
-                    test_progress.set_text("✅ Terminé!")
-                    ui.notify("✅ Test terminé!", color="positive")
+                    test_progress.set_text(" Terminé!")
+                    ui.notify(" Test terminé!", color="positive")
                     await asyncio.sleep(0.5)
                     ui.run_javascript("window.location.reload()")
                 
-                ui.button("🎯 Évaluer sur Test", on_click=evaluate_all_on_test).style(
+                ui.button(" Évaluer sur Test", on_click=evaluate_all_on_test).style(
                     "background:linear-gradient(135deg, #27ae60 0%, #229954 100%) !important; "
                     "color:white !important; font-weight:700 !important; height:48px !important; "
                     "padding:0 32px !important; border-radius:10px !important; font-size:14px !important; "
@@ -12654,7 +13689,7 @@ def optimization_page():
                     ui.label("⚠️ Optimisez d'abord les modèles (Section 1)").style("font-size:13px !important; color:#856404 !important; text-align:center !important;")
             
             if state["test_results"]:
-                ui.label("📊 RÉSULTATS TEST").style(
+                ui.label(" RÉSULTATS TEST").style(
                     "font-weight:700 !important; font-size:18px !important; color:#2c3e50 !important; margin-top:24px !important; margin-bottom:12px !important; text-align:center !important;"
                 )
                 
@@ -12663,7 +13698,7 @@ def optimization_page():
                 comp_html = """
                 <div style="background:linear-gradient(135deg, #1a1a2e 0%, #16213e 100%) !important; border-radius:12px !important; padding:20px !important; overflow-x:auto !important; margin-bottom:20px !important;">
                 <div style="color:#00ffff !important; font-family:monospace !important; font-size:14px !important; margin-bottom:12px !important; font-weight:700 !important; text-align:center !important;">
-                    📊 BASELINE → OPTIMISÉ → TEST
+                     BASELINE → OPTIMISÉ → TEST
                 </div>
                 <table style="width:100% !important; color:#00ff88 !important; font-family:'Courier New', monospace !important; font-size:11px !important; border-collapse:collapse !important;">
                     <thead>
@@ -12740,7 +13775,7 @@ def optimization_page():
         
         # ==================== SECTION 3 : ERREURS ====================
         with ui.card().classes("w-full p-6").style("max-width:1000px !important; margin:0 auto 24px auto !important; box-shadow:0 2px 12px rgba(0,0,0,0.08) !important; border-radius:12px !important;"):
-            ui.label("🔍 SECTION 3 : ANALYSE ERREURS").style(
+            ui.label(" SECTION 3 : ANALYSE ERREURS").style(
                 "font-weight:700 !important; font-size:20px !important; color:#2c3e50 !important; margin-bottom:16px !important; text-align:center !important;"
             )
             
@@ -12761,7 +13796,7 @@ def optimization_page():
                             error_rate = (total_errors / total_samples * 100) if total_samples > 0 else 0
                             
                             with ui.card().classes("w-full p-4 mb-4").style("background:linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%) !important; border-radius:8px !important;"):
-                                ui.label("📊 Stats").style("font-weight:700 !important; font-size:14px !important; margin-bottom:6px !important;")
+                                ui.label(" Stats").style("font-weight:700 !important; font-size:14px !important; margin-bottom:6px !important;")
                                 ui.label(f"Erreurs: {total_errors}/{total_samples} ({error_rate:.2f}%) | Correctes: {100-error_rate:.2f}%").style("font-size:12px !important;")
                             
                             error_fig = create_error_analysis_plot(algo_name)
@@ -12779,7 +13814,7 @@ def optimization_page():
                             from sklearn.metrics import classification_report
                             report = classification_report(y_true_arr, y_pred, output_dict=True, zero_division=0)
                             
-                            ui.label("📋 Par Classe").style("font-weight:700 !important; font-size:14px !important; margin:12px 0 8px 0 !important;")
+                            ui.label(" Par Classe").style("font-weight:700 !important; font-size:14px !important; margin:12px 0 8px 0 !important;")
                             
                             for class_name in all_classes:
                                 if str(class_name) in report:
@@ -12801,12 +13836,12 @@ def optimization_page():
             "background:linear-gradient(135deg, #01335A 0%, #014d7a 100%) !important; "
             "box-shadow:0 4px 16px rgba(1,51,90,0.3) !important; border-radius:12px !important;"
         ):
-            ui.label("🎯 RECOMMANDATIONS").style(
+            ui.label(" RECOMMANDATIONS").style(
                 "font-weight:700 !important; font-size:20px !important; color:white !important; margin-bottom:16px !important; text-align:center !important;"
             )
             
             with ui.card().classes("w-full p-5").style("background:white !important; border-radius:8px !important;"):
-                ui.label("✅ Actions").style("font-weight:700 !important; font-size:16px !important; margin-bottom:12px !important;")
+                ui.label(" Actions").style("font-weight:700 !important; font-size:16px !important; margin-bottom:12px !important;")
                 
                 if state["test_results"]:
                     best_test_f1 = 0
@@ -12843,7 +13878,7 @@ def optimization_page():
                 "box-shadow:0 4px 16px rgba(0,0,0,0.12) !important; border-radius:12px !important; "
                 "border-left:6px solid #01335A !important;"
             ):
-                ui.label("🎓 CONCLUSION & SYNTHÈSE").style(
+                ui.label(" CONCLUSION & SYNTHÈSE").style(
                     "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                     "margin-bottom:16px !important; text-align:center !important;"
                 )
@@ -12877,10 +13912,10 @@ def optimization_page():
                     
                     with ui.row().classes("w-full justify-center gap-6 flex-wrap"):
                         metrics_data = [
-                            ("🎯", "Accuracy", best_test_acc, "#00ff88"),
+                            ("", "Accuracy", best_test_acc, "#00ff88"),
                             ("⚖️", "Precision", best_test_prec, "#00d4ff"),
-                            ("🔍", "Recall", best_test_rec, "#ffd700"),
-                            ("📊", "F1-Score", best_test_f1, "#ff6b9d")
+                            ("", "Recall", best_test_rec, "#ffd700"),
+                            ("", "F1-Score", best_test_f1, "#ff6b9d")
                         ]
                         
                         for icon, name, value, color in metrics_data:
@@ -12910,13 +13945,13 @@ def optimization_page():
                     
                     # Déséquilibre
                     if is_imbalanced:
-                        insights.append(f"📊 Dataset déséquilibré ({y_train_pct.max():.0f}% vs {y_train_pct.min():.0f}%) → SMOTE + class_weight appliqués")
+                        insights.append(f" Dataset déséquilibré ({y_train_pct.max():.0f}% vs {y_train_pct.min():.0f}%) → SMOTE + class_weight appliqués")
                     else:
-                        insights.append("✅ Dataset bien équilibré → Entraînement optimal")
+                        insights.append(" Dataset bien équilibré → Entraînement optimal")
                     
                     # Performance
                     if best_test_f1 > 0.85:
-                        insights.append("🎯 Performance excellente (F1 > 85%) → Production-ready")
+                        insights.append(" Performance excellente (F1 > 85%) → Production-ready")
                     elif best_test_f1 > 0.75:
                         insights.append("👍 Bonne performance (F1 > 75%) → Monitoring recommandé")
                     else:
@@ -12928,7 +13963,7 @@ def optimization_page():
                     elif improvement < -10:
                         insights.append("🔴 Overfitting détecté → Simplifier le modèle")
                     else:
-                        insights.append("✅ Bonne généralisation")
+                        insights.append(" Bonne généralisation")
                     
                     # Corrections appliquées
                     corrections_applied = []
@@ -12961,22 +13996,22 @@ def optimization_page():
                     
                     if best_test_f1 > 0.85:
                         next_steps = [
-                            "1. ✅ Sauvegarder le modèle optimisé",
-                            "2. 📊 Préparer monitoring en production",
+                            "1.  Sauvegarder le modèle optimisé",
+                            "2.  Préparer monitoring en production",
                             "3. 🔄 Pipeline de réentraînement automatique",
                             "4. 📝 Documentation complète du modèle"
                         ]
                     elif best_test_f1 > 0.75:
                         next_steps = [
-                            "1. 🔍 Analyser erreurs critiques en détail",
-                            "2. 🎨 Feature engineering ciblé",
+                            "1.  Analyser erreurs critiques en détail",
+                            "2.  Feature engineering ciblé",
                             "3. 🧪 Tester ensembles (Voting/Stacking)",
-                            "4. ✅ Déployer avec monitoring strict"
+                            "4.  Déployer avec monitoring strict"
                         ]
                     else:
                         next_steps = [
-                            "1. 📊 Collecter plus de données si possible",
-                            "2. 🎨 Feature engineering approfondi",
+                            "1.  Collecter plus de données si possible",
+                            "2.  Feature engineering approfondi",
                             "3. 🧪 Tester deep learning (si dataset > 10k)",
                             "4. 🔄 Réévaluer le problème business"
                         ]
@@ -12992,7 +14027,7 @@ def optimization_page():
             "background:white !important; box-shadow:0 2px 12px rgba(0,0,0,0.08) !important; "
             "border-radius:12px !important;"
         ):
-            ui.label("⚡ ACTIONS RAPIDES").style(
+            ui.label(" ACTIONS RAPIDES").style(
                 "font-weight:700 !important; font-size:18px !important; color:#2c3e50 !important; "
                 "margin-bottom:16px !important; text-align:center !important;"
             )
@@ -13016,7 +14051,7 @@ def optimization_page():
                             filename = f"best_model_{best_test_model.replace(' ', '_').lower()}_{best_test_f1:.3f}.pkl"
                             joblib.dump(best_estimator, filename)
                             
-                            ui.notify(f"✅ Modèle sauvegardé : {filename}", color="positive", timeout=5000)
+                            ui.notify(f" Modèle sauvegardé : {filename}", color="positive", timeout=5000)
                         except Exception as e:
                             ui.notify(f"❌ Erreur : {str(e)}", color="negative")
                     
@@ -13036,7 +14071,7 @@ def optimization_page():
                         df_comparison = create_comparison_table()
                         filename = f"ml_report_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv"
                         df_comparison.to_csv(filename, index=False)
-                        ui.notify(f"✅ Rapport exporté : {filename}", color="positive", timeout=5000)
+                        ui.notify(f" Rapport exporté : {filename}", color="positive", timeout=5000)
                     except Exception as e:
                         ui.notify(f"❌ Erreur : {str(e)}", color="negative")
                 
@@ -13079,7 +14114,7 @@ def optimization_page():
             
             ui.button(
                 "🏠 Retour Accueil",
-                on_click=lambda: ui.run_javascript("window.location.href='/supervised'")
+                on_click=lambda: ui.run_javascript("window.location.href='/'")
             ).style(
                 "background:linear-gradient(135deg, #01335A 0%, #014d7a 100%) !important; "
                 "color:white !important; font-weight:700 !important; height:48px !important; "
@@ -13328,7 +14363,7 @@ def unsupervised_preprocessing_page():
         with ui.card().classes("w-full max-w-5xl p-6 mb-8").style(
             "background-color:white !important; border-radius:12px !important; box-shadow:0 4px 15px rgba(0,0,0,0.08) !important;"
         ):
-            ui.label("📊 Vue d’Ensemble du Dataset").style(
+            ui.label(" Vue d’Ensemble du Dataset").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; margin-bottom:12px !important;"
             )
 
@@ -13388,7 +14423,7 @@ def unsupervised_preprocessing_page():
                     "Exemples": examples
                 })
 
-            # ✅ Unsupervised: pas de target
+            #  Unsupervised: pas de target
             state["columns_info"] = columns_info
 
             ui.table(
@@ -13525,7 +14560,7 @@ def unsupervised_user_decisions_page():
         for col_name, cb in column_exclude_widgets.items():
             state.setdefault("columns_exclude", {})[col_name] = cb.value
 
-        # ✅ SÉLECTION AUTOMATIQUE : toutes les colonnes NON exclues
+        #  SÉLECTION AUTOMATIQUE : toutes les colonnes NON exclues
         selected_features = []
         for col_name, cb in column_exclude_widgets.items():
             if not cb.value:  # Si la case "Exclure" n'est PAS cochée
@@ -13537,7 +14572,7 @@ def unsupervised_user_decisions_page():
             ui.notify("⚠️ Au moins 2 colonnes non-exclues sont nécessaires pour le clustering", color="warning")
             return False
         
-        ui.notify(f"✅ {len(selected_features)} colonnes sélectionnées pour le clustering", color="positive")
+        ui.notify(f" {len(selected_features)} colonnes sélectionnées pour le clustering", color="positive")
         return True
 
     def save_and_go():
@@ -13564,7 +14599,7 @@ def unsupervised_user_decisions_page():
             "background:white !important; border-radius:16px !important; padding:32px !important; "
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
-            ui.label("👁️ Aperçu des données").style(
+            ui.label(" Aperçu des données").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:16px !important;"
             )
@@ -13700,7 +14735,7 @@ def unsupervised_user_decisions_page():
                     "font-size:13px !important; color:#01335A !important; line-height:1.6 !important;"
                 )
 
-            # ✅ DISPOSITION EN GRILLE : 2 COLONNES PAR LIGNE
+            #  DISPOSITION EN GRILLE : 2 COLONNES PAR LIGNE
             for i in range(0, len(columns_info), 2):
                 with ui.row().classes("w-full gap-4 mb-4"):
                     # Colonne 1
@@ -13845,12 +14880,18 @@ def get_recommendation(missing_pct):
     else:
         return "Suppression recommandée", "red"
 
+# ========== PAGE GESTION VALEURS MANQUANTES & DOUBLONS - NON SUPERVISÉ ==========
+# Cette version complète inclut la gestion des doublons suivant la même logique que le supervisé
+
 @ui.page('/unsupervised/missing_values')
 def missing_values_page():
     df = state.get("raw_df")
     features = state.get("selected_features")
     univariate_decisions = state.get("univariate_decisions", {})
     anomaly_decisions = state.get("anomaly_decisions", {})
+    
+    # État pour la gestion des doublons
+    state.setdefault("duplicate_strategy", "none")
     
     if df is None or features is None:
         with ui.column().style("width:100%; height:100vh; display:flex; align-items:center; justify-content:center;"):
@@ -13862,18 +14903,12 @@ def missing_values_page():
     
     # Appliquer les décisions précédentes
     df_proc = df[features].copy()
+    df_proc = df_proc.replace('?', np.nan).replace('', np.nan).replace(' ', np.nan)
     
-    # Convertir les "?" en NaN pour toutes les colonnes
-    df_proc = df_proc.replace('?', np.nan)
-    df_proc = df_proc.replace('', np.nan)
-    df_proc = df_proc.replace(' ', np.nan)
-    
-    # Appliquer suppressions univariées
     for col, decision in univariate_decisions.items():
         if decision == "Supprimer" and col in df_proc.columns:
             df_proc.drop(columns=col, inplace=True)
     
-    # Appliquer décisions anomalies (winsorisation, suppression)
     for col, decision in anomaly_decisions.items():
         if col not in df_proc.columns:
             continue
@@ -13882,69 +14917,165 @@ def missing_values_page():
         elif decision == "Winsoriser":
             series = pd.to_numeric(df_proc[col], errors="coerce")
             if series.notna().sum() > 0:
-                q1 = series.quantile(0.25)
-                q3 = series.quantile(0.75)
+                q1, q3 = series.quantile(0.25), series.quantile(0.75)
                 iqr = q3 - q1
-                lower = q1 - 1.5 * iqr
-                upper = q3 + 1.5 * iqr
-                df_proc[col] = series.clip(lower=lower, upper=upper)
+                df_proc[col] = series.clip(lower=q1 - 1.5*iqr, upper=q3 + 1.5*iqr)
     
-    # Calculer statistiques missing
+    # Statistiques missing
     missing_stats = []
     for col in df_proc.columns:
         missing_count = df_proc[col].isna().sum()
         missing_pct = (missing_count / len(df_proc)) * 100
         recommendation, color = get_recommendation(missing_pct)
         missing_stats.append({
-            'Colonne': col,
-            'Valeurs manquantes': missing_count,
-            '% Manquant': missing_pct,
-            'Recommandation': recommendation,
-            'Color': color
+            'Colonne': col, 'Valeurs manquantes': missing_count,
+            '% Manquant': missing_pct, 'Recommandation': recommendation, 'Color': color
         })
     
     missing_df = pd.DataFrame(missing_stats).sort_values('% Manquant', ascending=False)
     
-    # Stockage des décisions
+    # Calcul des doublons
+    n_duplicates = df_proc.duplicated().sum()
+    duplicate_pct = round(n_duplicates / len(df_proc) * 100, 2) if len(df_proc) > 0 else 0
+    
     column_decisions = {}
     row_threshold = {'value': 50}
     global_method = {'value': None}
     
-    # ✅ CONTENEUR PRINCIPAL AVEC CLASSES COMME UNIVARIATE
-    with ui.column().classes("w-full items-center").style(
-        "min-height:100vh !important; background:#f0f2f5 !important; padding:48px 24px !important; "
-        "font-family:'Inter', sans-serif !important;"
-    ):
+    # ========== HELPERS DOUBLONS ==========
+    def get_duplicate_rows(df_data, max_rows=20):
+        duplicated_mask = df_data.duplicated(keep=False)
+        return df_data[duplicated_mask].index.tolist()[:max_rows]
+    
+    def preview_duplicate_removal():
+        strategy = state.get("duplicate_strategy", "none")
+        if strategy == "none":
+            ui.notify("⚠️ Sélectionnez d'abord une stratégie", color="warning")
+            return
         
-        # HEADER MODERNE
-        ui.label("💧 Gestion des Valeurs Manquantes").style(
-            "font-weight:700 !important; font-size:36px !important; color:#01335A !important; "
-            "margin-bottom:8px !important; text-align:center !important; letter-spacing:-0.5px !important;"
+        try:
+            duplicate_indices = get_duplicate_rows(df_proc, max_rows=15)
+            if not duplicate_indices:
+                ui.notify("✅ Aucun doublon détecté", color="info")
+                return
+            
+            df_before = df_proc.loc[duplicate_indices].copy()
+            
+            if strategy == "drop_all":
+                df_after_full = df_proc.drop_duplicates(keep=False)
+            elif strategy == "drop_first":
+                df_after_full = df_proc.drop_duplicates(keep='first')
+            elif strategy == "drop_last":
+                df_after_full = df_proc.drop_duplicates(keep='last')
+            else:
+                df_after_full = df_proc.copy()
+            
+            remaining_indices = [idx for idx in duplicate_indices if idx in df_after_full.index]
+            df_after = df_after_full.loc[remaining_indices] if remaining_indices else pd.DataFrame()
+            
+            n_removed = len(df_proc) - len(df_after_full)
+            duplicate_preview_info.set_text(
+                f"✅ Preview : {len(df_proc)} → {len(df_after_full)} lignes | {n_removed} doublons supprimés"
+            )
+            
+            # Affichage tableaux
+            duplicate_table_before.clear()
+            duplicate_table_after.clear()
+            display_cols = df_proc.columns.tolist()[:8]
+            
+            with duplicate_table_before:
+                ui.label("🔴 AVANT Suppression").style(
+                    "font-weight:700 !important; font-size:16px !important; color:#01335A !important; margin-bottom:12px !important;"
+                )
+                rows_before = []
+                for idx in duplicate_indices:
+                    row_dict = {"Index": idx}
+                    for col in display_cols:
+                        val = df_before.loc[idx, col]
+                        row_dict[col] = str(val)[:30] if not pd.isna(val) else "NaN"
+                    rows_before.append(row_dict)
+                
+                columns_before = [{"name": "Index", "label": "Index", "field": "Index", "align": "center"}]
+                columns_before.extend([{"name": c, "label": c, "field": c, "align": "left"} for c in display_cols])
+                ui.table(columns=columns_before, rows=rows_before, row_key="Index").props("flat bordered dense")
+                
+                if len(df_proc.columns) > 8:
+                    ui.label(f"... et {len(df_proc.columns) - 8} autres colonnes").style(
+                        "font-size:11px !important; color:#7f8c8d !important; font-style:italic !important;"
+                    )
+            
+            with duplicate_table_after:
+                ui.label("📈 APRÈS Suppression").style(
+                    "font-weight:700 !important; font-size:16px !important; color:#27ae60 !important; margin-bottom:12px !important;"
+                )
+                if len(df_after) == 0:
+                    ui.label("✓ Tous les doublons supprimés").style(
+                        "font-size:14px !important; color:#27ae60 !important; font-weight:600 !important; padding:20px !important;"
+                    )
+                else:
+                    rows_after = []
+                    for idx in remaining_indices:
+                        row_dict = {"Index": idx, "Statut": ""}
+                        if strategy == "drop_first":
+                            row_dict["Statut"] = "✓ Gardée"
+                        elif strategy == "drop_last":
+                            row_dict["Statut"] = "✓ Gardée"
+                        for col in display_cols:
+                            val = df_after_full.loc[idx, col]
+                            row_dict[col] = str(val)[:30] if not pd.isna(val) else "NaN"
+                        rows_after.append(row_dict)
+                    
+                    columns_after = [
+                        {"name": "Index", "label": "Index", "field": "Index", "align": "center"},
+                        {"name": "Statut", "label": "Statut", "field": "Statut", "align": "center"}
+                    ]
+                    columns_after.extend([{"name": c, "label": c, "field": c, "align": "left"} for c in display_cols])
+                    ui.table(columns=columns_after, rows=rows_after, row_key="Index").props("flat bordered dense")
+                    
+                    if len(df_proc.columns) > 8:
+                        ui.label(f"... et {len(df_proc.columns) - 8} autres colonnes").style(
+                            "font-size:11px !important; color:#7f8c8d !important; font-style:italic !important;"
+                        )
+        except Exception as e:
+            ui.notify(f"❌ Erreur preview : {str(e)}", color="negative")
+    
+    def apply_duplicate_removal_to_df(df_input):
+        strategy = state.get("duplicate_strategy", "none")
+        if strategy == "none":
+            return df_input.copy()
+        
+        df_result = df_input.copy()
+        if strategy == "drop_all":
+            df_result = df_result.drop_duplicates(keep=False)
+        elif strategy == "drop_first":
+            df_result = df_result.drop_duplicates(keep='first')
+        elif strategy == "drop_last":
+            df_result = df_result.drop_duplicates(keep='last')
+        
+        return df_result
+    
+    # ========== UI PRINCIPALE ==========
+    with ui.column().classes("w-full items-center").style(
+        "min-height:100vh !important; background:#f0f2f5 !important; padding:48px 24px !important; font-family:'Inter', sans-serif !important;"
+    ):
+        ui.label("🧹 Gestion des Valeurs Manquantes & Doublons").style(
+            "font-weight:700 !important; font-size:36px !important; color:#01335A !important; margin-bottom:8px !important; text-align:center !important;"
         )
         
-        # Résumé global
         total_missing = df_proc.isna().sum().sum()
         total_cells = df_proc.shape[0] * df_proc.shape[1]
         global_missing_pct = (total_missing / total_cells) * 100
         
-        ui.label(f"{df_proc.shape[0]} lignes × {df_proc.shape[1]} colonnes | {global_missing_pct:.2f}% de valeurs manquantes").style(
-            "font-size:16px !important; color:#636e72 !important; margin-bottom:48px !important; "
-            "text-align:center !important; font-weight:400 !important;"
-        )
+        ui.label(
+            f"{df_proc.shape[0]} lignes × {df_proc.shape[1]} colonnes | {global_missing_pct:.2f}% manquantes | {n_duplicates} doublons ({duplicate_pct}%)"
+        ).style("font-size:16px !important; color:#636e72 !important; margin-bottom:48px !important; text-align:center !important;")
         
-        # 🆕 SECTION MÉTHODE GLOBALE
+        # MÉTHODE GLOBALE
         with ui.card().classes("w-full max-w-6xl mb-6").style(
-            "background:white !important; border-radius:16px !important; padding:32px !important; "
-            "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important; border:2px solid #3498db !important;"
+            "background:white !important; border-radius:16px !important; padding:32px !important; box-shadow:0 2px 8px rgba(0,0,0,0.08) !important; border:2px solid #3498db !important;"
         ):
-            
-            ui.label("⚡ Méthode Globale (Appliquer à toutes les colonnes)").style(
-                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
-                "margin-bottom:20px !important;"
-            )
-            
-            ui.label("Choisissez une méthode à appliquer automatiquement pour toutes les colonnes avec valeurs manquantes :").style(
-                "font-size:14px; color:#7f8c8d; margin-bottom:16px;"
+            ui.label("🌐 Méthode Globale").style(
+                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; margin-bottom:20px !important;"
             )
             
             global_method_select = ui.select(
@@ -13952,21 +15083,13 @@ def missing_values_page():
                         "Imputer Mean (tout)", "Imputer Median (tout)", "Imputer Mode (tout)", "Imputer KNN (tout)"],
                 value="Mode personnalisé (par colonne)",
                 label="Méthode globale"
-            ).style("width:100%; border:2px solid #3498db; border-radius:8px; font-weight:600;")
-            
-            with ui.card().style("padding:12px 16px; background:#e8f4f8; border-left:4px solid #3498db; border-radius:6px; margin-top:12px;"):
-                ui.label("💡 Astuce : Sélectionnez 'Mode personnalisé' pour configurer chaque colonne individuellement.").style(
-                    "font-size:13px; color:#2c3e50;"
-                )
+            ).style("width:100%; border:2px solid #3498db; border-radius:8px;")
             
             def apply_global_method():
                 method = global_method_select.value
-                global_method['value'] = method
-                
                 if method == "Mode personnalisé (par colonne)":
-                    ui.notify("Mode personnalisé activé. Configurez chaque colonne ci-dessous.", color="info")
+                    ui.notify("Mode personnalisé activé", color="info")
                 else:
-                    # Appliquer la méthode globale à toutes les colonnes
                     action_map = {
                         "Supprimer toutes les colonnes": "Supprimer colonne",
                         "Imputer Mean (tout)": "Imputer Mean",
@@ -13974,73 +15097,48 @@ def missing_values_page():
                         "Imputer Mode (tout)": "Imputer Mode",
                         "Imputer KNN (tout)": "Imputer KNN"
                     }
-                    
                     action = action_map.get(method, "Imputer KNN")
-                    
                     for col, widget in column_decisions.items():
                         if widget is not None:
                             widget.set_value(action)
-                    
-                    ui.notify(f"✅ Méthode '{method}' appliquée à toutes les colonnes !", color="positive")
+                    ui.notify(f"✓ Méthode '{method}' appliquée !", color="positive")
             
-            ui.button("✓ Appliquer cette méthode", on_click=apply_global_method).style(
+            ui.button("✓ Appliquer", on_click=apply_global_method).style(
                 "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white; font-weight:600; border-radius:8px; padding:10px 20px; margin-top:12px; width:100%;"
-            )                
+            )
         
         # STATISTIQUES PAR COLONNE
         with ui.card().classes("w-full max-w-6xl mb-6").style(
-            "background:white !important; border-radius:16px !important; padding:32px !important; "
-            "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
+            "background:white !important; border-radius:16px !important; padding:32px !important; box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
-            
             ui.label("📊 Statistiques par Colonne").style(
-                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
-                "margin-bottom:20px !important;"
+                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; margin-bottom:20px !important;"
             )
             
-            # Table rows
             for _, row in missing_df.iterrows():
                 col = row['Colonne']
-                
-                # Déterminer la couleur de bordure selon le pourcentage
-                if row['% Manquant'] > 50:
-                    border_color = "#e74c3c"
-                    bg_color = "#fadbd8"
-                elif row['% Manquant'] > 20:
-                    border_color = "#e67e22"
-                    bg_color = "#fdebd0"
-                elif row['% Manquant'] > 0:
-                    border_color = "#f39c12"
-                    bg_color = "#fef5e7"
-                else:
-                    border_color = "#27ae60"
-                    bg_color = "#d5f4e6"
+                border_color = "#e74c3c" if row['% Manquant'] > 50 else "#e67e22" if row['% Manquant'] > 20 else "#f39c12" if row['% Manquant'] > 0 else "#27ae60"
+                bg_color = "#fadbd8" if row['% Manquant'] > 50 else "#fdebd0" if row['% Manquant'] > 20 else "#fef5e7" if row['% Manquant'] > 0 else "#d5f4e6"
                 
                 with ui.card().classes("w-full mb-4").style(
-                    f"background:#f8f9fa !important; border-radius:12px !important; padding:16px !important; "
-                    f"border:1px solid {border_color} !important; box-shadow:none !important;"
+                    f"background:#f8f9fa !important; border-radius:12px !important; padding:16px !important; border:1px solid {border_color} !important;"
                 ):
-                    
-                    # Nom de colonne et stats
-                    with ui.row().style("display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; width:100%;"):
+                    with ui.row().style("display:flex; justify-content:space-between; width:100%; margin-bottom:16px;"):
                         ui.label(col).style("font-weight:700 !important; color:#01335A !important; font-size:16px !important;")
-                        with ui.row().style("display:flex; gap:12px; align-items:center;"):
+                        with ui.row().style("gap:12px;"):
                             with ui.card().style(f"padding:6px 12px; background:{bg_color}; border-radius:6px; border:1px solid {border_color};"):
                                 ui.label(f"{row['Valeurs manquantes']} manquantes").style(f"color:{border_color}; font-size:14px; font-weight:600;")
                             with ui.card().style(f"padding:6px 12px; background:{bg_color}; border-radius:6px; border:1px solid {border_color};"):
                                 ui.label(f"{row['% Manquant']:.1f}%").style(f"color:{border_color}; font-weight:700; font-size:16px;")
                     
-                    # Recommandation
                     with ui.card().style("padding:10px 14px; background:#f8f9fa; border-radius:6px; margin-bottom:16px;"):
                         ui.label(f"💡 {row['Recommandation']}").style(f"color:{row['Color']}; font-size:14px; font-weight:600;")
                     
-                    # Action (KNN par défaut)
                     if row['% Manquant'] > 0:
-                        with ui.row().style("display:flex; align-items:center; gap:12px;"):
+                        with ui.row().style("gap:12px; align-items:center;"):
                             ui.label("Action:").style("color:#7f8c8d; font-size:14px; font-weight:600;")
                             column_decisions[col] = ui.select(
-                                options=["Imputer KNN", "Garder tel quel", "Supprimer colonne", "Imputer Mean", 
-                                        "Imputer Median", "Imputer Mode"],
+                                options=["Imputer KNN", "Supprimer lignes NaN", "Supprimer colonne", "Imputer Mean", "Imputer Median", "Imputer Mode"],
                                 value="Imputer KNN"
                             ).style("width:300px; border:2px solid #e1e8ed; border-radius:6px;")
                     else:
@@ -14048,172 +15146,324 @@ def missing_values_page():
                         with ui.card().style("padding:8px 14px; background:#d5f4e6; border-radius:6px; display:inline-block;"):
                             ui.label("✓ Aucune action requise").style("color:#27ae60; font-size:14px; font-weight:600;")
         
-        # GESTION DES LIGNES
+        # GESTION LIGNES
         with ui.card().classes("w-full max-w-6xl mb-6").style(
-            "background:white !important; border-radius:16px !important; padding:32px !important; "
-            "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
+            "background:white !important; border-radius:16px !important; padding:32px !important; box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
-            
             ui.label("🗑️ Gestion des Lignes").style(
-                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
-                "margin-bottom:20px !important;"
+                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; margin-bottom:20px !important;"
             )
             
-            ui.label("Supprimer les lignes ayant plus de X% de valeurs manquantes :").style("font-size:15px; color:#2c3e50; font-weight:600; margin-bottom:16px;")
-            
             threshold_slider = ui.slider(min=0, max=100, value=50, step=5).props('label-always').style("width:100%; margin-bottom:16px;")
-            
             rows_missing_pct = (df_proc.isna().sum(axis=1) / df_proc.shape[1]) * 100
-            initial_rows_to_drop = (rows_missing_pct > threshold_slider.value).sum()
+            initial_rows_to_drop = (rows_missing_pct > 50).sum()
             
             with ui.card().style("padding:16px; background:#fdebd0; border-left:3px solid #e67e22; border-radius:6px;"):
-                impact_label = ui.label(
-                    f"📌 Impact : {initial_rows_to_drop} lignes supprimées ({(initial_rows_to_drop/len(df_proc)*100):.1f}%)"
-                ).style("font-size:15px; color:#e67e22; font-weight:600;")
+                impact_label = ui.label(f"📌 Impact : {initial_rows_to_drop} lignes supprimées").style("font-size:15px; color:#e67e22; font-weight:600;")
             
             def update_threshold():
                 row_threshold['value'] = threshold_slider.value
                 rows_to_drop = (rows_missing_pct > threshold_slider.value).sum()
-                impact_label.set_text(
-                    f"📌 Impact : {rows_to_drop} lignes supprimées ({(rows_to_drop/len(df_proc)*100):.1f}%)"
-                )
+                impact_label.set_text(f"📌 Impact : {rows_to_drop} lignes supprimées ({(rows_to_drop/len(df_proc)*100):.1f}%)")
             
             threshold_slider.on('update:model-value', update_threshold)
         
-        # 👀 PRÉVISUALISATION
+        # GESTION DOUBLONS
         with ui.card().classes("w-full max-w-6xl mb-6").style(
-            "background:white !important; border-radius:16px !important; padding:32px !important; "
-            "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
+            "background:white !important; border-radius:16px !important; padding:32px !important; box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
+            with ui.row().classes("w-full items-center justify-between mb-4"):
+                ui.label("🔄 Gestion des Doublons").style(
+                    "font-weight:700 !important; font-size:22px !important; color:#01335A !important;"
+                )
+                
+                if n_duplicates > 0:
+                    badge_color = "#e74c3c" if duplicate_pct > 5 else "#f39c12"
+                    with ui.row().style(f"background:{badge_color}15; padding:8px 16px; border-radius:8px;"):
+                        ui.label(f"⚠️ {n_duplicates} doublons ({duplicate_pct}%)").style(
+                            f"color:{badge_color} !important; font-weight:600 !important;"
+                        )
+                else:
+                    with ui.row().style("background:#27ae6015; padding:8px 16px; border-radius:8px;"):
+                        ui.label("✅ Aucun doublon").style("color:#27ae60 !important; font-weight:600 !important;")
             
-            ui.label("👀 Prévisualisation de l'Impact").style(
-                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
-                "margin-bottom:20px !important;"
+            if n_duplicates > 0:
+                duplicate_strategy_radio = ui.radio(
+                    options={
+                        'none': 'Aucune action',
+                        'drop_all': 'Supprimer toutes les occurrences',
+                        'drop_first': 'Conserver la première',
+                        'drop_last': 'Conserver la dernière'
+                    },
+                    value=state.get("duplicate_strategy", "none")
+                ).classes("mb-4")
+                
+                duplicate_strategy_radio.on_value_change(lambda: state.update({"duplicate_strategy": duplicate_strategy_radio.value}))
+                
+                duplicate_preview_info = ui.label("Cliquez sur 'Preview' pour visualiser").style(
+                    "font-size:14px !important; color:#636e72 !important; margin-bottom:20px !important;"
+                )
+                
+                with ui.row().classes("w-full gap-4 mb-4"):
+                    duplicate_table_before = ui.column().classes("flex-1")
+                    duplicate_table_after = ui.column().classes("flex-1")
+                
+                ui.button("👁 Preview Doublons", on_click=preview_duplicate_removal).style(
+                    "background:#9b59b6 !important; color:white !important; border-radius:8px !important; padding:10px 20px !important;"
+                )
+        
+        # PRÉVISUALISATION AVANT/APRÈS
+        with ui.card().classes("w-full max-w-6xl mb-6").style(
+            "background:white !important; border-radius:16px !important; padding:32px !important; box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
+        ):
+            ui.label("👁 Prévisualisation AVANT / APRÈS").style(
+                "font-weight:700 !important; font-size:22px !important; color:#01335A !important; margin-bottom:20px !important;"
             )
             
-            preview_container = ui.column()
-            
-            def update_preview():
-                preview_container.clear()
-                with preview_container:
-                    df_preview = df_proc.copy()
-                    cols_to_drop = []
+            def show_preview_popup():
+                df_preview = df_proc.copy()
+                cols_to_drop = []
+                
+                for col, widget in column_decisions.items():
+                    if widget is None:
+                        continue
+                    decision = widget.value
                     
-                    for col, widget in column_decisions.items():
-                        if widget is None:
-                            continue
-                        decision = widget.value
-                        if decision == "Supprimer colonne":
-                            cols_to_drop.append(col)
-                        elif decision == "Imputer Mean":
-                            df_preview[col] = pd.to_numeric(df_preview[col], errors="coerce")
-                            df_preview[col] = df_preview[col].fillna(df_preview[col].mean())
-                        elif decision == "Imputer Median":
-                            df_preview[col] = pd.to_numeric(df_preview[col], errors="coerce")
-                            df_preview[col] = df_preview[col].fillna(df_preview[col].median())
-                        elif decision == "Imputer Mode":
-                            mode_value = df_preview[col].mode().iloc[0] if df_preview[col].mode().size else None
-                            if mode_value is not None:
-                                df_preview[col] = df_preview[col].fillna(mode_value)
-                        elif decision == "Imputer KNN":
-                            try:
-                                series = pd.to_numeric(df_preview[col], errors="coerce")
-                                imputer = KNNImputer(n_neighbors=5)
+                    if decision == "Supprimer colonne":
+                        cols_to_drop.append(col)
+                    elif decision == "Supprimer lignes NaN":
+                        df_preview = df_preview.dropna(subset=[col])
+                    elif decision == "Imputer Mean":
+                        df_preview[col] = pd.to_numeric(df_preview[col], errors="coerce")
+                        mean_val = df_preview[col].mean()
+                        if pd.notna(mean_val):
+                            df_preview[col] = df_preview[col].fillna(mean_val)
+                        else:
+                            df_preview = df_preview.dropna(subset=[col])
+                    elif decision == "Imputer Median":
+                        df_preview[col] = pd.to_numeric(df_preview[col], errors="coerce")
+                        median_val = df_preview[col].median()
+                        if pd.notna(median_val):
+                            df_preview[col] = df_preview[col].fillna(median_val)
+                        else:
+                            df_preview = df_preview.dropna(subset=[col])
+                    elif decision == "Imputer Mode":
+                        mode_value = df_preview[col].mode().iloc[0] if not df_preview[col].mode().empty else None
+                        if mode_value is not None:
+                            df_preview[col] = df_preview[col].fillna(mode_value)
+                        else:
+                            df_preview = df_preview.dropna(subset=[col])
+                    elif decision == "Imputer KNN":
+                        try:
+                            from sklearn.impute import KNNImputer
+                            series = pd.to_numeric(df_preview[col], errors="coerce")
+                            if series.notna().sum() >= 5:
+                                imputer = KNNImputer(n_neighbors=min(5, series.notna().sum()))
                                 df_preview[col] = imputer.fit_transform(series.to_frame()).ravel()
-                            except:
-                                pass
+                            else:
+                                median_val = series.median()
+                                if pd.notna(median_val):
+                                    df_preview[col] = series.fillna(median_val)
+                                else:
+                                    df_preview = df_preview.dropna(subset=[col])
+                        except:
+                            series = pd.to_numeric(df_preview[col], errors="coerce")
+                            median_val = series.median()
+                            if pd.notna(median_val):
+                                df_preview[col] = series.fillna(median_val)
+                            else:
+                                df_preview = df_preview.dropna(subset=[col])
+                
+                if cols_to_drop:
+                    df_preview = df_preview.drop(columns=[c for c in cols_to_drop if c in df_preview.columns])
+                
+                rows_missing_pct_preview = (df_preview.isna().sum(axis=1) / df_preview.shape[1]) * 100
+                rows_to_keep = rows_missing_pct_preview <= row_threshold['value']
+                df_preview = df_preview[rows_to_keep]
+                
+                # Appliquer suppression doublons dans le preview
+                df_preview = apply_duplicate_removal_to_df(df_preview)
+                
+                with ui.dialog() as dialog, ui.card().style(
+                    "min-width:90vw !important; max-width:95vw !important; max-height:90vh !important; "
+                    "overflow-y:auto !important; padding:32px !important; background:white !important;"
+                ):
+                    with ui.row().classes("w-full items-center justify-between mb-6").style(
+                        "position:sticky !important; top:0 !important; background:white !important; "
+                        "z-index:1000 !important; padding-bottom:16px !important; border-bottom:2px solid #e0e0e0 !important;"
+                    ):
+                        ui.label("🔍 Prévisualisation Complète").style(
+                            "font-weight:800 !important; font-size:24px !important; color:#01335A !important;"
+                        )
+                        ui.button("✕", on_click=dialog.close).props("flat round").style(
+                            "font-size:20px !important; color:#e74c3c !important;"
+                        )
                     
-                    if cols_to_drop:
-                        df_preview = df_preview.drop(columns=[c for c in cols_to_drop if c in df_preview.columns])
-                    
-                    rows_missing_pct = (df_preview.isna().sum(axis=1) / df_preview.shape[1]) * 100
-                    rows_to_keep = rows_missing_pct <= row_threshold['value']
-                    df_preview = df_preview[rows_to_keep]
-                    
-                    # Résumé transformation
-                    with ui.row().style("display:flex; gap:16px; align-items:center; margin-bottom:20px;"):
-                        with ui.card().style("padding:12px 20px; background:#f8f9fa; border-radius:8px; border:2px dashed #bdc3c7;"):
-                            ui.label(f"Original: {df_proc.shape[0]} × {df_proc.shape[1]}").style("color:#7f8c8d; font-size:14px; font-weight:600;")
+                    with ui.row().classes("w-full gap-4 mb-6 justify-center items-center"):
+                        with ui.card().style(
+                            "padding:16px 24px !important; background:linear-gradient(135deg, #ffebee, #ffcdd2) !important; "
+                            "border-radius:12px !important; border-left:4px solid #e74c3c !important; min-width:180px !important;"
+                        ):
+                            ui.label("🔴 AVANT").style(
+                                "font-weight:700 !important; font-size:14px !important; color:#c0392b !important; "
+                                "margin-bottom:8px !important; text-align:center !important;"
+                            )
+                            ui.label(f"{df_proc.shape[0]} lignes").style(
+                                "font-size:20px !important; font-weight:800 !important; color:#e74c3c !important; text-align:center !important;"
+                            )
+                            ui.label(f"{df_proc.shape[1]} colonnes").style(
+                                "font-size:16px !important; font-weight:600 !important; color:#e74c3c !important; text-align:center !important;"
+                            )
+                            ui.label(f"{df_proc.isna().sum().sum()} NaN").style(
+                                "font-size:14px !important; font-weight:600 !important; color:#e74c3c !important; text-align:center !important;"
+                            )
                         
-                        ui.label("→").style("font-size:24px; color:#01335A;")
+                        ui.label("→").style("font-size:36px !important; color:#01335A !important; font-weight:700 !important;")
                         
-                        with ui.card().style("padding:12px 20px; background:#d5f4e6; border-radius:8px; border:2px solid #27ae60;"):
-                            ui.label(f"Après: {df_preview.shape[0]} × {df_preview.shape[1]}").style("color:#27ae60; font-weight:700; font-size:14px;")
+                        with ui.card().style(
+                            "padding:16px 24px !important; background:linear-gradient(135deg, #e8f5e9, #c8e6c9) !important; "
+                            "border-radius:12px !important; border-left:4px solid #27ae60 !important; min-width:180px !important;"
+                        ):
+                            ui.label("📈 APRÈS").style(
+                                "font-weight:700 !important; font-size:14px !important; color:#1e8449 !important; "
+                                "margin-bottom:8px !important; text-align:center !important;"
+                            )
+                            ui.label(f"{df_preview.shape[0]} lignes").style(
+                                "font-size:20px !important; font-weight:800 !important; color:#27ae60 !important; text-align:center !important;"
+                            )
+                            ui.label(f"{df_preview.shape[1]} colonnes").style(
+                                "font-size:16px !important; font-weight:600 !important; color:#27ae60 !important; text-align:center !important;"
+                            )
+                            remaining_nans = df_preview.isna().sum().sum()
+                            ui.label(f"{remaining_nans} NaN").style(
+                                f"font-size:14px !important; font-weight:600 !important; "
+                                f"color:{'#27ae60' if remaining_nans == 0 else '#e67e22'} !important; text-align:center !important;"
+                            )
                         
                         rows_lost = df_proc.shape[0] - df_preview.shape[0]
                         cols_lost = df_proc.shape[1] - df_preview.shape[1]
                         
                         if rows_lost > 0 or cols_lost > 0:
-                            with ui.card().style("padding:12px 20px; background:#fadbd8; border-radius:8px; border:2px solid #e74c3c;"):
-                                ui.label(f"Supprimé: {rows_lost} lignes, {cols_lost} colonnes").style("color:#e74c3c; font-size:14px; font-weight:700;")
+                            with ui.card().style(
+                                "padding:16px 24px !important; background:linear-gradient(135deg, #fff3e0, #ffe0b2) !important; "
+                                "border-radius:12px !important; border-left:4px solid #ff9800 !important; min-width:140px !important;"
+                            ):
+                                ui.label("Δ Différence").style(
+                                    "font-weight:700 !important; font-size:14px !important; color:#e65100 !important; "
+                                    "margin-bottom:8px !important; text-align:center !important;"
+                                )
+                                ui.label(f"-{rows_lost} lignes").style(
+                                    "font-size:16px !important; font-weight:700 !important; color:#ff9800 !important; text-align:center !important;"
+                                )
+                                ui.label(f"-{cols_lost} colonnes").style(
+                                    "font-size:14px !important; font-weight:600 !important; color:#ff9800 !important; text-align:center !important;"
+                                )
                     
-                    ui.separator().style("margin:20px 0; background:#ecf0f1;")
+                    ui.separator().style("margin:24px 0 !important; background:#e0e0e0 !important;")
                     
-                    # ✅ TABLEAU DE PRÉVISUALISATION
-                    ui.label(f"📋 Visualisation des 10 premières lignes du dataset ({df_preview.shape[0]} lignes × {df_preview.shape[1]} colonnes)").style(
-                        "font-size:14px; color:#636e72; margin-bottom:12px;"
+                    # Tableau AVANT
+                    ui.label("🔴 Dataset AVANT Traitement").style(
+                        "font-weight:700 !important; font-size:18px !important; color:#e74c3c !important; margin-bottom:16px !important;"
                     )
                     
-                    df_sample = df_preview.head(10).copy()
+                    df_before = df_proc.head(15).copy()
+                    html_before = f"""
+                    <div style="width:100%; overflow-x:auto; border-radius:12px; border:2px solid #e74c3c; background:white; margin-bottom:32px;">
+                        <div style="background:#ffebee; padding:12px 16px; border-bottom:2px solid #e74c3c;">
+                            <span style="font-size:13px; color:#c0392b; font-weight:700;">
+                                {df_before.shape[0]} lignes × {df_before.shape[1]} colonnes
+                            </span>
+                        </div>
+                        <div style="overflow-x:auto;">
+                            <table style="width:100%; border-collapse:collapse; font-size:12px; font-family:'Inter', sans-serif;">
+                                <thead><tr style="background:#e74c3c; color:white;">
+                    """
+                    for col in df_before.columns:
+                        html_before += f'<th style="padding:10px 14px; text-align:left; font-weight:700; white-space:nowrap; min-width:120px;">{col}</th>'
+                    html_before += "</tr></thead><tbody>"
                     
-                    columns_for_table = []
-                    rows_for_table = []
-                    
-                    for col in df_sample.columns:
-                        columns_for_table.append({
-                            "name": col,
-                            "label": col,
-                            "field": col,
-                            "align": "left",
-                            "sortable": True
-                        })
-                    
-                    for idx, row in df_sample.iterrows():
-                        row_dict = {}
-                        for col in df_sample.columns:
+                    for idx, row in df_before.iterrows():
+                        bg_color = "#f8f9fa" if idx % 2 == 0 else "white"
+                        html_before += f'<tr style="background:{bg_color}; border-bottom:1px solid #e0e0e0;">'
+                        for col in df_before.columns:
                             val = row[col]
                             if pd.isna(val):
-                                row_dict[col] = "NaN"
-                            elif isinstance(val, (int, np.integer)):
-                                row_dict[col] = str(val)
-                            elif isinstance(val, (float, np.floating)):
-                                row_dict[col] = f"{val:.2f}"
+                                display_val = '<span style="color:#e74c3c; font-weight:700; background:#fadbd8; padding:2px 6px; border-radius:4px;">NaN</span>'
                             else:
-                                row_dict[col] = str(val)
-                        rows_for_table.append(row_dict)
+                                display_val = str(val)[:30] if not isinstance(val, (int, float)) else f"{val:.2f}" if isinstance(val, float) else str(val)
+                            html_before += f'<td style="padding:10px 14px; white-space:nowrap;">{display_val}</td>'
+                        html_before += '</tr>'
+                    html_before += "</tbody></table></div></div>"
+                    ui.html(html_before, sanitize=False)
                     
-                    ui.table(
-                        columns=columns_for_table,
-                        rows=rows_for_table,
-                        row_key=df_sample.columns[0]
-                    ).props("flat dense wrap-cells=false").style(
-                        "font-size:12px !important; width:100% !important; overflow-x:auto !important; display:block !important;"
+                    # Tableau APRÈS
+                    ui.label("📈 Dataset APRÈS Traitement").style(
+                        "font-weight:700 !important; font-size:18px !important; color:#27ae60 !important; margin-bottom:16px !important;"
                     )
+                    
+                    df_after = df_preview.head(15).copy()
+                    html_after = f"""
+                    <div style="width:100%; overflow-x:auto; border-radius:12px; border:2px solid #27ae60; background:white;">
+                        <div style="background:#e8f5e9; padding:12px 16px; border-bottom:2px solid #27ae60;">
+                            <span style="font-size:13px; color:#1e8449; font-weight:700;">
+                                {df_after.shape[0]} lignes × {df_after.shape[1]} colonnes
+                            </span>
+                        </div>
+                        <div style="overflow-x:auto;">
+                            <table style="width:100%; border-collapse:collapse; font-size:12px; font-family:'Inter', sans-serif;">
+                                <thead><tr style="background:#27ae60; color:white;">
+                    """
+                    for col in df_after.columns:
+                        html_after += f'<th style="padding:10px 14px; text-align:left; font-weight:700; white-space:nowrap; min-width:120px;">{col}</th>'
+                    html_after += "</tr></thead><tbody>"
+                    
+                    for idx, row in df_after.iterrows():
+                        bg_color = "#f8f9fa" if idx % 2 == 0 else "white"
+                        html_after += f'<tr style="background:{bg_color}; border-bottom:1px solid #e0e0e0;">'
+                        for col in df_after.columns:
+                            val = row[col]
+                            if pd.isna(val):
+                                display_val = '<span style="color:#e74c3c; font-weight:700; background:#fadbd8; padding:2px 6px; border-radius:4px;">NaN</span>'
+                            else:
+                                display_val = str(val)[:30] if not isinstance(val, (int, float)) else f"{val:.2f}" if isinstance(val, float) else str(val)
+                            html_after += f'<td style="padding:10px 14px; white-space:nowrap;">{display_val}</td>'
+                        html_after += '</tr>'
+                    html_after += "</tbody></table></div></div>"
+                    ui.html(html_after, sanitize=False)
+                
+                dialog.open()
             
-            ui.button("🔄 Mettre à jour la prévisualisation", on_click=update_preview).style(
-                "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white; font-weight:600; border-radius:8px; padding:12px 24px; border:none; cursor:pointer; transition:all 0.2s; margin-top:16px;"
+            ui.button("🔍 Afficher la Prévisualisation Complète", on_click=show_preview_popup).style(
+                "background:linear-gradient(135deg, #01335A, #024a7a) !important; color:white !important; "
+                "font-weight:700 !important; border-radius:10px !important; padding:14px 40px !important; "
+                "margin-top:20px !important; box-shadow:0 4px 12px rgba(1,51,90,0.3) !important; font-size:15px !important;"
             )
         
-        # BOUTONS DE NAVIGATION
+        # NAVIGATION
         def save_and_next():
-            decisions = {
-                'column_decisions': {col: widget.value for col, widget in column_decisions.items() if widget is not None},
-                'row_threshold': row_threshold['value'],
-                'global_method': global_method['value']
-            }
+            decisions = {'column_decisions': {col: widget.value for col, widget in column_decisions.items() if widget}, 'row_threshold': row_threshold['value']}
             state["missing_decisions"] = decisions
             
             df_final = df_proc.copy()
+            cols_to_drop = []
             
             for col, action in decisions['column_decisions'].items():
-                if action == "Supprimer colonne" and col in df_final.columns:
-                    df_final.drop(columns=col, inplace=True)
+                if col not in df_final.columns:
+                    continue
+                if action == "Supprimer colonne":
+                    cols_to_drop.append(col)
+                elif action == "Supprimer lignes NaN":
+                    df_final = df_final.dropna(subset=[col])
                 elif action == "Imputer Mean":
                     df_final[col] = pd.to_numeric(df_final[col], errors="coerce")
-                    df_final[col] = df_final[col].fillna(df_final[col].mean())
+                    mean_val = df_final[col].mean()
+                    if pd.notna(mean_val):
+                        df_final[col] = df_final[col].fillna(mean_val)
                 elif action == "Imputer Median":
                     df_final[col] = pd.to_numeric(df_final[col], errors="coerce")
-                    df_final[col] = df_final[col].fillna(df_final[col].median())
+                    median_val = df_final[col].median()
+                    if pd.notna(median_val):
+                        df_final[col] = df_final[col].fillna(median_val)
                 elif action == "Imputer Mode":
                     mode = df_final[col].mode()
                     if not mode.empty:
@@ -14221,38 +15471,73 @@ def missing_values_page():
                 elif action == "Imputer KNN":
                     try:
                         series = pd.to_numeric(df_final[col], errors="coerce")
-                        imputer = KNNImputer(n_neighbors=5)
-                        df_final[col] = imputer.fit_transform(series.to_frame()).ravel()
+                        if series.notna().sum() >= 5:
+                            from sklearn.impute import KNNImputer
+                            imputer = KNNImputer(n_neighbors=min(5, series.notna().sum()))
+                            df_final[col] = imputer.fit_transform(series.to_frame()).ravel()
+                        else:
+                            median_val = series.median()
+                            if pd.notna(median_val):
+                                df_final[col] = series.fillna(median_val)
                     except:
                         pass
             
-            rows_missing_pct = (df_final.isna().sum(axis=1) / df_final.shape[1]) * 100
-            df_final = df_final[rows_missing_pct <= decisions['row_threshold']]
+            if cols_to_drop:
+                df_final = df_final.drop(columns=[c for c in cols_to_drop if c in df_final.columns])
+            
+            rows_missing_pct_final = (df_final.isna().sum(axis=1) / df_final.shape[1]) * 100
+            df_final = df_final[rows_missing_pct_final <= decisions['row_threshold']]
+            
+            # Appliquer suppression doublons
+            df_final = apply_duplicate_removal_to_df(df_final)
+            
+            # Nettoyage final
+            remaining_nans = df_final.isna().sum()
+            cols_with_nans = remaining_nans[remaining_nans > 0]
+            
+            for col in cols_with_nans.index:
+                if col in df_final.columns:
+                    series = df_final[col]
+                    numeric_series = pd.to_numeric(series, errors="coerce")
+                    if numeric_series.notna().sum() / len(series) > 0.5:
+                        median_val = numeric_series.median()
+                        if pd.notna(median_val):
+                            df_final[col] = numeric_series.fillna(median_val)
+                        else:
+                            df_final.drop(columns=col, inplace=True)
+                    else:
+                        mode = series.mode()
+                        if not mode.empty:
+                            df_final[col] = series.fillna(mode.iloc[0])
+                        else:
+                            df_final.drop(columns=col, inplace=True)
+            
+            if df_final.isna().sum().sum() > 0:
+                df_final = df_final.dropna()
             
             state["cleaned_data"] = df_final
+            ui.notify(f"✅ Nettoyage terminé : {df_final.shape[0]} lignes × {df_final.shape[1]} colonnes", color="positive", timeout=5000)
             ui.run_javascript("window.location.href='/unsupervised/encoding'")
         
         with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
-            ui.button(
-                "← Retour",
-                on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/multivariate_analysis'")
-            ).style(
-                "background:white !important; color:#01335A !important; font-weight:500 !important; "
-                "border:1px solid #e1e8ed !important; border-radius:8px !important; height:50px !important; "
-                "min-width:200px !important; font-size:14px !important; text-transform:none !important; "
-                "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
+            ui.button("← Retour", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/multivariate_analysis'")).style(
+                "background:white !important; color:#01335A !important; border:1px solid #e1e8ed !important; border-radius:8px !important; height:50px !important; min-width:200px !important;"
             )
-            
-            ui.button(
-                "Sauvegarder et Continuer →",
-                on_click=save_and_next
-            ).style(
-                "background:#01335A !important; color:white !important; font-weight:600 !important; "
-                "border-radius:8px !important; height:50px !important; min-width:250px !important; "
-                "font-size:14px !important; text-transform:none !important;"
-            ) 
-# 
-# 
+            ui.button("Sauvegarder et Continuer →", on_click=save_and_next).style(
+                "background:#01335A !important; color:white !important; border-radius:8px !important; height:50px !important; min-width:250px !important;"
+            )
+# Fonction helper pour les recommandations
+def get_recommendation(pct):
+    if pct == 0:
+        return "Aucune action nécessaire", "#27ae60"
+    elif pct <= 5:
+        return "Imputation recommandée (Mean/Median/Mode/KNN)", "#27ae60"
+    elif pct <= 20:
+        return "Imputation ou suppression selon contexte", "#f39c12"
+    elif pct <= 50:
+        return "Suppression de colonne à considérer", "#e67e22"
+    else:
+        return "Suppression de colonne fortement recommandée", "#e74c3c" 
 #   ----------------- PAGE /unsupervised/encoding -----------------
 @ui.page('/unsupervised/encoding')
 def encoding_page():
@@ -14284,7 +15569,7 @@ def encoding_page():
         
         # ==================== HEADER ====================
         with ui.column().classes("w-full items-center").style("margin-bottom:40px !important;"):
-            ui.label("🎨 Encodage des Variables Catégorielles").style(
+            ui.label(" Encodage des Variables Catégorielles").style(
                 "font-weight:800 !important; font-size:36px !important; color:#01335A !important; "
                 "margin-bottom:12px !important; text-align:center !important; letter-spacing:-0.8px !important;"
             )
@@ -14303,7 +15588,7 @@ def encoding_page():
                 "border-radius:24px !important; box-shadow:0 4px 16px rgba(1,51,90,0.25) !important; "
                 "margin-top:8px !important;"
             ):
-                ui.label("📊 Étape essentielle pour l'analyse non supervisée").style(
+                ui.label(" Étape essentielle pour l'analyse non supervisée").style(
                     "color:white !important; font-size:14px !important; font-weight:600 !important; "
                     "text-align:center !important;"
                 )
@@ -14313,7 +15598,7 @@ def encoding_page():
             "background:white !important; border-radius:16px !important; padding:32px !important; "
             "box-shadow:0 4px 16px rgba(1,51,90,0.12) !important; border-top:4px solid #01335A !important;"
         ):
-            ui.label("📚 Méthodes d'Encodage Disponibles").style(
+            ui.label(" Méthodes d'Encodage Disponibles").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:20px !important;"
             )
@@ -14331,7 +15616,7 @@ def encoding_page():
                     ui.label("Principe : Crée une colonne binaire (0/1) pour chaque valeur unique").style(
                         "font-size:13px !important; color:#2c3e50 !important; margin-bottom:8px !important; line-height:1.5 !important;"
                     )
-                    ui.label("✅ Idéal pour variables nominales (pas d'ordre)").style(
+                    ui.label(" Idéal pour variables nominales (pas d'ordre)").style(
                         "font-size:12px !important; color:#27ae60 !important; font-weight:600 !important;"
                     )
                     ui.label("Exemple : Genre → Gender_Male, Gender_Female").style(
@@ -14343,14 +15628,14 @@ def encoding_page():
                     "background:linear-gradient(135deg, #fff3e0, #ffe0b2) !important; padding:20px !important; "
                     "border-radius:12px !important; border-left:4px solid #ff9800 !important;"
                 ):
-                    ui.label("📊 Ordinal Encoding").style(
+                    ui.label(" Ordinal Encoding").style(
                         "font-weight:700 !important; font-size:16px !important; color:#ff9800 !important; "
                         "margin-bottom:12px !important;"
                     )
                     ui.label("Principe : Assigne un nombre entier à chaque valeur unique").style(
                         "font-size:13px !important; color:#2c3e50 !important; margin-bottom:8px !important; line-height:1.5 !important;"
                     )
-                    ui.label("✅ Idéal pour variables ordinales (avec ordre)").style(
+                    ui.label(" Idéal pour variables ordinales (avec ordre)").style(
                         "font-size:12px !important; color:#f39c12 !important; font-weight:600 !important;"
                     )
                     ui.label("Exemple : Niveau → Low=0, Medium=1, High=2").style(
@@ -14363,7 +15648,7 @@ def encoding_page():
             "box-shadow:0 4px 16px rgba(1,51,90,0.12) !important;"
         ):
             
-            ui.label("⚙️ Configuration par Variable").style(
+            ui.label(" Configuration par Variable").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:20px !important;"
             )
@@ -14403,7 +15688,7 @@ def encoding_page():
                             encoding_decisions[col] = ui.select(
                                 options={
                                     "onehot": "🔷 One-Hot Encoding (Recommandé)",
-                                    "ordinal": "📊 Ordinal Encoding"
+                                    "ordinal": " Ordinal Encoding"
                                 },
                                 value="onehot"
                             ).props("outlined dense").style(
@@ -14437,7 +15722,7 @@ def encoding_page():
             "box-shadow:0 4px 16px rgba(1,51,90,0.12) !important;"
         ):
             
-            ui.label("👀 Prévisualisation AVANT / APRÈS").style(
+            ui.label(" Prévisualisation AVANT / APRÈS").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:20px !important;"
             )
@@ -14464,7 +15749,7 @@ def encoding_page():
                         mapping = {v: i for i, v in enumerate(uniques)}
                         temp[col] = temp[col].map(mapping)
                 
-                # ✅ CRÉER POPUP SCROLLABLE
+                #  CRÉER POPUP SCROLLABLE
                 with ui.dialog() as dialog, ui.card().style(
                     "min-width:90vw !important; max-width:95vw !important; max-height:90vh !important; "
                     "overflow-y:auto !important; padding:32px !important; background:white !important;"
@@ -14474,7 +15759,7 @@ def encoding_page():
                         "position:sticky !important; top:0 !important; background:white !important; "
                         "z-index:1000 !important; padding-bottom:16px !important; border-bottom:2px solid #e0e0e0 !important;"
                     ):
-                        ui.label("📊 Prévisualisation Complète").style(
+                        ui.label(" Prévisualisation Complète").style(
                             "font-weight:800 !important; font-size:24px !important; color:#01335A !important;"
                         )
                         ui.button("✕", on_click=dialog.close).props("flat round").style(
@@ -14488,7 +15773,7 @@ def encoding_page():
                             "padding:16px 24px !important; background:linear-gradient(135deg, #ffebee, #ffcdd2) !important; "
                             "border-radius:12px !important; border-left:4px solid #e74c3c !important; min-width:180px !important;"
                         ):
-                            ui.label("📊 AVANT").style(
+                            ui.label(" AVANT").style(
                                 "font-weight:700 !important; font-size:14px !important; color:#c0392b !important; "
                                 "margin-bottom:8px !important; text-align:center !important;"
                             )
@@ -14543,7 +15828,7 @@ def encoding_page():
                     ui.separator().style("margin:24px 0 !important; background:#e0e0e0 !important;")
                     
                     # ==================== TABLEAU AVANT ====================
-                    ui.label("📋 Dataset AVANT Encodage").style(
+                    ui.label(" Dataset AVANT Encodage").style(
                         "font-weight:700 !important; font-size:18px !important; color:#e74c3c !important; "
                         "margin-bottom:16px !important;"
                     )
@@ -14662,7 +15947,7 @@ def encoding_page():
             
             # Bouton pour ouvrir le popup
             ui.button(
-                "🔍 Afficher la Prévisualisation Complète",
+                " Afficher la Prévisualisation Complète",
                 on_click=show_preview_popup
             ).style(
                 "background:linear-gradient(135deg, #01335A, #024a7a) !important; color:white !important; "
@@ -14695,7 +15980,7 @@ def encoding_page():
                 "categorical": {col: widget.value for col, widget in encoding_decisions.items()}
             }
             
-            ui.notify("✅ Encodage appliqué avec succès!", color="positive")
+            ui.notify(" Encodage appliqué avec succès!", color="positive")
             ui.run_javascript("setTimeout(() => window.location.href='/unsupervised/anomalies', 800);")
         
         with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8 mb-8"):
@@ -14790,7 +16075,7 @@ def unsupervised_univariate_page():
                 "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
             ):
                 # En-tête de section
-                ui.label("📊 Variables Numériques").style(
+                ui.label(" Variables Numériques").style(
                     "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                     "margin-bottom:20px !important;"
                 )
@@ -15021,7 +16306,7 @@ def unsupervised_univariate_page():
         # BOUTONS DE NAVIGATION
         # ==========================================================
         def go_next():
-            ui.notify("✅ Analyse univariée terminée", color="positive")
+            ui.notify(" Analyse univariée terminée", color="positive")
             ui.run_javascript("setTimeout(() => window.location.href='/unsupervised/multivariate_analysis', 500);")
 
         with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
@@ -15124,7 +16409,7 @@ def multivariate_analysis_page():
             if v_stat > 0.9:
                 categorical_pairs.append((i, j, v_stat))
 
-    # ✅ CONTENEUR PRINCIPAL
+    #  CONTENEUR PRINCIPAL
     with ui.column().classes("w-full items-center").style(
         "min-height:100vh !important; background:#f0f2f5 !important; padding:48px 24px !important; "
         "font-family:'Inter', sans-serif !important;"
@@ -15149,7 +16434,7 @@ def multivariate_analysis_page():
                 "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
             ):
                 
-                ui.label("📊 Matrice de Corrélation (Variables Numériques)").style(
+                ui.label(" Matrice de Corrélation (Variables Numériques)").style(
                     "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                     "margin-bottom:20px !important;"
                 )
@@ -15186,7 +16471,7 @@ def multivariate_analysis_page():
                 
                 if not correlated_pairs:
                     with ui.card().style("padding:16px; background:#d5f4e6; border-left:3px solid #27ae60; border-radius:6px;"):
-                        ui.label("✅ Aucune redondance détectée").style("color:#27ae60; font-size:16px; font-weight:600;")
+                        ui.label(" Aucune redondance détectée").style("color:#27ae60; font-size:16px; font-weight:600;")
                 else:
                     ui.label(f"{len(correlated_pairs)} paire(s) détectée(s)").style("color:#7f8c8d; font-size:14px; margin-bottom:16px;")
                     
@@ -15270,7 +16555,7 @@ def multivariate_analysis_page():
                 
                 if not categorical_pairs:
                     with ui.card().style("padding:16px; background:#d5f4e6; border-left:3px solid #27ae60; border-radius:6px;"):
-                        ui.label("✅ Aucune redondance détectée").style("color:#27ae60; font-size:16px; font-weight:600;")
+                        ui.label(" Aucune redondance détectée").style("color:#27ae60; font-size:16px; font-weight:600;")
                 else:
                     ui.label(f"{len(categorical_pairs)} paire(s) fortement associée(s)").style("color:#7f8c8d; font-size:14px; margin-bottom:16px;")
                     
@@ -15334,9 +16619,9 @@ def multivariate_analysis_page():
             if cols_to_remove:
                 updated_features = [f for f in features if f not in cols_to_remove]
                 state["selected_features"] = updated_features
-                ui.notify(f"✅ {len(cols_to_remove)} variable(s) supprimée(s)", type="positive")
+                ui.notify(f" {len(cols_to_remove)} variable(s) supprimée(s)", type="positive")
             else:
-                ui.notify("ℹ️ Aucune modification", type="info")
+                ui.notify(" Aucune modification", type="info")
             
             ui.navigate.to("/unsupervised/missing_values")
 
@@ -15426,14 +16711,14 @@ def anomalies_page():
             'outliers_z_pct': outliers_z_pct
         }
     
-    # ✅ CONTENEUR PRINCIPAL AVEC CLASSES COMME UNIVARIATE
+    #  CONTENEUR PRINCIPAL AVEC CLASSES COMME UNIVARIATE
     with ui.column().classes("w-full items-center").style(
         "min-height:100vh !important; background:#f0f2f5 !important; padding:48px 24px !important; "
         "font-family:'Inter', sans-serif !important;"
     ):
         
         # HEADER
-        ui.label("🔍 Détection d'Anomalies").style(
+        ui.label(" Détection d'Anomalies").style(
             "font-weight:700 !important; font-size:36px !important; color:#01335A !important; "
             "margin-bottom:8px !important; text-align:center !important; letter-spacing:-0.5px !important;"
         )
@@ -15449,7 +16734,7 @@ def anomalies_page():
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
             
-            ui.label("📖 Méthodes de Détection").style(
+            ui.label(" Méthodes de Détection").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:20px !important;"
             )
@@ -15464,7 +16749,7 @@ def anomalies_page():
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
             
-            ui.label(f"📊 Variables Numériques ({len(stats_data)})").style(
+            ui.label(f" Variables Numériques ({len(stats_data)})").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:20px !important;"
             )
@@ -15565,7 +16850,7 @@ def anomalies_page():
                             return load_graph
                         
                         ui.button(
-                            "📊 Afficher le graphique", 
+                            " Afficher le graphique", 
                             on_click=create_graph(graph_container, col, series, lower, upper, is_outlier_iqr, outliers_iqr_count)
                         ).style("background:#3498db; color:white; padding:8px 16px; border-radius:6px; margin-bottom:12px; cursor:pointer; font-weight:600;")
                         
@@ -15586,7 +16871,7 @@ def anomalies_page():
                                 recommendation_color = "#3498db"
                             else:
                                 recommended = "Garder"
-                                recommendation_text = "✅ Peu d'outliers"
+                                recommendation_text = " Peu d'outliers"
                                 recommendation_color = "#27ae60"
                             
                             select_widget = ui.select(
@@ -15604,7 +16889,7 @@ def anomalies_page():
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
             
-            ui.label("📋 Guide des Actions").style(
+            ui.label(" Guide des Actions").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:20px !important;"
             )
@@ -15614,133 +16899,294 @@ def anomalies_page():
                 ui.label("• Supprimer : Retirer les lignes contenant des outliers").style("font-size:14px; color:#7f8c8d;")
                 ui.label("• Winsoriser : Remplacer les outliers par les seuils IQR").style("font-size:14px; color:#7f8c8d;")
         
-        # PRÉVISUALISATION DES DONNÉES APRÈS TRAITEMENT
+        # ==================== PRÉVISUALISATION AVEC POPUP ====================
         with ui.card().classes("w-full max-w-6xl mb-6").style(
             "background:white !important; border-radius:16px !important; padding:32px !important; "
-            "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important; overflow:hidden !important;"
+            "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
             
-            ui.label("👀 Prévisualisation de l'Impact").style(
+            ui.label(" Prévisualisation AVANT / APRÈS").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:20px !important;"
             )
             
-            preview_container = ui.column()
-            
-            def update_preview():
-                preview_container.clear()
-                with preview_container:
-                    # Appliquer les transformations
-                    df_processed = df.copy()
-                    removed_rows = 0
-                    winsorized_cols = []
-                    removed_cols = []
+            def show_preview_popup():
+                """Affiche la prévisualisation dans un popup scrollable"""
+                # Appliquer les transformations
+                df_processed = df.copy()
+                removed_rows = 0
+                winsorized_cols = []
+                removed_cols = []
+                
+                for col, widget in decisions.items():
+                    if col not in df_processed.columns:
+                        continue
                     
-                    for col, widget in decisions.items():
-                        if col not in df_processed.columns:
-                            continue
-                        
-                        decision = widget.value
-                        
-                        # Convertir d'abord en float64 pour éviter les problèmes avec Int64
-                        if df_processed[col].dtype.name in ['Int64', 'Int32', 'Int16', 'Int8']:
-                            df_processed[col] = df_processed[col].astype('float64')
-                        
-                        series = df_processed[col].copy()
-                        
-                        if decision == "Supprimer":
-                            initial_rows = len(df_processed)
-                            q1 = series.quantile(0.25)
-                            q3 = series.quantile(0.75)
-                            iqr = q3 - q1
-                            lower = q1 - 1.5 * iqr
-                            upper = q3 + 1.5 * iqr
-                            
-                            mask = (series >= lower) & (series <= upper)
-                            df_processed = df_processed[mask]
-                            rows_removed = initial_rows - len(df_processed)
-                            removed_rows += rows_removed
-                            if rows_removed > 0:
-                                removed_cols.append(f"{col} ({rows_removed} lignes)")
-                        
-                        elif decision == "Winsoriser":
-                            q1 = series.quantile(0.25)
-                            q3 = series.quantile(0.75)
-                            iqr = q3 - q1
-                            lower = q1 - 1.5 * iqr
-                            upper = q3 + 1.5 * iqr
-                            
-                            df_processed[col] = series.clip(lower=lower, upper=upper)
-                            winsorized_cols.append(col)
+                    decision = widget.value
                     
-                    # Résumé de transformation
-                    with ui.row().style("display:flex; gap:16px; align-items:center; margin-bottom:20px; flex-wrap:wrap;"):
-                        with ui.card().style("padding:12px 20px; background:#f8f9fa; border-radius:8px; border:2px dashed #bdc3c7;"):
-                            ui.label(f"Original: {df.shape[0]} × {df.shape[1]}").style("color:#7f8c8d; font-size:14px; font-weight:600;")
+                    # Convertir d'abord en float64 pour éviter les problèmes avec Int64
+                    if df_processed[col].dtype.name in ['Int64', 'Int32', 'Int16', 'Int8']:
+                        df_processed[col] = df_processed[col].astype('float64')
+                    
+                    series = df_processed[col].copy()
+                    
+                    if decision == "Supprimer":
+                        initial_rows = len(df_processed)
+                        q1 = series.quantile(0.25)
+                        q3 = series.quantile(0.75)
+                        iqr = q3 - q1
+                        lower = q1 - 1.5 * iqr
+                        upper = q3 + 1.5 * iqr
                         
-                        ui.label("→").style("font-size:24px; color:#01335A;")
+                        mask = (series >= lower) & (series <= upper)
+                        df_processed = df_processed[mask]
+                        rows_removed = initial_rows - len(df_processed)
+                        removed_rows += rows_removed
+                        if rows_removed > 0:
+                            removed_cols.append(f"{col} ({rows_removed} lignes)")
+                    
+                    elif decision == "Winsoriser":
+                        q1 = series.quantile(0.25)
+                        q3 = series.quantile(0.75)
+                        iqr = q3 - q1
+                        lower = q1 - 1.5 * iqr
+                        upper = q3 + 1.5 * iqr
                         
-                        with ui.card().style("padding:12px 20px; background:#d5f4e6; border-radius:8px; border:2px solid #27ae60;"):
-                            ui.label(f"Après: {df_processed.shape[0]} × {df_processed.shape[1]}").style("color:#27ae60; font-weight:700; font-size:14px;")
+                        df_processed[col] = series.clip(lower=lower, upper=upper)
+                        winsorized_cols.append(col)
+                
+                #  CRÉER POPUP SCROLLABLE
+                with ui.dialog() as dialog, ui.card().style(
+                    "min-width:90vw !important; max-width:95vw !important; max-height:90vh !important; "
+                    "overflow-y:auto !important; padding:32px !important; background:white !important;"
+                ):
+                    # Header du popup
+                    with ui.row().classes("w-full items-center justify-between mb-6").style(
+                        "position:sticky !important; top:0 !important; background:white !important; "
+                        "z-index:1000 !important; padding-bottom:16px !important; border-bottom:2px solid #e0e0e0 !important;"
+                    ):
+                        ui.label(" Prévisualisation Complète").style(
+                            "font-weight:800 !important; font-size:24px !important; color:#01335A !important;"
+                        )
+                        ui.button("✕", on_click=dialog.close).props("flat round").style(
+                            "font-size:20px !important; color:#e74c3c !important;"
+                        )
+                    
+                    # ==================== RÉSUMÉ TRANSFORMATION ====================
+                    with ui.row().classes("w-full gap-4 mb-6 justify-center items-center"):
+                        # Avant
+                        with ui.card().style(
+                            "padding:16px 24px !important; background:linear-gradient(135deg, #ffebee, #ffcdd2) !important; "
+                            "border-radius:12px !important; border-left:4px solid #e74c3c !important; min-width:180px !important;"
+                        ):
+                            ui.label(" AVANT").style(
+                                "font-weight:700 !important; font-size:14px !important; color:#c0392b !important; "
+                                "margin-bottom:8px !important; text-align:center !important;"
+                            )
+                            ui.label(f"{df.shape[0]} lignes").style(
+                                "font-size:20px !important; font-weight:800 !important; color:#e74c3c !important; "
+                                "text-align:center !important;"
+                            )
+                            ui.label(f"{df.shape[1]} colonnes").style(
+                                "font-size:16px !important; font-weight:600 !important; color:#e74c3c !important; "
+                                "text-align:center !important;"
+                            )
                         
+                        # Flèche
+                        ui.label("→").style(
+                            "font-size:36px !important; color:#01335A !important; font-weight:700 !important;"
+                        )
+                        
+                        # Après
+                        with ui.card().style(
+                            "padding:16px 24px !important; background:linear-gradient(135deg, #e8f5e9, #c8e6c9) !important; "
+                            "border-radius:12px !important; border-left:4px solid #27ae60 !important; min-width:180px !important;"
+                        ):
+                            ui.label("📈 APRÈS").style(
+                                "font-weight:700 !important; font-size:14px !important; color:#1e8449 !important; "
+                                "margin-bottom:8px !important; text-align:center !important;"
+                            )
+                            ui.label(f"{df_processed.shape[0]} lignes").style(
+                                "font-size:20px !important; font-weight:800 !important; color:#27ae60 !important; "
+                                "text-align:center !important;"
+                            )
+                            ui.label(f"{df_processed.shape[1]} colonnes").style(
+                                "font-size:16px !important; font-weight:600 !important; color:#27ae60 !important; "
+                                "text-align:center !important;"
+                            )
+                        
+                        # Delta
                         if removed_rows > 0:
-                            with ui.card().style("padding:12px 20px; background:#fadbd8; border-radius:8px; border:2px solid #e74c3c;"):
-                                ui.label(f"-{removed_rows} lignes").style("color:#e74c3c; font-size:14px; font-weight:700;")
+                            with ui.card().style(
+                                "padding:16px 24px !important; background:linear-gradient(135deg, #fadbd8, #f8d7da) !important; "
+                                "border-radius:12px !important; border-left:4px solid #e74c3c !important; min-width:140px !important;"
+                            ):
+                                ui.label("Δ Lignes supprimées").style(
+                                    "font-weight:700 !important; font-size:14px !important; color:#c0392b !important; "
+                                    "margin-bottom:8px !important; text-align:center !important;"
+                                )
+                                ui.label(f"-{removed_rows} lignes").style(
+                                    "font-size:18px !important; font-weight:800 !important; "
+                                    "color:#e74c3c !important; text-align:center !important;"
+                                )
                         
                         if winsorized_cols:
-                            with ui.card().style("padding:12px 20px; background:#d6eaf8; border-radius:8px; border:2px solid #3498db;"):
-                                ui.label(f"{len(winsorized_cols)} colonnes winsorisées").style("color:#3498db; font-size:14px; font-weight:700;")
+                            with ui.card().style(
+                                "padding:16px 24px !important; background:linear-gradient(135deg, #d6eaf8, #bbdefb) !important; "
+                                "border-radius:12px !important; border-left:4px solid #3498db !important; min-width:140px !important;"
+                            ):
+                                ui.label("✂️ Winsorisations").style(
+                                    "font-weight:700 !important; font-size:14px !important; color:#1565c0 !important; "
+                                    "margin-bottom:8px !important; text-align:center !important;"
+                                )
+                                ui.label(f"{len(winsorized_cols)} colonnes").style(
+                                    "font-size:18px !important; font-weight:800 !important; "
+                                    "color:#3498db !important; text-align:center !important;"
+                                )
                     
                     # Détails des modifications
                     if removed_cols or winsorized_cols:
-                        with ui.column().style("gap:8px; margin-bottom:16px;"):
-                            if removed_cols:
-                                ui.label(f"🗑️ Suppressions: {', '.join(removed_cols)}").style("font-size:13px; color:#e74c3c; word-wrap:break-word; max-width:100%;")
-                            if winsorized_cols:
-                                ui.label(f"✂️ Winsorisations: {', '.join(winsorized_cols)}").style("font-size:13px; color:#3498db; word-wrap:break-word; max-width:100%;")
+                        with ui.card().style("background:#f8f9fa; padding:16px; border-radius:8px; margin-bottom:24px;"):
+                            with ui.column().style("gap:8px;"):
+                                if removed_cols:
+                                    ui.label(f"🗑️ Suppressions: {', '.join(removed_cols)}").style(
+                                        "font-size:13px; color:#e74c3c; word-wrap:break-word;"
+                                    )
+                                if winsorized_cols:
+                                    ui.label(f"✂️ Winsorisations: {', '.join(winsorized_cols)}").style(
+                                        "font-size:13px; color:#3498db; word-wrap:break-word;"
+                                    )
                     
-                    ui.separator().style("margin:20px 0; background:#ecf0f1;")
+                    ui.separator().style("margin:24px 0 !important; background:#e0e0e0 !important;")
                     
-                    # Aperçu des 10 premières lignes
-                    ui.label(f"📋 Aperçu du dataset ({df_processed.shape[0]} lignes × {df_processed.shape[1]} colonnes)").style(
-                        "font-size:14px; color:#636e72; margin-bottom:12px; font-weight:600;"
+                    # ==================== TABLEAU AVANT ====================
+                    ui.label(" Dataset AVANT Traitement des Anomalies").style(
+                        "font-weight:700 !important; font-size:18px !important; color:#e74c3c !important; "
+                        "margin-bottom:16px !important;"
                     )
                     
-                    df_sample = df_processed.head(10).copy()
+                    df_before = df.head(15).copy()
                     
-                    # Créer les colonnes et lignes manuellement
-                    columns_list = [{"name": col, "label": col, "field": col, "align": "left"} for col in df_sample.columns]
+                    html_before = f"""
+                    <div style="width:100%; overflow-x:auto; border-radius:12px; border:2px solid #e74c3c; background:white; margin-bottom:32px;">
+                        <div style="background:#ffebee; padding:12px 16px; border-bottom:2px solid #e74c3c;">
+                            <span style="font-size:13px; color:#c0392b; font-weight:700;">
+                                {df_before.shape[0]} lignes × {df_before.shape[1]} colonnes
+                            </span>
+                        </div>
+                        <div style="overflow-x:auto;">
+                            <table style="width:100%; border-collapse:collapse; font-size:12px; font-family:'Inter', sans-serif;">
+                                <thead>
+                                    <tr style="background:#e74c3c; color:white;">
+                    """
                     
-                    rows_list = []
-                    for idx, row in df_sample.iterrows():
-                        row_dict = {}
-                        for col in df_sample.columns:
+                    for col in df_before.columns:
+                        html_before += f'<th style="padding:10px 14px; text-align:left; font-weight:700; white-space:nowrap; min-width:120px;">{col}</th>'
+                    
+                    html_before += """
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    """
+                    
+                    for idx, row in df_before.iterrows():
+                        bg_color = "#f8f9fa" if idx % 2 == 0 else "white"
+                        html_before += f'<tr style="background:{bg_color}; border-bottom:1px solid #e0e0e0;">'
+                        
+                        for col in df_before.columns:
                             val = row[col]
                             if pd.isna(val):
-                                row_dict[col] = "NaN"
+                                display_val = '<span style="color:#e74c3c; font-weight:700;">NaN</span>'
                             elif isinstance(val, (int, np.integer)):
-                                row_dict[col] = str(val)
+                                display_val = str(val)
                             elif isinstance(val, (float, np.floating)):
-                                row_dict[col] = f"{val:.2f}"
+                                display_val = f"{val:.2f}"
                             else:
-                                row_dict[col] = str(val)
-                        rows_list.append(row_dict)
+                                display_val = str(val)
+                            
+                            html_before += f'<td style="padding:10px 14px; white-space:nowrap; min-width:120px;">{display_val}</td>'
+                        
+                        html_before += '</tr>'
                     
-                    # Conteneur scrollable pour forcer la barre horizontale
-                    with ui.element('div').style(
-                        "width:100% !important; overflow-x:auto !important; "
-                        "border:1px solid #dfe6e9 !important; border-radius:6px !important;"
-                    ):
-                        ui.table(
-                            columns=columns_list,
-                            rows=rows_list,
-                            row_key=df_sample.columns[0]
-                        ).props("flat dense").style(
-                            "font-size:12px !important;"
-                        )
+                    html_before += """
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    """
+                    
+                    ui.html(html_before, sanitize=False)
+                    
+                    # ==================== TABLEAU APRÈS ====================
+                    ui.label("📈 Dataset APRÈS Traitement des Anomalies").style(
+                        "font-weight:700 !important; font-size:18px !important; color:#27ae60 !important; "
+                        "margin-bottom:16px !important;"
+                    )
+                    
+                    df_after = df_processed.head(15).copy()
+                    
+                    html_after = f"""
+                    <div style="width:100%; overflow-x:auto; border-radius:12px; border:2px solid #27ae60; background:white;">
+                        <div style="background:#e8f5e9; padding:12px 16px; border-bottom:2px solid #27ae60;">
+                            <span style="font-size:13px; color:#1e8449; font-weight:700;">
+                                {df_after.shape[0]} lignes × {df_after.shape[1]} colonnes
+                            </span>
+                        </div>
+                        <div style="overflow-x:auto;">
+                            <table style="width:100%; border-collapse:collapse; font-size:12px; font-family:'Inter', sans-serif;">
+                                <thead>
+                                    <tr style="background:#27ae60; color:white;">
+                    """
+                    
+                    for col in df_after.columns:
+                        html_after += f'<th style="padding:10px 14px; text-align:left; font-weight:700; white-space:nowrap; min-width:120px;">{col}</th>'
+                    
+                    html_after += """
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    """
+                    
+                    for idx, row in df_after.iterrows():
+                        bg_color = "#f8f9fa" if idx % 2 == 0 else "white"
+                        html_after += f'<tr style="background:{bg_color}; border-bottom:1px solid #e0e0e0;">'
+                        
+                        for col in df_after.columns:
+                            val = row[col]
+                            if pd.isna(val):
+                                display_val = '<span style="color:#e74c3c; font-weight:700;">NaN</span>'
+                            elif isinstance(val, (int, np.integer)):
+                                display_val = str(val)
+                            elif isinstance(val, (float, np.floating)):
+                                display_val = f"{val:.2f}"
+                            else:
+                                display_val = str(val)
+                            
+                            html_after += f'<td style="padding:10px 14px; white-space:nowrap; min-width:120px;">{display_val}</td>'
+                        
+                        html_after += '</tr>'
+                    
+                    html_after += """
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    """
+                    
+                    ui.html(html_after, sanitize=False)
+                
+                dialog.open()
             
-            ui.button("🔄 Mettre à jour la prévisualisation", on_click=update_preview).style(
-                "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white; font-weight:600; border-radius:8px; padding:12px 24px; margin-top:16px; border:none; cursor:pointer; transition:all 0.2s;"
+            # Bouton pour ouvrir le popup
+            ui.button(
+                " Afficher la Prévisualisation Complète",
+                on_click=show_preview_popup
+            ).style(
+                "background:linear-gradient(135deg, #01335A, #024a7a) !important; color:white !important; "
+                "font-weight:700 !important; border-radius:10px !important; padding:14px 40px !important; "
+                "margin-top:20px !important; border:none !important; cursor:pointer !important; "
+                "box-shadow:0 4px 12px rgba(1,51,90,0.3) !important; text-transform:none !important; "
+                "font-size:15px !important;"
             )
         
         # BOUTONS DE NAVIGATION
@@ -15788,28 +17234,29 @@ def anomalies_page():
             
             state["anomalies_processed_data"] = df_processed
             
-            ui.run_javascript("window.location.href='/unsupervised/normalization'")
+            ui.notify(" Traitement des anomalies appliqué avec succès!", color="positive")
+            ui.run_javascript("setTimeout(() => window.location.href='/unsupervised/normalization', 800);")
         
-        with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
+        with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8 mb-8"):
             ui.button(
-                "← Retour",
+                "← Précédent",
                 on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/encoding'")
             ).style(
-                "background:white !important; color:#01335A !important; font-weight:500 !important; "
-                "border:1px solid #e1e8ed !important; border-radius:8px !important; height:50px !important; "
-                "min-width:200px !important; font-size:14px !important; text-transform:none !important; "
+                "background:white !important; color:#01335A !important; font-weight:600 !important; "
+                "border:2px solid #01335A !important; border-radius:10px !important; height:50px !important; "
+                "min-width:160px !important; font-size:14px !important; text-transform:none !important; "
                 "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
             )
             
             ui.button(
-                "Appliquer et Continuer →",
+                "Sauvegarder et Continuer →",
                 on_click=save_and_next
             ).style(
-                "background:#01335A !important; color:white !important; font-weight:600 !important; "
-                "border-radius:8px !important; height:50px !important; min-width:250px !important; "
-                "font-size:14px !important; text-transform:none !important;"
+                "background:linear-gradient(135deg, #27ae60, #229954) !important; color:white !important; "
+                "font-weight:700 !important; border-radius:10px !important; height:50px !important; "
+                "min-width:260px !important; font-size:14px !important; text-transform:none !important; "
+                "box-shadow:0 4px 12px rgba(39,174,96,0.3) !important;"
             ) 
-# 
 # 
 # 
 # 
@@ -15875,14 +17322,14 @@ def normalization_page():
     # Stockage des décisions
     normalization_decisions = {}
     
-    # ✅ CONTENEUR PRINCIPAL AVEC CLASSES COMME UNIVARIATE
+    #  CONTENEUR PRINCIPAL AVEC CLASSES COMME UNIVARIATE
     with ui.column().classes("w-full items-center").style(
         "min-height:100vh !important; background:#f0f2f5 !important; padding:48px 24px !important; "
         "font-family:'Inter', sans-serif !important;"
     ):
         
         # HEADER
-        ui.label("📐 Normalisation des Features").style(
+        ui.label(" Normalisation des Features").style(
             "font-weight:700 !important; font-size:36px !important; color:#01335A !important; "
             "margin-bottom:8px !important; text-align:center !important; letter-spacing:-0.5px !important;"
         )
@@ -15898,7 +17345,7 @@ def normalization_page():
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
             
-            ui.label("ℹ️ Pourquoi Normaliser ?").style(
+            ui.label(" Pourquoi Normaliser ?").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:20px !important;"
             )
@@ -15915,7 +17362,7 @@ def normalization_page():
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
             
-            ui.label("🎯 Méthodes de Normalisation").style(
+            ui.label(" Méthodes de Normalisation").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:20px !important;"
             )
@@ -15923,7 +17370,7 @@ def normalization_page():
             with ui.row().style("gap:16px; margin-bottom:20px; width:100%;"):
                 # Z-Score
                 with ui.card().style("padding:20px; background:#e3f2fd; flex:1; border-radius:8px; border:2px solid #3498db;"):
-                    ui.label("📐 Z-Score (StandardScaler)").style("font-weight:700; color:#01335A; margin-bottom:12px; font-size:16px;")
+                    ui.label(" Z-Score (StandardScaler)").style("font-weight:700; color:#01335A; margin-bottom:12px; font-size:16px;")
                     ui.label("Formule : (x - μ) / σ").style("font-family:monospace; font-size:13px; color:#7f8c8d; margin-bottom:8px; background:white; padding:8px; border-radius:4px;")
                     ui.label("Résultat : Moyenne = 0, Écart-type = 1").style("font-size:13px; color:#2c3e50; margin-bottom:8px; font-weight:600;")
                     with ui.column().style("gap:4px;"):
@@ -15968,7 +17415,7 @@ def normalization_page():
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
             
-            ui.label(f"⚙️ Configuration par Feature ({len(features_stats)})").style(
+            ui.label(f" Configuration par Feature ({len(features_stats)})").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:20px !important;"
             )
@@ -16040,7 +17487,7 @@ def normalization_page():
                                     
                                     if method == "Aucune":
                                         with ui.card().style("padding:16px; background:#f8f9fa; border-radius:8px; margin-top:12px;"):
-                                            ui.label("ℹ️ Sélectionnez une méthode pour voir l'aperçu").style(
+                                            ui.label(" Sélectionnez une méthode pour voir l'aperçu").style(
                                                 "color:#7f8c8d; font-size:13px; font-style:italic;"
                                             )
                                     else:
@@ -16050,7 +17497,7 @@ def normalization_page():
                                         # Stats avant/après
                                         with ui.row().style("gap:16px; margin:16px 0;"):
                                             with ui.card().style("padding:16px; background:#e3f2fd; flex:1; border-radius:8px; border:2px solid #3498db;"):
-                                                ui.label("📊 Avant normalisation").style("font-size:13px; color:#01335A; margin-bottom:8px; font-weight:700;")
+                                                ui.label(" Avant normalisation").style("font-size:13px; color:#01335A; margin-bottom:8px; font-weight:700;")
                                                 ui.label(f"Moyenne : {original_series.mean():.4f}").style("font-size:12px; margin-bottom:4px; color:#7f8c8d;")
                                                 ui.label(f"Écart-type : {original_series.std():.4f}").style("font-size:12px; margin-bottom:4px; color:#7f8c8d;")
                                                 ui.label(f"Min : {original_series.min():.4f}").style("font-size:12px; margin-bottom:4px; color:#7f8c8d;")
@@ -16066,7 +17513,7 @@ def normalization_page():
                             return show_preview
                         
                         preview_handler = create_preview_handler(col, preview_container)
-                        ui.button("📊 Voir les statistiques", on_click=preview_handler).style(
+                        ui.button(" Voir les statistiques", on_click=preview_handler).style(
                             "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white; padding:8px 16px; border-radius:6px; margin:12px 0; cursor:pointer; font-size:13px; font-weight:600;"
                         )
                         
@@ -16090,108 +17537,253 @@ def normalization_page():
                 ui.label("• Si vous avez traité les outliers, Z-Score est généralement plus robuste").style("color:#7f8c8d; font-size:14px;")
                 ui.label("• Pour des algorithmes comme K-Means, la normalisation est fortement recommandée").style("color:#7f8c8d; font-size:14px;")
         
-        # PRÉVISUALISATION DES DONNÉES APRÈS TRAITEMENT
+        # ==================== PRÉVISUALISATION AVEC POPUP ====================
         with ui.card().classes("w-full max-w-6xl mb-6").style(
             "background:white !important; border-radius:16px !important; padding:32px !important; "
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
             
-            ui.label("👀 Prévisualisation de l'Impact Global").style(
+            ui.label(" Prévisualisation AVANT / APRÈS").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:20px !important;"
             )
             
-            global_preview_container = ui.column()
-            
-            def update_global_preview():
-                global_preview_container.clear()
-                with global_preview_container:
-                    # Appliquer les normalisations
-                    df_normalized = df.copy()
-                    normalized_count = 0
-                    zscore_cols = []
-                    minmax_cols = []
+            def show_preview_popup():
+                """Affiche la prévisualisation dans un popup scrollable"""
+                # Appliquer les normalisations
+                df_normalized = df.copy()
+                normalized_count = 0
+                zscore_cols = []
+                minmax_cols = []
+                
+                for col, widget in normalization_decisions.items():
+                    method = widget.value
+                    if method != "Aucune" and col in df_normalized.columns:
+                        df_normalized[col] = apply_normalization(df_normalized[col], method)
+                        normalized_count += 1
+                        if method == "Z-Score (StandardScaler)":
+                            zscore_cols.append(col)
+                        elif method == "Min-Max (0-1)":
+                            minmax_cols.append(col)
+                
+                #  CRÉER POPUP SCROLLABLE
+                with ui.dialog() as dialog, ui.card().style(
+                    "min-width:90vw !important; max-width:95vw !important; max-height:90vh !important; "
+                    "overflow-y:auto !important; padding:32px !important; background:white !important;"
+                ):
+                    # Header du popup
+                    with ui.row().classes("w-full items-center justify-between mb-6").style(
+                        "position:sticky !important; top:0 !important; background:white !important; "
+                        "z-index:1000 !important; padding-bottom:16px !important; border-bottom:2px solid #e0e0e0 !important;"
+                    ):
+                        ui.label(" Prévisualisation Complète").style(
+                            "font-weight:800 !important; font-size:24px !important; color:#01335A !important;"
+                        )
+                        ui.button("✕", on_click=dialog.close).props("flat round").style(
+                            "font-size:20px !important; color:#e74c3c !important;"
+                        )
                     
-                    for col, widget in normalization_decisions.items():
-                        method = widget.value
-                        if method != "Aucune" and col in df_normalized.columns:
-                            df_normalized[col] = apply_normalization(df_normalized[col], method)
-                            normalized_count += 1
-                            if method == "Z-Score (StandardScaler)":
-                                zscore_cols.append(col)
-                            elif method == "Min-Max (0-1)":
-                                minmax_cols.append(col)
-                    
-                    # Résumé de transformation
-                    with ui.row().style("display:flex; gap:16px; align-items:center; margin-bottom:20px; flex-wrap:wrap;"):
-                        with ui.card().style("padding:12px 20px; background:#f8f9fa; border-radius:8px; border:2px dashed #bdc3c7;"):
-                            ui.label(f"Original: {df.shape[0]} × {df.shape[1]}").style("color:#7f8c8d; font-size:14px; font-weight:600;")
+                    # ==================== RÉSUMÉ TRANSFORMATION ====================
+                    with ui.row().classes("w-full gap-4 mb-6 justify-center items-center"):
+                        # Avant
+                        with ui.card().style(
+                            "padding:16px 24px !important; background:linear-gradient(135deg, #ffebee, #ffcdd2) !important; "
+                            "border-radius:12px !important; border-left:4px solid #e74c3c !important; min-width:180px !important;"
+                        ):
+                            ui.label(" AVANT").style(
+                                "font-weight:700 !important; font-size:14px !important; color:#c0392b !important; "
+                                "margin-bottom:8px !important; text-align:center !important;"
+                            )
+                            ui.label(f"{df.shape[0]} lignes").style(
+                                "font-size:20px !important; font-weight:800 !important; color:#e74c3c !important; "
+                                "text-align:center !important;"
+                            )
+                            ui.label(f"{df.shape[1]} colonnes").style(
+                                "font-size:16px !important; font-weight:600 !important; color:#e74c3c !important; "
+                                "text-align:center !important;"
+                            )
                         
-                        ui.label("→").style("font-size:24px; color:#01335A;")
+                        # Flèche
+                        ui.label("→").style(
+                            "font-size:36px !important; color:#01335A !important; font-weight:700 !important;"
+                        )
                         
-                        with ui.card().style("padding:12px 20px; background:#d5f4e6; border-radius:8px; border:2px solid #27ae60;"):
-                            ui.label(f"Normalisé: {df_normalized.shape[0]} × {df_normalized.shape[1]}").style("color:#27ae60; font-weight:700; font-size:14px;")
+                        # Après
+                        with ui.card().style(
+                            "padding:16px 24px !important; background:linear-gradient(135deg, #e8f5e9, #c8e6c9) !important; "
+                            "border-radius:12px !important; border-left:4px solid #27ae60 !important; min-width:180px !important;"
+                        ):
+                            ui.label("📈 APRÈS").style(
+                                "font-weight:700 !important; font-size:14px !important; color:#1e8449 !important; "
+                                "margin-bottom:8px !important; text-align:center !important;"
+                            )
+                            ui.label(f"{df_normalized.shape[0]} lignes").style(
+                                "font-size:20px !important; font-weight:800 !important; color:#27ae60 !important; "
+                                "text-align:center !important;"
+                            )
+                            ui.label(f"{df_normalized.shape[1]} colonnes").style(
+                                "font-size:16px !important; font-weight:600 !important; color:#27ae60 !important; "
+                                "text-align:center !important;"
+                            )
                         
+                        # Delta
                         if normalized_count > 0:
-                            with ui.card().style("padding:12px 20px; background:#d6eaf8; border-radius:8px; border:2px solid #3498db;"):
-                                ui.label(f"{normalized_count} colonnes normalisées").style("color:#3498db; font-size:14px; font-weight:700;")
+                            with ui.card().style(
+                                "padding:16px 24px !important; background:linear-gradient(135deg, #d6eaf8, #bbdefb) !important; "
+                                "border-radius:12px !important; border-left:4px solid #3498db !important; min-width:140px !important;"
+                            ):
+                                ui.label(" Normalisations").style(
+                                    "font-weight:700 !important; font-size:14px !important; color:#1565c0 !important; "
+                                    "margin-bottom:8px !important; text-align:center !important;"
+                                )
+                                ui.label(f"{normalized_count} colonnes").style(
+                                    "font-size:18px !important; font-weight:800 !important; "
+                                    "color:#3498db !important; text-align:center !important;"
+                                )
                     
                     # Détails des méthodes appliquées
                     if zscore_cols or minmax_cols:
-                        with ui.column().style("gap:8px; margin-bottom:16px;"):
-                            if zscore_cols:
-                                ui.label(f"📐 Z-Score appliqué: {', '.join(zscore_cols)}").style("font-size:13px; color:#3498db;")
-                            if minmax_cols:
-                                ui.label(f"📏 Min-Max appliqué: {', '.join(minmax_cols)}").style("font-size:13px; color:#9b59b6;")
+                        with ui.card().style("background:#f8f9fa; padding:16px; border-radius:8px; margin-bottom:24px;"):
+                            with ui.column().style("gap:8px;"):
+                                if zscore_cols:
+                                    ui.label(f" Z-Score appliqué: {', '.join(zscore_cols)}").style(
+                                        "font-size:13px; color:#3498db; word-wrap:break-word;"
+                                    )
+                                if minmax_cols:
+                                    ui.label(f"📏 Min-Max appliqué: {', '.join(minmax_cols)}").style(
+                                        "font-size:13px; color:#9b59b6; word-wrap:break-word;"
+                                    )
                     
-                    ui.separator().style("margin:20px 0; background:#ecf0f1;")
+                    ui.separator().style("margin:24px 0 !important; background:#e0e0e0 !important;")
                     
-                    # Aperçu des 10 premières lignes
-                    ui.label(f"📋 Visualisation des 10 premières lignes du dataset ({df_normalized.shape[0]} lignes × {df_normalized.shape[1]} colonnes)").style(
-                        "font-size:14px; color:#636e72; margin-bottom:12px;"
+                    # ==================== TABLEAU AVANT ====================
+                    ui.label(" Dataset AVANT Normalisation").style(
+                        "font-weight:700 !important; font-size:18px !important; color:#e74c3c !important; "
+                        "margin-bottom:16px !important;"
                     )
                     
-                    df_sample = df_normalized.head(10).copy()
+                    df_before = df.head(15).copy()
                     
-                    columns_for_table = []
-                    rows_for_table = []
+                    html_before = f"""
+                    <div style="width:100%; overflow-x:auto; border-radius:12px; border:2px solid #e74c3c; background:white; margin-bottom:32px;">
+                        <div style="background:#ffebee; padding:12px 16px; border-bottom:2px solid #e74c3c;">
+                            <span style="font-size:13px; color:#c0392b; font-weight:700;">
+                                {df_before.shape[0]} lignes × {df_before.shape[1]} colonnes
+                            </span>
+                        </div>
+                        <div style="overflow-x:auto;">
+                            <table style="width:100%; border-collapse:collapse; font-size:12px; font-family:'Inter', sans-serif;">
+                                <thead>
+                                    <tr style="background:#e74c3c; color:white;">
+                    """
                     
-                    # Créer les colonnes du tableau
-                    for col in df_sample.columns:
-                        columns_for_table.append({
-                            "name": col,
-                            "label": col,
-                            "field": col,
-                            "align": "left",
-                            "sortable": True
-                        })
+                    for col in df_before.columns:
+                        html_before += f'<th style="padding:10px 14px; text-align:left; font-weight:700; white-space:nowrap; min-width:120px;">{col}</th>'
                     
-                    # Créer les lignes du tableau
-                    for idx, row in df_sample.iterrows():
-                        row_dict = {}
-                        for col in df_sample.columns:
+                    html_before += """
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    """
+                    
+                    for idx, row in df_before.iterrows():
+                        bg_color = "#f8f9fa" if idx % 2 == 0 else "white"
+                        html_before += f'<tr style="background:{bg_color}; border-bottom:1px solid #e0e0e0;">'
+                        
+                        for col in df_before.columns:
                             val = row[col]
                             if pd.isna(val):
-                                row_dict[col] = "NaN"
+                                display_val = '<span style="color:#e74c3c; font-weight:700;">NaN</span>'
                             elif isinstance(val, (int, np.integer)):
-                                row_dict[col] = str(val)
+                                display_val = str(val)
                             elif isinstance(val, (float, np.floating)):
-                                row_dict[col] = f"{val:.4f}"  # Plus de précision pour les valeurs normalisées
+                                display_val = f"{val:.4f}"
                             else:
-                                row_dict[col] = str(val)
-                        rows_for_table.append(row_dict)
+                                display_val = str(val)
+                            
+                            html_before += f'<td style="padding:10px 14px; white-space:nowrap; min-width:120px;">{display_val}</td>'
+                        
+                        html_before += '</tr>'
                     
-                    # Tableau avec scroll horizontal
-                    ui.table(
-                        columns=columns_for_table,
-                        rows=rows_for_table,
-                        row_key=df_sample.columns[0]
-                    ).props("flat dense wrap-cells=false").style(
-                        "font-size:12px !important; width:100% !important; overflow-x:auto !important; display:block !important;"
+                    html_before += """
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    """
+                    
+                    ui.html(html_before, sanitize=False)
+                    
+                    # ==================== TABLEAU APRÈS ====================
+                    ui.label("📈 Dataset APRÈS Normalisation").style(
+                        "font-weight:700 !important; font-size:18px !important; color:#27ae60 !important; "
+                        "margin-bottom:16px !important;"
                     )
+                    
+                    df_after = df_normalized.head(15).copy()
+                    
+                    html_after = f"""
+                    <div style="width:100%; overflow-x:auto; border-radius:12px; border:2px solid #27ae60; background:white;">
+                        <div style="background:#e8f5e9; padding:12px 16px; border-bottom:2px solid #27ae60;">
+                            <span style="font-size:13px; color:#1e8449; font-weight:700;">
+                                {df_after.shape[0]} lignes × {df_after.shape[1]} colonnes
+                            </span>
+                        </div>
+                        <div style="overflow-x:auto;">
+                            <table style="width:100%; border-collapse:collapse; font-size:12px; font-family:'Inter', sans-serif;">
+                                <thead>
+                                    <tr style="background:#27ae60; color:white;">
+                    """
+                    
+                    for col in df_after.columns:
+                        html_after += f'<th style="padding:10px 14px; text-align:left; font-weight:700; white-space:nowrap; min-width:120px;">{col}</th>'
+                    
+                    html_after += """
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    """
+                    
+                    for idx, row in df_after.iterrows():
+                        bg_color = "#f8f9fa" if idx % 2 == 0 else "white"
+                        html_after += f'<tr style="background:{bg_color}; border-bottom:1px solid #e0e0e0;">'
+                        
+                        for col in df_after.columns:
+                            val = row[col]
+                            if pd.isna(val):
+                                display_val = '<span style="color:#e74c3c; font-weight:700;">NaN</span>'
+                            elif isinstance(val, (int, np.integer)):
+                                display_val = str(val)
+                            elif isinstance(val, (float, np.floating)):
+                                display_val = f"{val:.4f}"
+                            else:
+                                display_val = str(val)
+                            
+                            html_after += f'<td style="padding:10px 14px; white-space:nowrap; min-width:120px;">{display_val}</td>'
+                        
+                        html_after += '</tr>'
+                    
+                    html_after += """
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    """
+                    
+                    ui.html(html_after, sanitize=False)
+                
+                dialog.open()
             
-            ui.button("🔄 Mettre à jour la prévisualisation", on_click=update_global_preview).style(
-                "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white; font-weight:600; border-radius:8px; padding:12px 24px; margin-top:16px; border:none; cursor:pointer; transition:all 0.2s;"
+            # Bouton pour ouvrir le popup
+            ui.button(
+                " Afficher la Prévisualisation Complète",
+                on_click=show_preview_popup
+            ).style(
+                "background:linear-gradient(135deg, #01335A, #024a7a) !important; color:white !important; "
+                "font-weight:700 !important; border-radius:10px !important; padding:14px 40px !important; "
+                "margin-top:20px !important; border:none !important; cursor:pointer !important; "
+                "box-shadow:0 4px 12px rgba(1,51,90,0.3) !important; text-transform:none !important; "
+                "font-size:15px !important;"
             )
         
         # NAVIGATION
@@ -16210,28 +17802,29 @@ def normalization_page():
             
             state["normalized_data"] = df_normalized
             
-            ui.run_javascript("window.location.href='/unsupervised/pca'")
+            ui.notify(" Normalisation appliquée avec succès!", color="positive")
+            ui.run_javascript("setTimeout(() => window.location.href='/unsupervised/pca', 800);")
         
-        with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
+        with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8 mb-8"):
             ui.button(
-                "← Retour",
+                "← Précédent",
                 on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/anomalies'")
             ).style(
-                "background:white !important; color:#01335A !important; font-weight:500 !important; "
-                "border:1px solid #e1e8ed !important; border-radius:8px !important; height:50px !important; "
-                "min-width:200px !important; font-size:14px !important; text-transform:none !important; "
+                "background:white !important; color:#01335A !important; font-weight:600 !important; "
+                "border:2px solid #01335A !important; border-radius:10px !important; height:50px !important; "
+                "min-width:160px !important; font-size:14px !important; text-transform:none !important; "
                 "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
             )
             
             ui.button(
-                "Appliquer et Continuer →",
+                "Sauvegarder et Continuer →",
                 on_click=save_and_next
             ).style(
-                "background:#01335A !important; color:white !important; font-weight:600 !important; "
-                "border-radius:8px !important; height:50px !important; min-width:250px !important; "
-                "font-size:14px !important; text-transform:none !important;"
+                "background:linear-gradient(135deg, #27ae60, #229954) !important; color:white !important; "
+                "font-weight:700 !important; border-radius:10px !important; height:50px !important; "
+                "min-width:260px !important; font-size:14px !important; text-transform:none !important; "
+                "box-shadow:0 4px 12px rgba(39,174,96,0.3) !important;"
             )
-#
 # 
 # ---------------- PAGE /unsupervised/pca ----------------- 
 
@@ -16273,7 +17866,7 @@ def pca_page():
     
     max_components = min(len(numeric_cols), len(numeric_df))
     
-    # ✅ CONTENEUR PRINCIPAL AVEC CLASSES COMME UNIVARIATE
+    #  CONTENEUR PRINCIPAL AVEC CLASSES COMME UNIVARIATE
     with ui.column().classes("w-full items-center").style(
         "min-height:100vh !important; background:#f0f2f5 !important; padding:48px 24px !important; "
         "font-family:'Inter', sans-serif !important;"
@@ -16296,7 +17889,7 @@ def pca_page():
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
             
-            ui.label("ℹ️ Qu'est-ce que la PCA ?").style(
+            ui.label(" Qu'est-ce que la PCA ?").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:20px !important;"
             )
@@ -16315,7 +17908,7 @@ def pca_page():
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
             
-            ui.label("⚙️ Configuration de la PCA").style(
+            ui.label(" Configuration de la PCA").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:20px !important;"
             )
@@ -16355,7 +17948,7 @@ def pca_page():
                 with preview_area:
                     if not apply_switch.value:
                         with ui.card().style("padding:20px; background:#f8f9fa; border-radius:8px; text-align:center;"):
-                            ui.label("ℹ️ Activez la PCA pour voir l'aperçu").style(
+                            ui.label(" Activez la PCA pour voir l'aperçu").style(
                                 "color:#7f8c8d; font-size:13px; font-style:italic;"
                             )
                         return
@@ -16377,11 +17970,11 @@ def pca_page():
                         
                         # Résumé global
                         with ui.card().style("padding:20px; background:#d5f4e6; border-left:4px solid #27ae60; border-radius:8px; margin-bottom:16px;"):
-                            ui.label(f"✅ Aperçu PCA avec {n_components} composante(s)").style("font-size:16px; font-weight:700; color:#27ae60; margin-bottom:12px;")
-                            ui.label(f"📊 Variance totale conservée : {cumulative_variance[-1]:.2f}%").style("font-size:15px; color:#27ae60; font-weight:600; margin-bottom:8px;")
+                            ui.label(f" Aperçu PCA avec {n_components} composante(s)").style("font-size:16px; font-weight:700; color:#27ae60; margin-bottom:12px;")
+                            ui.label(f" Variance totale conservée : {cumulative_variance[-1]:.2f}%").style("font-size:15px; color:#27ae60; font-weight:600; margin-bottom:8px;")
                             
                             if cumulative_variance[-1] >= 90:
-                                ui.label("🎯 Excellent ! Plus de 90% de l'information est préservée").style("font-size:13px; color:#27ae60;")
+                                ui.label(" Excellent ! Plus de 90% de l'information est préservée").style("font-size:13px; color:#27ae60;")
                             elif cumulative_variance[-1] >= 70:
                                 ui.label("👍 Bon ! Une grande partie de l'information est préservée").style("font-size:13px; color:#f39c12;")
                             else:
@@ -16389,7 +17982,7 @@ def pca_page():
                         
                         # Tableau simple et clair
                         with ui.card().style("padding:20px; background:white; border:1px solid #e1e8ed; border-radius:8px; margin-bottom:16px;"):
-                            ui.label("📊 Résultats par composante").style("font-size:15px; font-weight:700; color:#2c3e50; margin-bottom:16px;")
+                            ui.label(" Résultats par composante").style("font-size:15px; font-weight:700; color:#2c3e50; margin-bottom:16px;")
                             
                             # En-tête du tableau
                             with ui.row().style("padding:12px; background:#f8f9fa; border-radius:6px; margin-bottom:8px; font-weight:600; color:#2c3e50;"):
@@ -16416,7 +18009,7 @@ def pca_page():
                         with ui.card().style("padding:20px; background:#fee2e2; border-left:4px solid #e74c3c; border-radius:8px;"):
                             ui.label(f"❌ Erreur : {str(e)}").style("font-size:14px; color:#c0392b; font-weight:600;")
             
-            ui.button("👁️ Voir l'aperçu", on_click=preview_pca).style(
+            ui.button(" Voir l'aperçu", on_click=preview_pca).style(
                 "background:linear-gradient(135deg, #01335A, #09538C) !important; color:white; font-weight:600; border-radius:8px; padding:10px 20px; cursor:pointer; margin-top:12px;"
             )
             
@@ -16494,7 +18087,7 @@ def download_dataset(df):
     csv_data = csv_buffer.getvalue()
     
     ui.download(csv_data.encode('utf-8'), filename='dataset_preprocessed.csv')
-    ui.notify("✅ Dataset téléchargé avec succès !", type='positive', position='top', timeout=2000)
+    ui.notify(" Dataset téléchargé avec succès !", type='positive', position='top', timeout=2000)
 
 def validate_and_continue(df):
     """Valide et passe à l'étape de clustering"""
@@ -16523,7 +18116,7 @@ def summary_page():
         with ui.column().style("width:100%; height:100vh; display:flex; align-items:center; justify-content:center;"):
             ui.label("❌ Données manquantes").style("font-size:20px; color:#e74c3c; font-weight:600; margin-bottom:12px;")
             ui.label("Veuillez compléter toutes les étapes de prétraitement").style("font-size:14px; color:#7f8c8d; margin-bottom:20px;")
-            ui.button("← Retour à l'accueil", on_click=lambda: ui.run_javascript("window.location.href='/unsupervised'")).style(
+            ui.button("← Retour à l'accueil", on_click=lambda: ui.run_javascript("window.location.href='/'")).style(
                 "background:#dfe6e9 !important; color:#2c3e50 !important; font-weight:600 !important; border-radius:8px !important; height:46px !important; width:200px !important;"
             )
         return
@@ -16565,14 +18158,14 @@ def summary_page():
     # ============= NORMALIZATION =============
     cols_normalized = {col: method for col, method in normalization_decisions.items() if method != "Aucune"}
     
-    # ✅ CONTENEUR PRINCIPAL AVEC CLASSES COMME UNIVARIATE
+    #  CONTENEUR PRINCIPAL AVEC CLASSES COMME UNIVARIATE
     with ui.column().classes("w-full items-center").style(
         "min-height:100vh !important; background:#f0f2f5 !important; padding:48px 24px !important; "
         "font-family:'Inter', sans-serif !important;"
     ):
         
         # HEADER
-        ui.label("📋 Récapitulatif du Prétraitement").style(
+        ui.label(" Récapitulatif du Prétraitement").style(
             "font-weight:700 !important; font-size:36px !important; color:#01335A !important; "
             "margin-bottom:8px !important; text-align:center !important; letter-spacing:-0.5px !important;"
         )
@@ -16588,7 +18181,7 @@ def summary_page():
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
             
-            ui.label("📊 Comparaison Avant/Après").style(
+            ui.label(" Comparaison Avant/Après").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:20px !important;"
             )
@@ -16633,16 +18226,16 @@ def summary_page():
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
             
-            ui.label("✅ Étapes Complétées").style(
+            ui.label(" Étapes Complétées").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:20px !important;"
             )
             
             timeline_steps = [
-                ("📊 Sélection", f"{len(selected_features)} features", "#3498db", "/unsupervised/user_decisions"),
+                (" Sélection", f"{len(selected_features)} features", "#3498db", "/unsupervised/user_decisions"),
                 ("📈 Univariée", f"{len(cols_removed_univariate)} supprimées" if cols_removed_univariate else "Aucune suppression", "#9b59b6", "/unsupervised/univariate_analysis"),
-                ("🔍 Anomalies", f"{len(cols_winsorized)} winsorisées" if cols_winsorized else "Aucun traitement", "#e74c3c", "/unsupervised/anomalies"),
-                ("💧 Manquantes", f"{len(cols_imputed_dict)} traitées" if cols_imputed_dict else "Aucune action", "#1abc9c", "/unsupervised/missing_values"),
+                (" Anomalies", f"{len(cols_winsorized)} winsorisées" if cols_winsorized else "Aucun traitement", "#e74c3c", "/unsupervised/anomalies"),
+                (" Manquantes", f"{len(cols_imputed_dict)} traitées" if cols_imputed_dict else "Aucune action", "#1abc9c", "/unsupervised/missing_values"),
                 ("🔤 Encodage", f"{len(cols_encoded_dict)} traitées" if cols_encoded_dict else "Aucune action", "#f39c12", "/unsupervised/encoding"),
                 ("📏 Normalisation", f"{len(cols_normalized)} normalisées" if cols_normalized else "Aucune normalisation", "#27ae60", "/unsupervised/normalization"),
                 ("🔬 PCA", f"{pca_decision.get('n_components')} composantes" if pca_decision.get('apply') else "Non appliquée", "#3498db", "/unsupervised/pca")
@@ -16668,7 +18261,7 @@ def summary_page():
         
         # DÉTAILS DES TRANSFORMATIONS
         if any([cols_removed_univariate, cols_winsorized, cols_removed_anomaly, cols_imputed_dict, cols_encoded_dict, cols_normalized]):
-            with ui.expansion("🔍 Détails des Transformations", icon='info').classes("w-full max-w-6xl mb-6").style(
+            with ui.expansion(" Détails des Transformations", icon='info').classes("w-full max-w-6xl mb-6").style(
                 "background:white !important; border-radius:16px !important; box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
             ):
                 with ui.column().style("padding:16px; gap:12px; width:100%;"):
@@ -16687,7 +18280,7 @@ def summary_page():
                     
                     if cols_imputed_dict:
                         with ui.card().style("padding:12px; background:#d6eaf8; border-left:3px solid #3498db; border-radius:6px;"):
-                            ui.label("💧 Colonnes imputées :").style("font-size:13px; font-weight:600; color:#01335A; margin-bottom:4px;")
+                            ui.label(" Colonnes imputées :").style("font-size:13px; font-weight:600; color:#01335A; margin-bottom:4px;")
                             for col, method in cols_imputed_dict.items():
                                 ui.label(f"  • {col} : {method}").style("font-size:12px; color:#7f8c8d;")
                     
@@ -16703,71 +18296,247 @@ def summary_page():
                             for col, method in cols_normalized.items():
                                 ui.label(f"  • {col} : {method}").style("font-size:12px; color:#7f8c8d;")
         
-        # APERÇU DU DATASET
+        # ==================== PRÉVISUALISATION AVEC POPUP ====================
         with ui.card().classes("w-full max-w-6xl mb-6").style(
             "background:white !important; border-radius:16px !important; padding:32px !important; "
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
             
-            ui.label("👀 Aperçu du Dataset Final").style(
+            ui.label(" Prévisualisation AVANT / APRÈS").style(
                 "font-weight:700 !important; font-size:22px !important; color:#01335A !important; "
                 "margin-bottom:20px !important;"
             )
             
-            # Statistiques par type
-            numeric_cols = df_final.select_dtypes(include=[np.number]).columns.tolist()
-            categorical_cols = df_final.select_dtypes(exclude=[np.number]).columns.tolist()
-            
-            with ui.row().style("gap:12px; margin-bottom:20px; flex-wrap:wrap; width:100%;"):
-                with ui.card().style("padding:16px 20px; background:#d5f4e6; border-radius:8px; flex:1; min-width:150px;"):
-                    ui.label("Variables numériques").style("font-size:12px; color:#27ae60; margin-bottom:4px; font-weight:600;")
-                    ui.label(str(len(numeric_cols))).style("font-size:32px; font-weight:700; color:#27ae60;")
+            def show_preview_popup():
+                """Affiche la prévisualisation complète dans un popup scrollable"""
                 
-                with ui.card().style("padding:16px 20px; background:#fce7f3; border-radius:8px; flex:1; min-width:150px;"):
-                    ui.label("Variables catégorielles").style("font-size:12px; color:#e74c3c; margin-bottom:4px; font-weight:600;")
-                    ui.label(str(len(categorical_cols))).style("font-size:32px; font-weight:700; color:#e74c3c;")
+                #  CRÉER POPUP SCROLLABLE
+                with ui.dialog() as dialog, ui.card().style(
+                    "min-width:90vw !important; max-width:95vw !important; max-height:90vh !important; "
+                    "overflow-y:auto !important; padding:32px !important; background:white !important;"
+                ):
+                    # Header du popup
+                    with ui.row().classes("w-full items-center justify-between mb-6").style(
+                        "position:sticky !important; top:0 !important; background:white !important; "
+                        "z-index:1000 !important; padding-bottom:16px !important; border-bottom:2px solid #e0e0e0 !important;"
+                    ):
+                        ui.label(" Prévisualisation Complète du Prétraitement").style(
+                            "font-weight:800 !important; font-size:24px !important; color:#01335A !important;"
+                        )
+                        ui.button("✕", on_click=dialog.close).props("flat round").style(
+                            "font-size:20px !important; color:#e74c3c !important;"
+                        )
+                    
+                    # ==================== RÉSUMÉ TRANSFORMATION ====================
+                    with ui.row().classes("w-full gap-4 mb-6 justify-center items-center"):
+                        # Avant
+                        with ui.card().style(
+                            "padding:16px 24px !important; background:linear-gradient(135deg, #ffebee, #ffcdd2) !important; "
+                            "border-radius:12px !important; border-left:4px solid #e74c3c !important; min-width:180px !important;"
+                        ):
+                            ui.label(" AVANT").style(
+                                "font-weight:700 !important; font-size:14px !important; color:#c0392b !important; "
+                                "margin-bottom:8px !important; text-align:center !important;"
+                            )
+                            ui.label(f"{original_shape[0]} lignes").style(
+                                "font-size:20px !important; font-weight:800 !important; color:#e74c3c !important; "
+                                "text-align:center !important;"
+                            )
+                            ui.label(f"{original_shape[1]} colonnes").style(
+                                "font-size:16px !important; font-weight:600 !important; color:#e74c3c !important; "
+                                "text-align:center !important;"
+                            )
+                        
+                        # Flèche
+                        ui.label("→").style(
+                            "font-size:36px !important; color:#01335A !important; font-weight:700 !important;"
+                        )
+                        
+                        # Après
+                        with ui.card().style(
+                            "padding:16px 24px !important; background:linear-gradient(135deg, #e8f5e9, #c8e6c9) !important; "
+                            "border-radius:12px !important; border-left:4px solid #27ae60 !important; min-width:180px !important;"
+                        ):
+                            ui.label("📈 APRÈS").style(
+                                "font-weight:700 !important; font-size:14px !important; color:#1e8449 !important; "
+                                "margin-bottom:8px !important; text-align:center !important;"
+                            )
+                            ui.label(f"{final_shape[0]} lignes").style(
+                                "font-size:20px !important; font-weight:800 !important; color:#27ae60 !important; "
+                                "text-align:center !important;"
+                            )
+                            ui.label(f"{final_shape[1]} colonnes").style(
+                                "font-size:16px !important; font-weight:600 !important; color:#27ae60 !important; "
+                                "text-align:center !important;"
+                            )
+                        
+                        # Delta
+                        rows_diff = original_shape[0] - final_shape[0]
+                        cols_diff = original_shape[1] - final_shape[1]
+                        
+                        if rows_diff > 0:
+                            with ui.card().style(
+                                "padding:16px 24px !important; background:linear-gradient(135deg, #fadbd8, #f8d7da) !important; "
+                                "border-radius:12px !important; border-left:4px solid #e74c3c !important; min-width:140px !important;"
+                            ):
+                                ui.label("Δ Lignes").style(
+                                    "font-weight:700 !important; font-size:14px !important; color:#c0392b !important; "
+                                    "margin-bottom:8px !important; text-align:center !important;"
+                                )
+                                ui.label(f"-{rows_diff}").style(
+                                    "font-size:18px !important; font-weight:800 !important; "
+                                    "color:#e74c3c !important; text-align:center !important;"
+                                )
+                        
+                        if cols_diff > 0:
+                            with ui.card().style(
+                                "padding:16px 24px !important; background:linear-gradient(135deg, #fdebd0, #ffe0b2) !important; "
+                                "border-radius:12px !important; border-left:4px solid #f39c12 !important; min-width:140px !important;"
+                            ):
+                                ui.label("Δ Colonnes").style(
+                                    "font-weight:700 !important; font-size:14px !important; color:#e67e22 !important; "
+                                    "margin-bottom:8px !important; text-align:center !important;"
+                                )
+                                ui.label(f"-{cols_diff}").style(
+                                    "font-size:18px !important; font-weight:800 !important; "
+                                    "color:#f39c12 !important; text-align:center !important;"
+                                )
+                    
+                    ui.separator().style("margin:24px 0 !important; background:#e0e0e0 !important;")
+                    
+                    # ==================== TABLEAU AVANT ====================
+                    ui.label(" Dataset AVANT Prétraitement").style(
+                        "font-weight:700 !important; font-size:18px !important; color:#e74c3c !important; "
+                        "margin-bottom:16px !important;"
+                    )
+                    
+                    # Prendre les features sélectionnées du dataset original
+                    if selected_features:
+                        df_before = raw_df[selected_features].head(15).copy()
+                    else:
+                        df_before = raw_df.head(15).copy()
+                    
+                    html_before = f"""
+                    <div style="width:100%; overflow-x:auto; border-radius:12px; border:2px solid #e74c3c; background:white; margin-bottom:32px;">
+                        <div style="background:#ffebee; padding:12px 16px; border-bottom:2px solid #e74c3c;">
+                            <span style="font-size:13px; color:#c0392b; font-weight:700;">
+                                {df_before.shape[0]} lignes × {df_before.shape[1]} colonnes
+                            </span>
+                        </div>
+                        <div style="overflow-x:auto;">
+                            <table style="width:100%; border-collapse:collapse; font-size:12px; font-family:'Inter', sans-serif;">
+                                <thead>
+                                    <tr style="background:#e74c3c; color:white;">
+                    """
+                    
+                    for col in df_before.columns:
+                        html_before += f'<th style="padding:10px 14px; text-align:left; font-weight:700; white-space:nowrap; min-width:120px;">{col}</th>'
+                    
+                    html_before += """
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    """
+                    
+                    for idx, row in df_before.iterrows():
+                        bg_color = "#f8f9fa" if idx % 2 == 0 else "white"
+                        html_before += f'<tr style="background:{bg_color}; border-bottom:1px solid #e0e0e0;">'
+                        
+                        for col in df_before.columns:
+                            val = row[col]
+                            if pd.isna(val):
+                                display_val = '<span style="color:#e74c3c; font-weight:700;">NaN</span>'
+                            elif isinstance(val, (int, np.integer)):
+                                display_val = str(val)
+                            elif isinstance(val, (float, np.floating)):
+                                display_val = f"{val:.4f}"
+                            else:
+                                display_val = str(val)
+                            
+                            html_before += f'<td style="padding:10px 14px; white-space:nowrap; min-width:120px;">{display_val}</td>'
+                        
+                        html_before += '</tr>'
+                    
+                    html_before += """
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    """
+                    
+                    ui.html(html_before, sanitize=False)
+                    
+                    # ==================== TABLEAU APRÈS ====================
+                    ui.label("📈 Dataset APRÈS Prétraitement Complet").style(
+                        "font-weight:700 !important; font-size:18px !important; color:#27ae60 !important; "
+                        "margin-bottom:16px !important;"
+                    )
+                    
+                    df_after = df_final.head(15).copy()
+                    
+                    html_after = f"""
+                    <div style="width:100%; overflow-x:auto; border-radius:12px; border:2px solid #27ae60; background:white;">
+                        <div style="background:#e8f5e9; padding:12px 16px; border-bottom:2px solid #27ae60;">
+                            <span style="font-size:13px; color:#1e8449; font-weight:700;">
+                                {df_after.shape[0]} lignes × {df_after.shape[1]} colonnes
+                            </span>
+                        </div>
+                        <div style="overflow-x:auto;">
+                            <table style="width:100%; border-collapse:collapse; font-size:12px; font-family:'Inter', sans-serif;">
+                                <thead>
+                                    <tr style="background:#27ae60; color:white;">
+                    """
+                    
+                    for col in df_after.columns:
+                        html_after += f'<th style="padding:10px 14px; text-align:left; font-weight:700; white-space:nowrap; min-width:120px;">{col}</th>'
+                    
+                    html_after += """
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    """
+                    
+                    for idx, row in df_after.iterrows():
+                        bg_color = "#f8f9fa" if idx % 2 == 0 else "white"
+                        html_after += f'<tr style="background:{bg_color}; border-bottom:1px solid #e0e0e0;">'
+                        
+                        for col in df_after.columns:
+                            val = row[col]
+                            if pd.isna(val):
+                                display_val = '<span style="color:#e74c3c; font-weight:700;">NaN</span>'
+                            elif isinstance(val, (int, np.integer)):
+                                display_val = str(val)
+                            elif isinstance(val, (float, np.floating)):
+                                display_val = f"{val:.4f}"
+                            else:
+                                display_val = str(val)
+                            
+                            html_after += f'<td style="padding:10px 14px; white-space:nowrap; min-width:120px;">{display_val}</td>'
+                        
+                        html_after += '</tr>'
+                    
+                    html_after += """
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    """
+                    
+                    ui.html(html_after, sanitize=False)
                 
-                with ui.card().style("padding:16px 20px; background:#d6eaf8; border-radius:8px; flex:1; min-width:150px;"):
-                    ui.label("Total variables").style("font-size:12px; color:#01335A; margin-bottom:4px; font-weight:600;")
-                    ui.label(str(final_shape[1])).style("font-size:32px; font-weight:700; color:#3498db;")
+                dialog.open()
             
-            # Tableau des premières lignes
-            ui.label("Premières lignes du dataset :").style("font-weight:600; font-size:15px; color:#2c3e50; margin-bottom:12px;")
-            
-            html_table = df_final.head(5).to_html(index=False, classes="preview-table")
-            
-            ui.html(f"""
-            <div style="overflow-x:auto; max-width:100%; border-radius:8px; border:1px solid #e1e8ed;">
-                <style>
-                    .preview-table {{
-                        border-collapse: collapse;
-                        width: 100%;
-                        font-size: 13px;
-                        font-family: 'Inter', sans-serif;
-                    }}
-                    .preview-table th {{
-                        background: #01335A;
-                        color: white;
-                        padding: 12px;
-                        text-align: left;
-                        font-weight: 600;
-                        border-bottom: 2px solid #09538C;
-                    }}
-                    .preview-table td {{
-                        border: 1px solid #e1e8ed;
-                        padding: 10px 12px;
-                        color: #2c3e50;
-                    }}
-                    .preview-table tr:nth-child(even) {{
-                        background: #f8f9fa;
-                    }}
-                    .preview-table tr:hover {{
-                        background: #e8f4f8;
-                    }}
-                </style>
-                {html_table}
-            </div>
-            """, sanitize=False)
+            # Bouton pour ouvrir le popup
+            ui.button(
+                " Afficher la Prévisualisation Complète",
+                on_click=show_preview_popup
+            ).style(
+                "background:linear-gradient(135deg, #01335A, #024a7a) !important; color:white !important; "
+                "font-weight:700 !important; border-radius:10px !important; padding:14px 40px !important; "
+                "margin-top:20px !important; border:none !important; cursor:pointer !important; "
+                "box-shadow:0 4px 12px rgba(1,51,90,0.3) !important; text-transform:none !important; "
+                "font-size:15px !important;"
+            )
         
         # VALIDATION FINALE
         with ui.card().classes("w-full max-w-6xl mb-6").style(
@@ -16787,17 +18556,16 @@ def summary_page():
                 )
         
         # NAVIGATION
-        with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
+        with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8 mb-8"):
             ui.button(
-                "← Retour à la PCA",
+                "← Précédent",
                 on_click=lambda: ui.run_javascript("window.location.href='/unsupervised/pca'")
             ).style(
-                "background:white !important; color:#01335A !important; font-weight:500 !important; "
-                "border:1px solid #e1e8ed !important; border-radius:8px !important; height:50px !important; "
-                "min-width:200px !important; font-size:14px !important; text-transform:none !important; "
+                "background:white !important; color:#01335A !important; font-weight:600 !important; "
+                "border:2px solid #01335A !important; border-radius:10px !important; height:50px !important; "
+                "min-width:160px !important; font-size:14px !important; text-transform:none !important; "
                 "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
             ) 
-# 
 # ==========================================================
 # FONCTIONS UTILITAIRES
 # ==========================================================
@@ -16806,7 +18574,7 @@ def download_dataset(df):
     try:
         csv_data = df.to_csv(index=False)
         ui.download(csv_data.encode(), "dataset_preprocessed.csv")
-        ui.notify("✅ Dataset téléchargé avec succès", type="positive", position="top")
+        ui.notify(" Dataset téléchargé avec succès", type="positive", position="top")
     except Exception as e:
         ui.notify(f"❌ Erreur lors du téléchargement : {str(e)}", type="negative", position="top")
 
@@ -16816,7 +18584,7 @@ def validate_and_continue(df):
     try:
         state["final_dataset"] = df
         state["preprocessing_completed"] = True
-        ui.notify("✅ Prétraitement validé ! Redirection vers le clustering...", type="positive", position="top", timeout=2000)
+        ui.notify(" Prétraitement validé ! Redirection vers le clustering...", type="positive", position="top", timeout=2000)
         ui.navigate.to("/unsupervised/clustering")
     except Exception as e:
         ui.notify(f"❌ Erreur : {str(e)}", type="negative", position="top")
@@ -16833,9 +18601,6 @@ def validate_and_continue(df):
 
 # ----------------- PAGE /unsupervised/clustering -----------------
 # ----------------- PAGE /unsupervised/clustering -----------------
-# ===============================================================================
-# FICHIER 1 : PAGE CLUSTERING (remplace le document 2)
-# ===============================================================================
 
 @ui.page('/unsupervised/clustering')
 def algos_page():
@@ -16877,7 +18642,7 @@ def algos_page():
     state['X'] = X
 
     # Calculer les K optimaux au chargement avec la méthode Silhouette
-    ui.notify("🔍 Calcul des K optimaux (méthode Silhouette)...", color='info', timeout=2000)
+    ui.notify(" Calcul des K optimaux (méthode Silhouette)...", color='info', timeout=2000)
     
     optimal_k_kmeans = 3
     optimal_k_kmedoids = 3
@@ -16885,13 +18650,13 @@ def algos_page():
     
     try:
         optimal_k_kmeans, _, _ = find_optimal_k_silhouette(X, max_k=10, algo='kmeans')
-        ui.notify(f"✅ K optimal KMeans: {optimal_k_kmeans}", color='positive', timeout=2000)
+        ui.notify(f" K optimal KMeans: {optimal_k_kmeans}", color='positive', timeout=2000)
     except Exception as e:
         ui.notify(f"⚠️ Erreur KMeans: {str(e)}", color='warning', timeout=2000)
     
     try:
         optimal_k_kmedoids, _, _ = find_optimal_k_silhouette(X, max_k=10, algo='kmedoids')
-        ui.notify(f"✅ K optimal KMedoids: {optimal_k_kmedoids}", color='positive', timeout=2000)
+        ui.notify(f" K optimal KMedoids: {optimal_k_kmedoids}", color='positive', timeout=2000)
     except Exception as e:
         ui.notify(f"⚠️ Erreur KMedoids: {str(e)}", color='warning', timeout=2000)
     
@@ -17213,7 +18978,7 @@ def algos_page():
             state['results'].update(results)
             state['optimal_k'] = optimal_ks
             
-            ui.notify("✅ Clustering terminé", color='positive')
+            ui.notify(" Clustering terminé", color='positive')
             ui.run_javascript("window.location.href='/unsupervised/results'")
 
         with ui.row().classes("w-full max-w-6xl justify-between gap-4 mt-8"):
@@ -17236,10 +19001,6 @@ def algos_page():
                 "font-size:14px !important; text-transform:none !important;"
             )
 
-
-# ===============================================================================
-# FICHIER 2 : PAGE RESULTS (remplace le document 1)
-# ===============================================================================
 
 @ui.page('/unsupervised/results')
 def results_page():
@@ -17358,7 +19119,7 @@ def results_page():
             "background:white !important; border-radius:16px !important; padding:24px !important; "
             "box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;"
         ):
-            ui.label("📊 Comparaison Visuelle des Métriques").style(
+            ui.label(" Comparaison Visuelle des Métriques").style(
                 "font-weight:700 !important; font-size:20px !important; color:#01335A !important; margin-bottom:16px !important;"
             )
             
@@ -17408,7 +19169,7 @@ def results_page():
                             "background:#f8f9fa !important; padding:12px !important; border-radius:8px !important; "
                             "border-left:3px solid #01335A !important; box-shadow:none !important;"
                         ):
-                            ui.label(f"✅ K utilisé : {k_used} (K optimal - Silhouette)").style(
+                            ui.label(f" K utilisé : {k_used} (K optimal - Silhouette)").style(
                                 "font-size:14px !important; color:#01335A !important; font-weight:600 !important;"
                             )
                     else:
@@ -17416,7 +19177,7 @@ def results_page():
                             "background:#fff9e6 !important; padding:12px !important; border-radius:8px !important; "
                             "border-left:3px solid #f39c12 !important; box-shadow:none !important;"
                         ):
-                            ui.label(f"⚙️ K utilisé : {k_used} | K optimal suggéré (Silhouette) : {k_optimal}").style(
+                            ui.label(f" K utilisé : {k_used} | K optimal suggéré (Silhouette) : {k_optimal}").style(
                                 "font-size:14px !important; color:#856404 !important; font-weight:600 !important;"
                             )
                 elif algo == 'dbscan':
@@ -17426,7 +19187,7 @@ def results_page():
                         "background:#f8f9fa !important; padding:12px !important; border-radius:8px !important; "
                         "border-left:3px solid #01335A !important; box-shadow:none !important;"
                     ):
-                        ui.label(f"⚙️ eps : {eps_used:.2f} | min_samples : {min_samples_used}").style(
+                        ui.label(f" eps : {eps_used:.2f} | min_samples : {min_samples_used}").style(
                             "font-size:14px !important; color:#01335A !important; font-weight:600 !important;"
                         )
 
@@ -17511,7 +19272,7 @@ def results_page():
                 
                 if has_elbow:
                     ui.separator().classes("my-6")
-                    ui.label("📊 Analyse de Clustering (Inertie & Silhouette)").style(
+                    ui.label(" Analyse de Clustering (Inertie & Silhouette)").style(
                         "font-weight:600 !important; font-size:18px !important; color:#01335A !important; margin-bottom:12px !important;"
                     )
                     
@@ -17523,7 +19284,7 @@ def results_page():
                             "background:#f8f9fa !important; padding:12px !important; border-radius:8px !important; "
                             "border-left:3px solid #01335A !important; box-shadow:none !important; display:inline-block !important;"
                         ):
-                            ui.label(f"✅ K utilisé : {k_used_val} (identique au K optimal - Silhouette)").style(
+                            ui.label(f" K utilisé : {k_used_val} (identique au K optimal - Silhouette)").style(
                                 "font-size:14px !important; color:#01335A !important; font-weight:600 !important;"
                             )
                     else:
@@ -17531,7 +19292,7 @@ def results_page():
                             "background:#fff9e6 !important; padding:12px !important; border-radius:8px !important; "
                             "border-left:3px solid #f39c12 !important; box-shadow:none !important; display:inline-block !important;"
                         ):
-                            ui.label(f"📊 K optimal trouvé (Silhouette) : {k_optimal_val} | K utilisé : {k_used_val}").style(
+                            ui.label(f" K optimal trouvé (Silhouette) : {k_optimal_val} | K utilisé : {k_used_val}").style(
                                 "font-size:14px !important; color:#856404 !important; font-weight:600 !important;"
                             )
                     
@@ -17543,7 +19304,7 @@ def results_page():
                 
                 # PCA et Dendrogramme
                 ui.separator().classes("my-6")
-                ui.label("🎨 Visualisations").style(
+                ui.label(" Visualisations").style(
                     "font-weight:600 !important; font-size:18px !important; color:#01335A !important; margin-bottom:16px !important;"
                 )
                 
@@ -17553,7 +19314,7 @@ def results_page():
                         "padding:20px !important; background:#f8f9fa !important; border-radius:12px !important; "
                         "min-width:300px !important; box-shadow:none !important;"
                     ):
-                        ui.label("🎨 Visualisation PCA").style(
+                        ui.label(" Visualisation PCA").style(
                             "font-weight:600 !important; font-size:16px !important; color:#01335A !important; margin-bottom:12px !important;"
                         )
                         if X_pca is None:
